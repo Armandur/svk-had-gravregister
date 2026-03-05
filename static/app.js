@@ -52,10 +52,19 @@ async function valjMapp(mappNamn) {
   try {
     const res = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/filer`);
     const data = await res.json();
-    filer = data.filer || [];
+    filer = data.effective_filer || data.filer || [];
+    if (data.extramaterial && data.extramaterial.length > 0) {
+      window.extramaterial = data.extramaterial;
+    } else {
+      window.extramaterial = [];
+    }
     const innehållsSidor = Math.max(0, filer.length - forstattOffset);
-    document.getElementById('mapp-status').textContent =
-      filer.length + ' PDF-filer i mappen. Efter ' + forstattOffset + ' försättssidor: ' + innehållsSidor + ' innehållssidor.';
+    let status = filer.length + ' innehållssidor (efter försättssidor';
+    if (window.extramaterial.length > 0) {
+      status += ', ' + window.extramaterial.length + ' extramaterial exkluderat';
+    }
+    status += '). ' + innehållsSidor + ' sidor från start.';
+    document.getElementById('mapp-status').textContent = status;
 
     if (innehållsSidor >= 3) {
       document.getElementById('visning').hidden = false;
@@ -127,6 +136,51 @@ function uppdateraPdfBilder() {
 
   preloadGravplatsBilder(maxSida);
   uppdateraVyVal();
+  uppdateraExtramaterialLista();
+}
+
+function uppdateraExtramaterialLista() {
+  const el = document.getElementById('extramaterial-lista');
+  const currentEl = document.getElementById('em-current-start');
+  if (!el || !currentEl) return;
+  currentEl.textContent = startSida;
+  const forDenna = (window.extramaterial || []).filter((e) => e.grav_start_sida === startSida);
+  if (forDenna.length === 0) {
+    el.textContent = 'Inga registrerade.';
+  } else {
+    el.textContent = forDenna.map((e) => e.typ ? e.filnamn + ' (' + e.typ + ')' : e.filnamn).join(', ');
+  }
+}
+
+async function laggTillExtramaterial() {
+  const filnamn = document.getElementById('em-filnamn')?.value?.trim();
+  if (!filnamn || !valdMapp) return;
+  const typEl = document.getElementById('em-typ');
+  const typ = typEl?.value?.trim() || null;
+  const endastMapp = document.getElementById('em-endast-mapp')?.checked ?? false;
+  const grav_start_sida = endastMapp ? null : startSida;
+  try {
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/extramaterial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filnamn, typ, grav_start_sida }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById('em-filnamn').value = '';
+    if (typEl) typEl.value = '';
+    await refreshFiler();
+  } catch (e) {
+    alert('Kunde inte lägga till: ' + e.message);
+  }
+}
+
+async function refreshFiler() {
+  if (!valdMapp) return;
+  const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/filer`);
+  const data = await res.json();
+  filer = data.effective_filer || data.filer || [];
+  window.extramaterial = data.extramaterial || [];
+  uppdateraPdfBilder();
 }
 
 /** Preload bilder för föregående och nästa gravplats (max 6 bilder) för snabbare bläddring. */
@@ -227,6 +281,43 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+
+document.getElementById('em-lagg-till')?.addEventListener('click', laggTillExtramaterial);
+
+async function visaExtramaterialMapp() {
+  const btn = document.getElementById('em-visa-mapp');
+  const listaEl = document.getElementById('extramaterial-mapp-lista');
+  if (!btn || !listaEl || !valdMapp) return;
+  const isOpen = btn.getAttribute('aria-expanded') === 'true';
+  if (isOpen) {
+    listaEl.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = 'Visa extramaterial knutet till mappen';
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/extramaterial-mapp`);
+    const data = await res.json();
+    const items = data.extramaterial || [];
+    const pdfBase = `${API}/mappar/${encodeURIComponent(valdMapp)}/fil`;
+    if (items.length === 0) {
+      listaEl.innerHTML = '<p class="extramaterial-mapp-tom">Inget extramaterial knutet endast till mappen.</p>';
+    } else {
+      listaEl.innerHTML = '<ul>' + items.map((e) => {
+        const label = e.typ ? `${e.filnamn} (${e.typ})` : e.filnamn;
+        return `<li><a href="${pdfBase}/${encodeURIComponent(e.filnamn)}" target="_blank" rel="noopener">${label}</a></li>`;
+      }).join('') + '</ul>';
+    }
+    listaEl.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    btn.textContent = 'Dölj extramaterial knutet till mappen';
+  } catch (e) {
+    listaEl.innerHTML = '<p class="extramaterial-mapp-fel">Kunde inte ladda: ' + e.message + '</p>';
+    listaEl.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+document.getElementById('em-visa-mapp')?.addEventListener('click', visaExtramaterialMapp);
 
 document.getElementById('forsattssidor').addEventListener('change', () => {
   if (!valdMapp || filer.length === 0) return;

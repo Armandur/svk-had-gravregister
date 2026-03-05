@@ -104,6 +104,20 @@
         </aside>
         </div>
       </div>
+      <div class="extramaterial-sektion">
+        <h4>Extramaterial för denna gravplats (startSida <span id="em-current-start">1</span>)</h4>
+        <p id="extramaterial-lista" class="extramaterial-lista">Inga registrerade.</p>
+        <div class="extramaterial-form">
+          <label>Filnamn: <input type="text" id="em-filnamn" placeholder="t.ex. 165.pdf" size="12" /></label>
+          <label>Typ (valfritt): <input type="text" id="em-typ" placeholder="t.ex. lapp, brev, karta" size="14" /></label>
+          <label><input type="checkbox" id="em-endast-mapp" /> Endast koppla till mappen (ingen specifik grav)</label>
+          <button type="button" id="em-lagg-till">Lägg till</button>
+        </div>
+        <div class="extramaterial-mapp-sektion">
+          <button type="button" id="em-visa-mapp" aria-expanded="false">Visa extramaterial knutet till mappen</button>
+          <div id="extramaterial-mapp-lista" class="extramaterial-mapp-lista" hidden></div>
+        </div>
+      </div>
     </section>
   </main>
 

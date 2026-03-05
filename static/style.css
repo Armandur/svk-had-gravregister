@@ -269,3 +269,80 @@ body {
   height: auto;
   object-fit: contain;
 }
+
+.extramaterial-sektion {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.extramaterial-sektion h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.95rem;
+}
+
+.extramaterial-lista {
+  margin: 0 0 0.5rem 0;
+  color: #555;
+}
+
+.extramaterial-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.extramaterial-form label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.extramaterial-form input[type="text"],
+.extramaterial-form input[type="checkbox"] {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.9rem;
+}
+.extramaterial-mapp-sektion {
+  margin-top: 0.5rem;
+}
+.extramaterial-mapp-sektion button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  background: var(--border);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.extramaterial-mapp-lista {
+  margin-top: 0.35rem;
+  padding-left: 1rem;
+  font-size: 0.9rem;
+}
+.extramaterial-mapp-lista ul {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: disc;
+}
+.extramaterial-mapp-lista a {
+  color: var(--accent);
+}
+.extramaterial-mapp-tom,
+.extramaterial-mapp-fel {
+  margin: 0;
+  color: #666;
+  font-style: italic;
+}
+
+.extramaterial-form button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}

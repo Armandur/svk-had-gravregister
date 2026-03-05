@@ -123,7 +123,7 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 
 ## 7. Lagring och export
 
-- **Primär lagring:** Databas.
+- **Primär lagring:** Databas. Gravplatser, gravsatta, gravrättsinnehavare samt **extramaterial** (vilka PDF:er som är extramaterial, valfri typ-beteckning och antingen koppling till en gravplats eller endast till mappen) lagras här och matas in via programmet så att bläddring och koppling till källor fungerar.
 - **Skiss på gravplatsen:** Lagras som **bild** i databasen (extraheras/inskannas från källan).
 - **Export/import:** Stöd för t.ex. JSON (och vid behov andra format).
 - **Kommentarer:** Möjlighet till en **kommentarsruta** per digitaliserad gravplats (för handskrivna tillägg, osäkerheter, undantag m.m.).
@@ -144,6 +144,14 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 - **Övre del av “sida 1” använd för nästa grav:** När en grav har **färre än 6 gravsatta** används inte den övre halvan av “sida 3” för den graven. I stället kan den **övre delen av nästa gravs “sida 1”** (normalt reserverad för föregående gravs 6–10) användas för att ange ytterligare gravsatta för den **nästa** gravplatsen (t.ex. grav 7+8). Då kan t.ex. “6” vara överstruket och “3” handskrivet – alltså en tredje gravsatt för den aktuella gravplatsen, inmatad i 6–10-fältet på föregående gravs sida. Källmaterialet är alltså utspritt över flera sidor.
 
 **Hantering vid inmatning:** Det räcker att användaren kan **bläddra** mellan gravplatserna i källvyn, samla in uppgifter från de sidor där personerna faktiskt står (även om de ligger på “fel” sida i förhållande till standardlayouten), och sedan **föra in varje gravsatt på den gravplats de tillhör** i inmatningsformuläret. Varje post kan kopplas till källan (vilken PDF och vilken del). Kommentarsfältet kan användas för att anteckna t.ex. “gravsatt 3 enl. övre del 13.pdf, handskriven numrering”.
+
+- **Extramaterial:** I mappen kan det finnas PDF:er som **inte** följer den vanliga tre-sidorsstrukturen. Dessa ska kunna **plockas ur spannet** (exkluderas från den normala sidräkningen) och antingen **kopplas till en specifik gravplats** eller **endast till mappen**. Exempel på gravkopplat extramaterial:
+  - **Lapp:** En eller fler sidor med t.ex. adressuppgift (”Elin Tynelius ddb c/o Hr A. Tynelius …”) – kan vara 165.pdf, 166.pdf som hör till en specifik grav.
+  - **Brev:** T.ex. brev till kyrkogårdsvaktmästaren som hör till graven på 191–193.pdf (brevet kan ligga på 189.pdf, 190.pdf).
+  - **Karta:** Mer specifik karta över placeringar i graven – t.ex. 203.pdf, 204.pdf som hör till graven på 205–207.pdf.
+Varje sådan PDF kan antingen **kopplas till en specifik gravplats** (visas under "Extramaterial för denna gravplats") eller **endast till mappen** – t.ex. tom sida eller försättssidor; då kan användaren **visa extramaterial knutet endast till mappen** i en egen lista. **Typ** är valfri fritext (t.ex. lapp, brev, karta) eller obehållen. Systemet exkluderar alla extramaterial från sidflödet vid bläddring.
+
+
 
 - **Övriga avvikelser** (handskrivna tillägg, överstrukna rader, ofullständig data) kan dokumenteras i kommentarsfältet för den aktuella graven.
 
