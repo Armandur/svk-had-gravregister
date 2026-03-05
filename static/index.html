@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gravregister – digitalisering</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar-titel">Gravregister</h1>
+    <div class="topbar-falt">
+      <label for="mapp">Mapp:</label>
+      <select id="mapp" disabled>
+        <option value="">– laddar –</option>
+      </select>
+      <span id="mapp-status" class="status"></span>
+    </div>
+    <div class="topbar-falt kontext-falt" id="kontext" hidden>
+      <label>Kyrkogård:</label>
+      <select id="kyrkogard">
+        <option value="">–</option>
+        <option value="HKG">HKG</option>
+        <option value="HKN">HKN</option>
+      </select>
+      <label>Kvarter:</label>
+      <input type="text" id="gravkvarter" placeholder="t.ex. 1, U, A" title="Kan ändras när kvarter byter" />
+      <label>Försättssidor:</label>
+      <select id="forsattssidor" title="Omslag/titelsidor – bläddringen startar efter dessa">
+        <option value="0">0</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+      </select>
+    </div>
+  </header>
+
+  <main class="innehall" id="main-innehall">
+    <section class="visning" id="visning" hidden>
+      <div class="visning-rad">
+        <div class="vy-val">
+          <label><input type="radio" name="vy" value="hela" checked /> Horisontellt</label>
+          <label><input type="radio" name="vy" value="halvor" /> Vertikalt</label>
+        </div>
+        <div class="navigering">
+          <button type="button" id="btn-föregående">← Föregående</button>
+          <button type="button" id="btn-nästa">Nästa gravplats →</button>
+        </div>
+      </div>
+      <div class="vy-hela-wrapper" id="vy-hela">
+        <div class="pdf-rutor">
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 1 – Gravrätt</span>
+              <a id="link-sida-1" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-1">–</span></a>
+            </div>
+            <img id="img-sida-1" alt="PDF sida 1" />
+          </div>
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 2 – Gravsatta 1–5</span>
+              <a id="link-sida-2" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-2">–</span></a>
+            </div>
+            <img id="img-sida-2" alt="PDF sida 2" />
+          </div>
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 3 – Gravsatta 6–10</span>
+              <a id="link-sida-3" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-3">–</span></a>
+            </div>
+            <img id="img-sida-3" alt="PDF sida 3" />
+          </div>
+        </div>
+        <div class="inmatning-horisontell" aria-label="Plats för inmatning">
+          <!-- Inmatningsfält kommer under rutorna i horisontellt läge -->
+        </div>
+      </div>
+      <div class="halvvy" id="vy-halvor" hidden>
+        <div class="halvvy-innehall">
+          <div class="halvor-stack">
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravrätt</span>
+              <a id="halva-link-1" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-1">–</span></a>
+            </div>
+            <img id="halva-img-1" alt="Gravrätt" />
+          </div>
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravsatta 1–5</span>
+              <a id="halva-link-2" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-2">–</span></a>
+            </div>
+            <img id="halva-img-2" alt="Gravsatta 1–5" />
+          </div>
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravsatta 6–10</span>
+              <a id="halva-link-3" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-3">–</span></a>
+            </div>
+            <img id="halva-img-3" alt="Gravsatta 6–10" />
+          </div>
+        </div>
+        <aside class="inmatning-vertikal" aria-label="Plats för inmatning">
+          <!-- Inmatningsfält kommer till höger i vertikalt läge -->
+        </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

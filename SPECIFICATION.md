@@ -17,7 +17,9 @@ På varje gravplats är endast **gravplatsnumret** angivet i själva registret. 
   - HKG: 1–24, samt U.  
   - HKN: t.ex. Allm, A, D, E, F, G, H, J, L, M, N, O.
 
-**Första gången en mapp öppnas** ska användaren ange vilken kyrkogård och vilket gravkvarter som gäller för allt innehåll i mappen. Denna information sparas och används för alla gravplatser i mappen (tills användaren byter mapp eller anger annat).
+**Första gången en mapp öppnas** anger användaren kyrkogård och (standard) gravkvarter. **Gravkvarter** gäller oftast för hela mappen men inte alltid – användaren ska kunna **ändra gravkvarter** när det byts till ett nytt kvarter i registret (utan att byta mapp).
+
+**Försättssidor:** I början av en mapp kan det finnas **en eller två försättssidor** (omslag/titelsidor för arkivvolymen) som inte tillhör gravregistret. Användaren ska kunna ange antal försättssidor (0, 1 eller 2) så att bläddringen med "tre sidor per gravplats" startar *efter* dessa – man ska alltså kunna "bläddra förbi" försättssidorna utan att de räknas in i sidnumreringen för gravplatser.
 
 ---
 
@@ -46,7 +48,14 @@ En gravplats använder **tre sidor** (tre PDF-filer) med följande layout:
 | **Övre halvan** | Platser för gravsatta 6–10 på den **aktuella** gravplatsen. |
 | **Nedre halvan** | Uppgifter om **nästa** gravplats (gravrättsinnehavare m.m.). |
 
+### Beskärning (splits) för visning
 
+"Övre" och "nedre" del är **inte** exakt 50/50 av sidan – andelerna är uppmätta från det skannade formatet (vid 150 DPI, typisk sidstorlek ca 1240×1600 px):
+
+- **Sida 1 och sida 3** (gravrättsinnehavare respektive gravsatta 6–10): Den **övre** relevanta delen är från toppen till ca **45,5 %** av sidhöjden (mätt som 727 px av 1597 px). Nedre delen = från 45,5 % till botten. *Split = 727/1597 ≈ 0,455.*
+- **Sida 2** (gravsatta 1–5): Den **nedre** relevanta delen börjar vid ca **54,5 %** av sidhöjden (mätt som 870 px av 1595 px) och går till botten. Övre delen = tom. *Split = 870/1595 ≈ 0,545.*
+
+Vid visning av endast "relevanta delar" ska dessa andelar användas så att rätt innehåll beskärs. Vid skannade arkiv med annan upplösning eller layout kan proportionerna behöva justeras.
 
 ---
 
@@ -95,16 +104,20 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 
 ## 6. Användargränssnitt (visning av PDF:er)
 
-- Programmet visar **3 PDF-sidor åt gången**:
-  - **Sida 1:** Övre halvan = gravsatta 6–10 föregående grav (tom på första gravplatsen). Nedre halvan = gravrättsinnehavare + gravplatsnr för aktuell grav.
-  - **Sida 2:** Övre halvan = tom. Nedre halvan = gravsatta 1–5 för aktuell grav.
-  - **Sida 3:** Övre halvan = gravsatta 6–10 för aktuell grav. Nedre halvan = uppgifter om nästa gravplats.
+- Programmet visar för varje gravplats **tre delar** (samma innehåll som avsnitt 3, eventuellt beskuret enligt avsnitt 3):
+  - **Del 1:** Gravrättsinnehavare + gravplatsnr (nedre del av sida 1).
+  - **Del 2:** Gravsatta 1–5 (nedre del av sida 2).
+  - **Del 3:** Gravsatta 6–10 (övre del av sida 3).
 
-- När användaren har matat in eller korrigerat all data för en gravplats går man vidare till **nästa** gravplats. Då “glider” fönstret:
-  - Tidigare sida 3 blir nu **första** visade sidan.
-  - Därefter visas sidorna 4 och 5.
+- **Layout:** Samma tre delar ska kunna visas antingen **horisontellt** (tre rutor bredvid varandra) eller **vertikalt** (staplade). Innehållet är identiskt – endast layouten skiljer.
 
-Så fortsätter sekvensen: alltid tre på varandra följande sidor (sida 1 = gravrätt aktuell grav, sida 2 = gravsatta 1–5, sida 3 = gravsatta 6–10 + gravrätt nästa grav).
+- **Bläddring:** När användaren går till **nästa** gravplats flyttas vyn **två** innehållssidor framåt: tidigare sida 3 blir nu sida 1 (info om nästa grav), därefter sida 2 och 3. Vid **föregående** gravplats flyttas vyn två sidor bakåt.
+
+- **Länk till källa:** I rubriken för varje del ska det finnas en länk till motsvarande PDF-fil (t.ex. filnamn högerställt), så att källan alltid går att öppna.
+
+- **Skärmutrymme:** Huvudparten av skärmen ska användas till själva PDF-innehållet. Val av mapp, kyrkogård, gravkvarter och försättssidor kan ligga i en **kompakt topprad** så att läsningen prioriteras.
+
+- **Prestanda (rekommendation):** Genererade bilder kan cachas (t.ex. Cache-Control) och bilder för angränsande gravplatser kan preloadas i bakgrunden för snabbare bläddring.
 
 ---
 
@@ -123,6 +136,15 @@ Så fortsätter sekvensen: alltid tre på varandra följande sidor (sida 1 = gra
 - **Färre än 6 gravsatta:** Raderna för gravsatta 6–10 används inte (övre halvan tom).
 - **Gravbeteckning på position 1:** I vissa fall har gravsatt position 1 använts för en beteckning på graven (t.ex. "Per Augusts familjegrav") i stället för en person. Den första faktiska gravsatta personen står då från position 2. Programmet ska tillåta att position 1 används antingen som person eller som beteckning/benämning.
 - **Underhåll – "för all framtid" överstruket:** Om texten "för all framtid" är överstruken betyder det att underhållet bara gällde viss tid (inte för all framtid). Detta ska kunna anges/registreras i digitaliseringen.
+
+- **Gravplatsnummer med intervall eller plus:** Gravplatsnumret behöver inte vara en enskild siffra – i källan kan det anges som t.ex. **1-2**, **1+2**, **7+8** osv. Samma tre-sidorsstruktur gäller; det är alltså en namngivning i registret, inte att gravar “slås ihop” som specialfall.
+
+- **Överstrukna och handskrivna positionsnummer:** De tryckta siffrorna för gravsatta (1–5 på sida 2, 6–10 på sida 3) kan vara **överstrukna och ersatta med handskrivna siffror**. Den handskrivna siffran anger den faktiska ordningen eller vilken “plats” personen har; den tryckta platsen på pappret behöver alltså inte motsvara den logiska positionen. Exempel: på sida 2 står (överstruket 1, handskriven 6), (överstruket 2, handskriven 5), … – då ska inmatningen kunna återspegla den ordning/numrering som avses (t.ex. gravsatt 1–6 med info från rätt rader).
+
+- **Övre del av “sida 1” använd för nästa grav:** När en grav har **färre än 6 gravsatta** används inte den övre halvan av “sida 3” för den graven. I stället kan den **övre delen av nästa gravs “sida 1”** (normalt reserverad för föregående gravs 6–10) användas för att ange ytterligare gravsatta för den **nästa** gravplatsen (t.ex. grav 7+8). Då kan t.ex. “6” vara överstruket och “3” handskrivet – alltså en tredje gravsatt för den aktuella gravplatsen, inmatad i 6–10-fältet på föregående gravs sida. Källmaterialet är alltså utspritt över flera sidor.
+
+**Hantering vid inmatning:** Det räcker att användaren kan **bläddra** mellan gravplatserna i källvyn, samla in uppgifter från de sidor där personerna faktiskt står (även om de ligger på “fel” sida i förhållande till standardlayouten), och sedan **föra in varje gravsatt på den gravplats de tillhör** i inmatningsformuläret. Varje post kan kopplas till källan (vilken PDF och vilken del). Kommentarsfältet kan användas för att anteckna t.ex. “gravsatt 3 enl. övre del 13.pdf, handskriven numrering”.
+
 - **Övriga avvikelser** (handskrivna tillägg, överstrukna rader, ofullständig data) kan dokumenteras i kommentarsfältet för den aktuella graven.
 
 ---
