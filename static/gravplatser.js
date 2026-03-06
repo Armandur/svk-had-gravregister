@@ -326,20 +326,50 @@ async function uppdateraVy() {
       const pdfKnapp = x.pdfUrl
         ? `<a href="${x.pdfUrl}" target="_blank" rel="noopener" class="gravplatser-halva-knapp">Öppna PDF</a>`
         : '';
-      const figcap = pdfKnapp ? `<figcaption class="gravplatser-halva-figcap">${pdfKnapp}</figcaption>` : '';
+      const h = halvor[i];
+      const isRegularHalva = h && h.content_sida != null && h.halva != null;
+      const doljKnapp = isRegularHalva
+        ? `<button type="button" class="gravplatser-halva-dolj" data-content-sida="${h.content_sida}" data-halva="${esc(h.halva)}" title="Dölj från gravplatsbilderna">Dölj</button>`
+        : '';
+      const figcapContent = [pdfKnapp, doljKnapp].filter(Boolean).join(' ');
+      const figcap = figcapContent ? `<figcaption class="gravplatser-halva-figcap">${figcapContent}</figcaption>` : '';
       return `<figure class="gravplatser-halva" data-halva-url="${esc(x.halvaUrl)}" data-hela-url="${esc(x.helaUrl)}" data-kan-hela="${x.halvaUrl !== x.helaUrl}" data-index="${i}">
         <img src="${imgSrc}" alt="" />
         ${figcap}
       </figure>`;
     }).join('');
 
+    halvorEl.querySelectorAll('.gravplatser-halva-dolj').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const contentSida = parseInt(btn.dataset.contentSida, 10);
+        const halva = btn.dataset.halva;
+        if (isNaN(contentSida) || !halva || currentGravplatsId == null) return;
+        try {
+          const res = await fetch(`${API}/gravplats/${currentGravplatsId}/dold-halva`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content_sida: contentSida, halva: halva }),
+          });
+          if (!res.ok) throw new Error('Kunde inte uppdatera');
+          await uppdateraVy();
+        } catch (err) {
+          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+        }
+      });
+    });
+
     uppdateraToggleHelaKnapp();
     uppdateraExtramaterialSektion(extramaterial, mappNamn);
+    const dolda = halvorData.dolda || [];
+    uppdateraDoldaSektion(dolda, mappNamn, gp.start_sida, extramaterial.length);
   } catch (e) {
     halvorEl.innerHTML = '<p class="gravplatser-fel">Kunde inte ladda halvor: ' + e.message + '</p>';
     currentExtramaterial = [];
     currentHalvorUrls = [];
     uppdateraExtramaterialSektion([], null);
+    uppdateraDoldaSektion([], null, null, 0);
   }
   inmatningDirty = false;
   uppdateraInmatningSparaKnapp();
@@ -397,9 +427,16 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
   miniatyrerEl.innerHTML = extramaterial.map((em, i) => {
     const bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(em.filnamn)}/bild?${cacheQ}`;
     const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    return `<button type="button" class="gp-em-miniatyr" data-em-index="${i}" data-bild-url="${esc(bildUrl)}" title="${esc(em.filnamn)}">
-      <img src="${bildUrl}" alt="${esc(em.filnamn)}" loading="lazy" />
-    </button>`;
+    const redanHalva = em.redan_halva === true;
+    const knappText = redanHalva ? 'Endast i extramaterial' : 'Visa som gravplatsbild';
+    return `<div class="gp-em-item">
+      <button type="button" class="gp-em-miniatyr" data-em-index="${i}" data-bild-url="${esc(bildUrl)}" title="${esc(em.filnamn)}">
+        <img src="${bildUrl}" alt="${esc(em.filnamn)}" loading="lazy" />
+      </button>
+      <div class="gp-em-knapprad">
+        <button type="button" class="gp-em-visa-som-grav" data-em-id="${em.id}" data-redan-halva="${redanHalva ? '1' : '0'}" title="${redanHalva ? 'Ta bort från gravplatsbilderna' : 'Lägg till bland gravplatsbilderna'}">${esc(knappText)}</button>
+      </div>
+    </div>`;
   }).join('');
 
   miniatyrerEl.querySelectorAll('.gp-em-miniatyr').forEach((btn) => {
@@ -409,6 +446,126 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
       if (url != null && !isNaN(idx)) openLightbox(idx);
     });
   });
+
+  miniatyrerEl.querySelectorAll('.gp-em-visa-som-grav').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const emId = btn.dataset.emId;
+      const redanHalva = btn.dataset.redanHalva === '1';
+      if (!emId || !currentExtramaterialMapp) return;
+      try {
+        const res = await fetch(`${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/extramaterial/${emId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ redan_halva: !redanHalva }),
+        });
+        if (!res.ok) throw new Error('Kunde inte uppdatera');
+        await uppdateraVy();
+      } catch (err) {
+        alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+      }
+    });
+  });
+}
+
+function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
+  const rubrikBtn = document.getElementById('gp-em-rubrik');
+  const doldaRubrikBtn = document.getElementById('gp-em-dolda-rubrik');
+  const innehallEl = document.getElementById('gp-em-dolda-innehall');
+  const miniatyrerEl = document.getElementById('gp-em-dolda-miniatyrer');
+  if (!doldaRubrikBtn || !innehallEl || !miniatyrerEl) return;
+
+  const n = dolda.length;
+  if (rubrikBtn) {
+    const emCount = extramaterialCount ?? 0;
+    rubrikBtn.textContent = n === 0
+      ? `Extramaterial (${emCount})`
+      : `Extramaterial (${emCount}), Dolda (${n})`;
+    rubrikBtn.disabled = emCount + n === 0;
+  }
+  doldaRubrikBtn.textContent = `Dolda (${n})`;
+  doldaRubrikBtn.disabled = n === 0;
+  doldaRubrikBtn.setAttribute('aria-expanded', 'false');
+  innehallEl.hidden = true;
+
+  if (n === 0) {
+    miniatyrerEl.innerHTML = '';
+    return;
+  }
+
+  const cacheQ = `_v=${cacheBust}`;
+  const split1och3 = (727 / 1597).toFixed(4);
+  const split2 = (870 / 1595).toFixed(4);
+  const base = mappNamn ? `${API}/mappar/${encodeURIComponent(mappNamn)}/sida` : '';
+
+  miniatyrerEl.innerHTML = dolda.map((item) => {
+    const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    if (item.type === 'halva' && item.content_sida != null && item.halva != null) {
+      const pos = startSida != null ? item.content_sida - startSida : 0;
+      const split = pos === 1 ? split2 : split1och3;
+      const bildUrl = base
+        ? `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`
+        : '';
+      return `<div class="gp-em-item" data-dold-type="halva">
+        <button type="button" class="gp-em-miniatyr gp-em-dolda-miniatyr" data-bild-url="${esc(bildUrl)}" title="Sida ${item.content_sida} ${item.halva}">
+          <img src="${bildUrl}" alt="" loading="lazy" />
+        </button>
+        <button type="button" class="gp-em-visa-som-grav gp-em-visa-igen" data-dold-type="halva" data-content-sida="${item.content_sida}" data-halva="${esc(item.halva)}" title="Visa igen bland gravplatsbilderna">Visa igen</button>
+      </div>`;
+    }
+    const bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(item.filnamn)}/bild?${cacheQ}`;
+    return `<div class="gp-em-item" data-dold-type="extramaterial">
+      <button type="button" class="gp-em-miniatyr gp-em-dolda-miniatyr" data-bild-url="${esc(bildUrl)}" title="${esc(item.filnamn)}">
+        <img src="${bildUrl}" alt="${esc(item.filnamn)}" loading="lazy" />
+      </button>
+      <button type="button" class="gp-em-visa-som-grav gp-em-visa-igen" data-dold-type="extramaterial" data-em-id="${item.id}" title="Visa igen bland gravplatsbilderna">Visa igen</button>
+    </div>`;
+  }).join('');
+
+  miniatyrerEl.querySelectorAll('.gp-em-visa-igen').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const type = btn.dataset.doldType;
+      if (type === 'halva') {
+        const contentSida = parseInt(btn.dataset.contentSida, 10);
+        const halva = btn.dataset.halva;
+        if (isNaN(contentSida) || !halva || currentGravplatsId == null) return;
+        try {
+          const res = await fetch(
+            `${API}/gravplats/${currentGravplatsId}/dold-halva?content_sida=${contentSida}&halva=${encodeURIComponent(halva)}`,
+            { method: 'DELETE' }
+          );
+          if (!res.ok) throw new Error('Kunde inte uppdatera');
+          await uppdateraVy();
+        } catch (err) {
+          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+        }
+      } else {
+        const emId = btn.dataset.emId;
+        if (!emId || !currentExtramaterialMapp) return;
+        try {
+          const res = await fetch(`${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/extramaterial/${emId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dold: false }),
+          });
+          if (!res.ok) throw new Error('Kunde inte uppdatera');
+          await uppdateraVy();
+        } catch (err) {
+          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+        }
+      }
+    });
+  });
+}
+
+function toggleDoldaInnehall() {
+  const rubrikBtn = document.getElementById('gp-em-dolda-rubrik');
+  const innehallEl = document.getElementById('gp-em-dolda-innehall');
+  if (!rubrikBtn || !innehallEl || rubrikBtn.disabled) return;
+  const expanded = rubrikBtn.getAttribute('aria-expanded') === 'true';
+  rubrikBtn.setAttribute('aria-expanded', !expanded);
+  innehallEl.hidden = expanded;
 }
 
 function toggleExtramaterialInnehall() {
@@ -502,13 +659,6 @@ function lightboxNext() {
   }
 }
 
-function scrollGalleri(riktning) {
-  const miniatyrerEl = document.getElementById('gp-em-miniatyrer');
-  if (!miniatyrerEl) return;
-  const step = 140;
-  miniatyrerEl.scrollBy({ left: riktning * step, behavior: 'smooth' });
-}
-
 function uppdateraToggleHelaKnapp() {
   const btn = document.getElementById('gp-btn-toggle-hela');
   if (!btn) return;
@@ -563,8 +713,7 @@ document.getElementById('gp-btn-toggle-hela')?.addEventListener('click', toggleH
 document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy);
 
 document.getElementById('gp-em-rubrik')?.addEventListener('click', toggleExtramaterialInnehall);
-document.getElementById('gp-em-prev')?.addEventListener('click', () => scrollGalleri(-1));
-document.getElementById('gp-em-next')?.addEventListener('click', () => scrollGalleri(1));
+document.getElementById('gp-em-dolda-rubrik')?.addEventListener('click', toggleDoldaInnehall);
 
 document.getElementById('gp-halvor')?.addEventListener('click', (e) => {
   if (e.target.closest('a')) return;

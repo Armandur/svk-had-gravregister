@@ -37,6 +37,7 @@ class Extramaterial(Base):
     typ: Mapped[str | None] = mapped_column(nullable=True)  # valfri fritext, t.ex. lapp, brev, karta
     grav_start_sida: Mapped[int | None] = mapped_column(nullable=True)  # null = endast knutet till mappen (exkluderas från visning)
     redan_halva: Mapped[bool] = mapped_column(default=False)  # True = kort skannat som en halva, visas som en halva i gravplatsvy
+    dold: Mapped[bool] = mapped_column(default=False)  # True = dölj från gravplatsbilderna, visas i sektion Dolda
 
     mapp: Mapped["MappConfig"] = relationship(back_populates="extramaterial")
 
@@ -84,6 +85,17 @@ class Gravplats(Base):
     # Undantag för vilken grav en halva tillhör (vid felaktig skanningsordning):
     sida1_ovre_tillhor_denna: Mapped[bool] = mapped_column(default=False)  # Sida 1 övre tillhör denna grav (inte föregående)
     sida3_ovre_tillhor_nasta: Mapped[bool] = mapped_column(default=False)  # Sida 3 övre (gravsatta 6–10) tillhör nästa grav
+
+
+class GravplatsDoldHalva(Base):
+    """Halvor (vanliga gravplatsbilder) som användaren dolt – visas i sektion Dolda istället för i bildraden."""
+    __tablename__ = "gravplats_dold_halva"
+    __table_args__ = (UniqueConstraint("gravplats_id", "content_sida", "halva", name="uq_gravplats_dold_halva"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
+    content_sida: Mapped[int] = mapped_column()  # 1-baserat innehållssida
+    halva: Mapped[str] = mapped_column()  # "nedre" | "ovre"
 
 
 class GravplatsInnehavare(Base):
@@ -214,6 +226,15 @@ def init_db():
             cols_inm = [row[1] for row in r]
             if "fardigtranskriberad" not in cols_inm:
                 conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN fardigtranskriberad INTEGER DEFAULT 0"))
+                conn.commit()
+        except Exception:
+            pass
+        # Migration: dold på extramaterial
+        try:
+            r = conn.execute(text("PRAGMA table_info(extramaterial)"))
+            cols_em = [row[1] for row in r]
+            if "dold" not in cols_em:
+                conn.execute(text("ALTER TABLE extramaterial ADD COLUMN dold INTEGER DEFAULT 0"))
                 conn.commit()
         except Exception:
             pass

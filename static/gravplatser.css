@@ -366,6 +366,22 @@
   filter: brightness(1.1);
 }
 
+.gravplatser-halva-dolj {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: #b91c1c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.gravplatser-halva-dolj:hover {
+  filter: brightness(1.1);
+}
+
 .gravplatser-fel {
   font-size: 0.9rem;
   color: #c00;
@@ -412,23 +428,6 @@
   gap: 0.5rem;
 }
 
-.gp-em-pil {
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  padding: 0;
-  font-size: 1.25rem;
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.gp-em-pil:hover {
-  filter: brightness(1.1);
-}
-
 .gp-em-miniatyrer {
   flex: 1;
   min-width: 0;
@@ -457,6 +456,88 @@
   width: 100%;
   height: auto;
   vertical-align: top;
+}
+
+.gp-em-item {
+  flex: 0 0 auto;
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gp-em-item .gp-em-miniatyr {
+  width: 100%;
+}
+
+.gp-em-knapprad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.gp-em-knapprad .gp-em-visa-som-grav,
+.gp-em-knapprad .gp-em-dolj {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gp-em-visa-som-grav {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.35rem;
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 3px;
+  width: 100%;
+}
+
+.gp-em-visa-som-grav:hover {
+  filter: brightness(1.1);
+}
+
+.gp-em-dolda {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.gp-em-dolda-rubrik {
+  width: 100%;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.gp-em-dolda-rubrik:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.gp-em-dolda-rubrik:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.gp-em-dolda-innehall {
+  margin-top: 0.35rem;
+  padding: 0.35rem 0;
+}
+
+.gp-em-dolda-miniatyrer {
+  margin-top: 0;
+}
+
+.gp-em-dolda .gp-em-item .gp-em-visa-som-grav {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.35rem;
 }
 
 /* Lightbox */

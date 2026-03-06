@@ -24,6 +24,7 @@ from app.database import (
     MappFilOrdning,
     MappSidaRedanHalva,
     Gravplats,
+    GravplatsDoldHalva,
     GravplatsInmatning,
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
@@ -459,6 +460,7 @@ class ExtramaterialSchema(BaseModel):
 
 class ExtramaterialPatchSchema(BaseModel):
     redan_halva: bool | None = None
+    dold: bool | None = None
 
 
 @app.get("/api/mappar/{mapp_namn}/config")
@@ -1038,13 +1040,14 @@ async def get_gravplats_halvor(
             item = expanded[sid - 1]
             if item.get("t") == "f":
                 h["filnamn"] = item["v"]
-    # Lägg till "färdiga halvor" – extramaterial markerade som redan_halva (kort skannade som en halva)
+    # Lägg till "färdiga halvor" – extramaterial markerade som redan_halva (kort skannade som en halva), exkludera dolda
     for em in (
         db.query(Extramaterial)
         .filter(
             Extramaterial.mapp_id == mapp_config.id,
             Extramaterial.grav_start_sida == g.start_sida,
-            Extramaterial.redan_halva.is_(True),
+            Extramaterial.redan_halva == True,
+            Extramaterial.dold != True,
         )
         .order_by(Extramaterial.id)
     ):
@@ -1053,18 +1056,47 @@ async def get_gravplats_halvor(
             "filnamn": em.filnamn,
             "typ": em.typ or "halva",
         })
-    # Alla extramaterial knutna till denna gravplats (för utfällbar sektion)
+    # Exkludera vanliga halvor som användaren dolt (gravplats_dold_halva)
+    dold_halvor_rows = db.query(GravplatsDoldHalva).filter(GravplatsDoldHalva.gravplats_id == g.id).all()
+    dold_halvor_set = {(r.content_sida, r.halva) for r in dold_halvor_rows}
+    halvor = [h for h in halvor if (h.get("content_sida"), h.get("halva")) not in dold_halvor_set]
+    # Alla extramaterial knutna till denna gravplats (ej dolda) – för utfällbar sektion
     extramaterial_lista = [
-        {"id": em.id, "filnamn": em.filnamn, "typ": em.typ or ""}
+        {"id": em.id, "filnamn": em.filnamn, "typ": em.typ or "", "redan_halva": getattr(em, "redan_halva", False)}
         for em in (
             db.query(Extramaterial)
             .filter(
                 Extramaterial.mapp_id == mapp_config.id,
                 Extramaterial.grav_start_sida == g.start_sida,
+                Extramaterial.dold != True,
             )
             .order_by(Extramaterial.id)
         )
     ]
+    # Dolda: (1) extramaterial med dold=true, (2) vanliga halvor som användaren dolt
+    dolda_lista = []
+    for em in (
+        db.query(Extramaterial)
+        .filter(
+            Extramaterial.mapp_id == mapp_config.id,
+            Extramaterial.grav_start_sida == g.start_sida,
+            Extramaterial.dold == True,
+        )
+        .order_by(Extramaterial.id)
+    ):
+        dolda_lista.append({"type": "extramaterial", "id": em.id, "filnamn": em.filnamn, "typ": em.typ or ""})
+    for r in dold_halvor_rows:
+        filnamn = None
+        if 1 <= r.content_sida <= len(expanded):
+            item = expanded[r.content_sida - 1]
+            if item.get("t") == "f":
+                filnamn = item.get("v")
+        dolda_lista.append({
+            "type": "halva",
+            "content_sida": r.content_sida,
+            "halva": r.halva,
+            "filnamn": filnamn or "",
+        })
     return {
         "gravplats": {
             "id": g.id,
@@ -1076,7 +1108,55 @@ async def get_gravplats_halvor(
         },
         "halvor": halvor,
         "extramaterial": extramaterial_lista,
+        "dolda": dolda_lista,
     }
+
+
+class DoldHalvaBody(BaseModel):
+    content_sida: int
+    halva: str  # "nedre" | "ovre"
+
+
+@app.post("/api/gravplats/{gravplats_id:int}/dold-halva")
+async def post_dold_halva(gravplats_id: int, body: DoldHalvaBody, db: Session = Depends(get_db)):
+    """Dölj en vanlig gravplatsbild (halva) från bildraden – den visas i sektion Dolda."""
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    existing = (
+        db.query(GravplatsDoldHalva)
+        .filter(
+            GravplatsDoldHalva.gravplats_id == gravplats_id,
+            GravplatsDoldHalva.content_sida == body.content_sida,
+            GravplatsDoldHalva.halva == body.halva,
+        )
+        .first()
+    )
+    if not existing:
+        row = GravplatsDoldHalva(gravplats_id=gravplats_id, content_sida=body.content_sida, halva=body.halva)
+        db.add(row)
+        db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/gravplats/{gravplats_id:int}/dold-halva")
+async def delete_dold_halva(
+    gravplats_id: int,
+    content_sida: int,
+    halva: str,
+    db: Session = Depends(get_db),
+):
+    """Visa igen en dold vanlig gravplatsbild (ta bort från Dolda)."""
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    db.query(GravplatsDoldHalva).filter(
+        GravplatsDoldHalva.gravplats_id == gravplats_id,
+        GravplatsDoldHalva.content_sida == content_sida,
+        GravplatsDoldHalva.halva == halva,
+    ).delete()
+    db.commit()
+    return {"ok": True}
 
 
 @app.post("/api/mappar/{mapp_namn}/gravplats")
@@ -1535,13 +1615,15 @@ async def patch_extramaterial(
     body: ExtramaterialPatchSchema,
     db: Session = Depends(get_db),
 ):
-    """Uppdatera extramaterial (t.ex. redan_halva)."""
+    """Uppdatera extramaterial (t.ex. redan_halva, dold)."""
     _mapp_path(mapp_namn)
     em = db.query(Extramaterial).filter(Extramaterial.id == em_id).first()
     if not em:
         raise HTTPException(status_code=404, detail="Extramaterial hittades inte")
     if body.redan_halva is not None:
         em.redan_halva = body.redan_halva
+    if body.dold is not None:
+        em.dold = body.dold
     db.commit()
     db.refresh(em)
     return {
@@ -1550,6 +1632,7 @@ async def patch_extramaterial(
         "typ": em.typ,
         "grav_start_sida": em.grav_start_sida,
         "redan_halva": getattr(em, "redan_halva", False),
+        "dold": getattr(em, "dold", False),
     }
 
 
