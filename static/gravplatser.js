@@ -125,10 +125,7 @@ function sorteradLista(lista) {
   });
 }
 
-async function laddaTrad() {
-  const container = document.getElementById('gp-trad');
-  const tomEl = document.getElementById('gp-trad-tom');
-  if (!container) return;
+async function fetchTradData() {
   try {
     const res = await fetch(`${API}/gravplatser/trad`);
     const data = await res.json();
@@ -141,6 +138,13 @@ async function laddaTrad() {
   } catch (e) {
     tradData = { kyrkogardar: [], kvarter_per_kyrkogard: {}, antal_per_kvarter: {}, antal_per_kyrkogard: {} };
   }
+}
+
+async function laddaTrad() {
+  await fetchTradData();
+  const container = document.getElementById('gp-trad');
+  const tomEl = document.getElementById('gp-trad-tom');
+  if (!container) return;
   container.innerHTML = '';
   if (tradData.kyrkogardar.length === 0) {
     if (tomEl) tomEl.hidden = false;
@@ -269,7 +273,7 @@ function toggleTradMeny() {
   }
 }
 
-async function laddaGravplatserForKvarter(targetGravplatsnummer) {
+async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
   if (!valdKyrkogard || !valdKvarter) return;
   const innehall = document.getElementById('gp-innehall');
   try {
@@ -282,6 +286,8 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer) {
         (g) => (g.gravplatsnummer || '').trim() === String(targetGravplatsnummer).trim()
       );
       currentIndex = idx >= 0 ? idx : 0;
+    } else if (tillSista && gravplatserLista.length > 0) {
+      currentIndex = gravplatserLista.length - 1;
     } else {
       currentIndex = 0;
     }
@@ -330,8 +336,21 @@ async function uppdateraVy() {
   const mappNamn = gp.mapp_namn;
 
   rubrikEl.textContent = gp.fullstandigt || [gp.kyrkogard, gp.kvarter, gp.gravplatsnummer].filter(Boolean).join(' ') || '–';
-  if (btnTillbaka) btnTillbaka.disabled = idx <= 0;
-  if (btnNasta) btnNasta.disabled = idx >= n - 1;
+
+  await ensureTradData(gp.kyrkogard);
+  const nastaKv = getNastaKvarter(gp.kyrkogard, gp.kvarter);
+  const foregaendeKv = getForegaendeKvarter(gp.kyrkogard, gp.kvarter);
+  const paSistaGravplats = idx >= n - 1;
+  const paForstaGravplats = idx <= 0;
+
+  if (btnTillbaka) {
+    btnTillbaka.disabled = paForstaGravplats && !foregaendeKv;
+    btnTillbaka.textContent = paForstaGravplats && foregaendeKv ? '← Byt till föregående kvarter' : '← Föregående';
+  }
+  if (btnNasta) {
+    btnNasta.disabled = paSistaGravplats && !nastaKv;
+    btnNasta.textContent = paSistaGravplats && nastaKv ? 'Byt till nästa kvarter →' : 'Nästa →';
+  }
 
   const slug = slugForGravplats(gp);
   const path = slug ? `/gravplatser/${slug}` : '/gravplatser';
@@ -439,6 +458,17 @@ async function uppdateraVy() {
   uppdateraInmatningSektionerVidGravplatsbyte();
 }
 
+/** I visa-läget: fäll ut alla inmatningssektioner (aria-expanded, innehall synlig). */
+function expandAllInmatningSektioner() {
+  const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  sektioner.forEach((s) => {
+    const btn = document.querySelector(`.gp-sektion-rubrik[data-sektion="${s}"]`);
+    const innehall = document.getElementById(`gp-innehall-${s}`);
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    if (innehall) innehall.hidden = false;
+  });
+}
+
 /** Vid gravplatsbyte: invalidera inmatningscache och återrendera öppna sektioner med ny gravplats data. */
 async function uppdateraInmatningSektionerVidGravplatsbyte() {
   if (currentGravplatsId == null) {
@@ -455,16 +485,13 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   if (sparaWrap) sparaWrap.hidden = true;
   const redigeraBtn = document.getElementById('gp-btn-redigera');
   if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
+  expandAllInmatningSektioner();
   uppdateraInmatningSparaKnapp();
   uppdateraInmatningRubrikCounts();
   const ok = await ensureInmatningData();
   if (ok) {
     const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
-    const oppna = sektioner.filter((s) => {
-      const innehall = document.getElementById(`gp-innehall-${s}`);
-      return innehall && !innehall.hidden;
-    });
-    oppna.forEach((s) => renderInmatningSektion(s));
+    sektioner.forEach((s) => renderInmatningSektion(s));
   }
   uppdateraFardigtranskriberadKnapp();
 }
@@ -767,6 +794,76 @@ function nasta() {
   }
 }
 
+/** Returnerar nästa kvarter på angiven kyrkogård, eller null. Om kyrkogard/kvarter utelämnas används valdKyrkogard/valdKvarter. */
+function getNastaKvarter(kyrkogard, kvarter) {
+  const kg = (kyrkogard != null ? kyrkogard : valdKyrkogard) || '';
+  const kv = (kvarter != null ? kvarter : valdKvarter) || '';
+  if (!kg || !kv) return null;
+  const lista = getKvarterListaForKyrkogard(kg);
+  const vald = String(kv).trim();
+  const i = lista.findIndex((k) => kvarterMatch((k || '').trim(), vald));
+  return i >= 0 && i < lista.length - 1 ? (lista[i + 1] || '').trim() : null;
+}
+
+/** Returnerar föregående kvarter på angiven kyrkogård, eller null. */
+function getForegaendeKvarter(kyrkogard, kvarter) {
+  const kg = (kyrkogard != null ? kyrkogard : valdKyrkogard) || '';
+  const kv = (kvarter != null ? kvarter : valdKvarter) || '';
+  if (!kg || !kv) return null;
+  const lista = getKvarterListaForKyrkogard(kg);
+  const vald = String(kv).trim();
+  const i = lista.findIndex((k) => kvarterMatch((k || '').trim(), vald));
+  return i > 0 ? (lista[i - 1] || '').trim() : null;
+}
+
+/** Jämför två kvartersträngar (t.ex. "01" och "1" räknas som samma). */
+function kvarterMatch(a, b) {
+  if (a === b) return true;
+  if (/^\d+$/.test(a) && /^\d+$/.test(b)) return parseInt(a, 10) === parseInt(b, 10);
+  return false;
+}
+
+/** Hämtar kvarterlistan för kyrkogård (från tradData). Matchar kyrkogårdsnyckel med trim. */
+function getKvarterListaForKyrkogard(kyrkogard) {
+  const k = (kyrkogard || '').trim();
+  if (!k) return [];
+  const raw = tradData.kvarter_per_kyrkogard[kyrkogard] || tradData.kvarter_per_kyrkogard[k];
+  if (Array.isArray(raw)) return raw;
+  const key = Object.keys(tradData.kvarter_per_kyrkogard || {}).find(
+    (kk) => (kk || '').trim().toLowerCase() === k.toLowerCase()
+  );
+  return key ? (tradData.kvarter_per_kyrkogard[key] || []) : [];
+}
+
+/** Ser till att tradData har kvarterlistan för kyrkogården (hämtar trädet vid behov). */
+let tradDataLaddas = null;
+async function ensureTradData(kyrkogard) {
+  const kg = (kyrkogard || valdKyrkogard || '').trim();
+  if (!kg) return;
+  const lista = getKvarterListaForKyrkogard(kg);
+  if (lista.length > 0) return;
+  if (tradDataLaddas) return tradDataLaddas;
+  tradDataLaddas = fetchTradData();
+  await tradDataLaddas;
+  tradDataLaddas = null;
+}
+
+/** Byt till nästa kvarter (första gravplatsen). Endast vid klick – inte piltangent. */
+async function bytTillNastaKvarter() {
+  const nastaKv = getNastaKvarter();
+  if (!nastaKv) return;
+  valdKvarter = nastaKv;
+  await laddaGravplatserForKvarter();
+}
+
+/** Byt till föregående kvarter (sista gravplatsen). Endast vid klick – inte piltangent. */
+async function bytTillForegaendeKvarter() {
+  const foregaende = getForegaendeKvarter();
+  if (!foregaende) return;
+  valdKvarter = foregaende;
+  await laddaGravplatserForKvarter(null, true);
+}
+
 /** OCR: visa overlay på figuren, användaren drar rektangel, kör Tesseract på crop och visar modal.
  * Om initialEvent anges (mousedown på bilden) startar markeringen direkt med den punkten. */
 function startOcrOverlay(fig, initialEvent) {
@@ -1060,8 +1157,22 @@ function closeOcrModal(anvand) {
 document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', () => {
   window.location.href = '/gravplatser';
 });
-document.getElementById('gp-btn-tillbaka')?.addEventListener('click', tillbaka);
-document.getElementById('gp-btn-nasta')?.addEventListener('click', nasta);
+document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
+  const foregaendeKv = getForegaendeKvarter();
+  if (currentIndex <= 0 && foregaendeKv) {
+    bytTillForegaendeKvarter();
+  } else {
+    tillbaka();
+  }
+});
+document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
+  const nastaKv = getNastaKvarter();
+  if (currentIndex >= gravplatserLista.length - 1 && nastaKv) {
+    bytTillNastaKvarter();
+  } else {
+    nasta();
+  }
+});
 document.getElementById('gp-btn-toggle-hela')?.addEventListener('click', toggleHelaSidor);
 document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy);
 
@@ -1182,10 +1293,10 @@ document.addEventListener('keydown', (e) => {
   const lb = document.getElementById('gp-lightbox');
   if (lb && !lb.hidden) return;
   if (e.key === 'ArrowLeft') {
-    tillbaka();
+    if (currentIndex > 0) tillbaka();
     e.preventDefault();
   } else if (e.key === 'ArrowRight') {
-    nasta();
+    if (currentIndex < gravplatserLista.length - 1) nasta();
     e.preventDefault();
   }
 });
@@ -1307,7 +1418,7 @@ function renderInmatningSektionLäs(sektion) {
   if (sektion === 'innehavare') {
     const inv = d.innehavare || [];
     if (inv.length === 0) {
-      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga gravrättsinnehavare registrerade.</p></div>';
+      innehall.innerHTML = '';
       return;
     }
     innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + inv.map((i) => {
@@ -1325,7 +1436,7 @@ function renderInmatningSektionLäs(sektion) {
   if (sektion === 'narmast_anhoriga') {
     const na = d.narmast_anhoriga || [];
     if (na.length === 0) {
-      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga närmast anhöriga registrerade.</p></div>';
+      innehall.innerHTML = '';
       return;
     }
     innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + na.map((n) => {
@@ -1353,20 +1464,20 @@ function renderInmatningSektionLäs(sektion) {
       radOmFyllt('Utfärdat den', d.utfordat_den) +
       radOmFyllt('Kommentar', d.kommentar);
     const innehallHtml = rader + (ovrigt ? '<h4 class="gp-inmatning-delrubrik">Övrigt</h4>' + ovrigt : '');
-    innehall.innerHTML = '<div class="gp-inmatning-las">' + (innehallHtml || '<p class="gp-las-tom">Inga uppgifter.</p>') + '</div>';
+    innehall.innerHTML = innehallHtml ? '<div class="gp-inmatning-las">' + innehallHtml + '</div>' : '';
     return;
   }
 
   if (sektion === 'skiss') {
     const rader = radOmFyllt('Storlek', d.storlek);
-    innehall.innerHTML = '<div class="gp-inmatning-las">' + rader + '<p class="gp-skiss-info">Här kommer du senare kunna ange/croppa skiss från bilden.</p></div>';
+    innehall.innerHTML = rader ? '<div class="gp-inmatning-las">' + rader + '</div>' : '';
     return;
   }
 
   if (sektion === 'gravsatta') {
     const gs = d.gravsatta || [];
     if (gs.length === 0) {
-      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga gravsatta registrerade.</p></div>';
+      innehall.innerHTML = '';
       return;
     }
     innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + gs.map((g, idx) => {
@@ -1594,18 +1705,17 @@ function bindDatumValidering(container) {
   blocks.forEach((blk) => {
     const idx = blk.dataset.gsIndex != null ? blk.dataset.gsIndex : '';
     const felIds = { gs_fodelse_datum: `gs_fodelse_datum_fel_${idx}`, gs_dods_datum: `gs_dods_datum_fel_${idx}`, gs_gravsatt_den: `gs_gravsatt_den_fel_${idx}` };
+    const runBlock = () => valideraGravsattBlockDatum(blk);
     ['gs_fodelse_datum', 'gs_dods_datum', 'gs_gravsatt_den'].forEach((base) => {
       const inp = blk.querySelector(`[name="${base}_${idx}"]`);
-      const felSpan = document.getElementById(felIds[base]);
       if (!inp) return;
-      const run = () => visaDatumValidering(inp, felSpan);
       inp.addEventListener('blur', () => {
         const fore = inp.value;
         normaliseraDatumFalt(inp);
         if (inp.value !== fore) markInmatningDirty();
-        run();
+        runBlock();
       });
-      inp.addEventListener('input', run);
+      inp.addEventListener('input', runBlock);
     });
   });
 }
@@ -1639,6 +1749,58 @@ function parseDatum(s) {
 }
 
 const DATUM_FORMAT_TEXT = 'Giltiga format: YYYY, YYYY-MM eller YYYY-MM-DD';
+
+/** Ger tidigast möjliga datum för partiellt datum (för jämförelse). YYYY → 1 jan, YYYY-MM → 1:e i månaden. */
+function parsedToEarliest(p) {
+  if (!p || p.ar == null) return null;
+  const y = p.ar;
+  const m = p.manad != null ? p.manad : 1;
+  const d = p.dag != null ? p.dag : 1;
+  return y * 10000 + m * 100 + d;
+}
+
+/** Ger senast möjliga datum för partiellt datum. YYYY → 31 dec, YYYY-MM → sista dagen i månaden. */
+function parsedToLatest(p) {
+  if (!p || p.ar == null) return null;
+  const y = p.ar;
+  let m, d;
+  if (p.manad != null && p.dag != null) {
+    m = p.manad;
+    d = p.dag;
+  } else if (p.manad != null) {
+    m = p.manad;
+    d = new Date(y, m, 0).getDate();
+  } else {
+    m = 12;
+    d = 31;
+  }
+  return y * 10000 + m * 100 + d;
+}
+
+/** Rimlighetskontroll för gravsatt-block: dödsdatum >= födelsedatum, gravsatt den >= dödsdatum. Returnerar { dodsFel?, gravsattFel? } med meddelande. */
+function valideraDatumRimlighetGravsattBlock(blk) {
+  const idx = blk.dataset.gsIndex != null ? blk.dataset.gsIndex : '';
+  const p = (name) => (blk.querySelector(`[name="${name}_${idx}"]`)?.value ?? '').trim();
+  const fodelse = parseDatum(p('gs_fodelse_datum'));
+  const dods = parseDatum(p('gs_dods_datum'));
+  const gravsattDen = parseDatum(p('gs_gravsatt_den'));
+  const err = {};
+  if (fodelse.ar != null && dods.ar != null) {
+    const latestDods = parsedToLatest(dods);
+    const earliestFodelse = parsedToEarliest(fodelse);
+    if (latestDods < earliestFodelse) {
+      err.dodsFel = 'Dödsdatum kan inte vara tidigare än födelsedatum.';
+    }
+  }
+  if (dods.ar != null && gravsattDen.ar != null) {
+    const latestGravsatt = parsedToLatest(gravsattDen);
+    const earliestDods = parsedToEarliest(dods);
+    if (latestGravsatt < earliestDods) {
+      err.gravsattFel = 'Gravsättningsdatum kan inte vara tidigare än dödsdatum.';
+    }
+  }
+  return err;
+}
 
 /** Om värdet är exakt 8 siffror (YYYYMMDD), formatera till YYYY-MM-DD. Endast 8 siffror konverteras; YYYY-MM skrivs manuellt. */
 function normaliseraDatumFalt(inp) {
@@ -1675,6 +1837,58 @@ function visaDatumValidering(inp, felSpan) {
   } else {
     if (felSpan) { felSpan.textContent = r.message || DATUM_FORMAT_TEXT; felSpan.hidden = false; }
     inp.setCustomValidity(r.message || DATUM_FORMAT_TEXT);
+  }
+}
+
+/** Kör format- och rimlighetsvalidering för ett gravsatt-blocks tre datumfält. Uppdaterar felSpan och setCustomValidity. */
+function valideraGravsattBlockDatum(blk) {
+  const idx = blk.dataset.gsIndex != null ? blk.dataset.gsIndex : '';
+  const bases = ['gs_fodelse_datum', 'gs_dods_datum', 'gs_gravsatt_den'];
+  const formatResults = {};
+  bases.forEach((base) => {
+    const inp = blk.querySelector(`[name="${base}_${idx}"]`);
+    const felSpan = document.getElementById(`${base}_fel_${idx}`);
+    if (!inp) return;
+    const r = validDatum(inp.value);
+    formatResults[base] = { valid: r.valid, message: r.message };
+    if (r.valid) {
+      if (felSpan) { felSpan.hidden = true; felSpan.textContent = ''; felSpan.className = 'gp-datum-fel'; }
+      inp.setCustomValidity('');
+    } else {
+      if (felSpan) { felSpan.textContent = r.message || DATUM_FORMAT_TEXT; felSpan.className = 'gp-datum-fel'; felSpan.hidden = false; }
+      inp.setCustomValidity(r.message || DATUM_FORMAT_TEXT);
+    }
+  });
+  const rimlighet = valideraDatumRimlighetGravsattBlock(blk);
+  const dodsInp = blk.querySelector(`[name="gs_dods_datum_${idx}"]`);
+  const dodsFel = document.getElementById(`gs_dods_datum_fel_${idx}`);
+  if (dodsInp && dodsFel) {
+    if (rimlighet.dodsFel) {
+      dodsFel.textContent = rimlighet.dodsFel;
+      dodsFel.className = 'gp-datum-fel gp-datum-varning';
+      dodsFel.hidden = false;
+      dodsInp.setCustomValidity(''); // varning spärrar inte – grundmaterialet kan ha så
+    } else if (formatResults['gs_dods_datum'].valid) {
+      dodsFel.hidden = true;
+      dodsFel.textContent = '';
+      dodsFel.className = 'gp-datum-fel';
+      dodsInp.setCustomValidity('');
+    }
+  }
+  const gravsattInp = blk.querySelector(`[name="gs_gravsatt_den_${idx}"]`);
+  const gravsattFel = document.getElementById(`gs_gravsatt_den_fel_${idx}`);
+  if (gravsattInp && gravsattFel) {
+    if (rimlighet.gravsattFel) {
+      gravsattFel.textContent = rimlighet.gravsattFel;
+      gravsattFel.className = 'gp-datum-fel gp-datum-varning';
+      gravsattFel.hidden = false;
+      gravsattInp.setCustomValidity(''); // varning spärrar inte
+    } else if (formatResults['gs_gravsatt_den'].valid) {
+      gravsattFel.hidden = true;
+      gravsattFel.textContent = '';
+      gravsattFel.className = 'gp-datum-fel';
+      gravsattInp.setCustomValidity('');
+    }
   }
 }
 
@@ -1856,20 +2070,11 @@ function valideraAllaDatumFalt() {
   if (!root) return true;
   let firstInvalid = null;
   root.querySelectorAll('.gp-gravsatt-block').forEach((blk) => {
+    valideraGravsattBlockDatum(blk);
     const idx = blk.dataset.gsIndex != null ? blk.dataset.gsIndex : '';
     ['gs_fodelse_datum', 'gs_dods_datum', 'gs_gravsatt_den'].forEach((base) => {
       const inp = blk.querySelector(`[name="${base}_${idx}"]`);
-      const felSpan = document.getElementById(`${base}_fel_${idx}`);
-      if (!inp) return;
-      const r = validDatum(inp.value);
-      if (r.valid) {
-        if (felSpan) { felSpan.hidden = true; felSpan.textContent = ''; }
-        inp.setCustomValidity('');
-      } else {
-        if (felSpan) { felSpan.textContent = r.message || DATUM_FORMAT_TEXT; felSpan.hidden = false; }
-        inp.setCustomValidity(r.message || DATUM_FORMAT_TEXT);
-        if (!firstInvalid) firstInvalid = inp;
-      }
+      if (inp && !validDatum(inp.value).valid && !firstInvalid) firstInvalid = inp;
     });
   });
   if (firstInvalid) {
@@ -1943,10 +2148,10 @@ function toggleRedigeraVy() {
     if (sparaWrap) sparaWrap.hidden = true;
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Redigera gravplatsen';
+    expandAllInmatningSektioner();
     const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
     sektioner.forEach((s) => {
-      const innehall = document.getElementById(`gp-innehall-${s}`);
-      if (innehall && !innehall.hidden) ensureInmatningData().then((ok) => { if (ok) renderInmatningSektion(s); });
+      ensureInmatningData().then((ok) => { if (ok) renderInmatningSektion(s); });
     });
     uppdateraFardigtranskriberadKnapp();
   } else {
