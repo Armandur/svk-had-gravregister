@@ -1158,6 +1158,11 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   display: none;
 }
 
+/* Varning för orimliga datum – spärrar inte sparning (grundmaterialet kan ha så) */
+.gp-datum-varning {
+  color: #b45309;
+}
+
 .gp-skiss-info {
   font-size: 0.85rem;
   color: var(--text-muted, #555);
