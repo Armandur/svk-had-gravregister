@@ -1,6 +1,7 @@
 """FastAPI-app för gravregister-PoC."""
 import base64
 import os
+import re
 import signal
 import sys
 import threading
@@ -92,15 +93,19 @@ async def root():
 
 @app.get("/listvy")
 async def listvy_sida():
-    """PDF-listvy – välj mapp, bläddra sidor, registrera gravplatser."""
+    """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser."""
     return FileResponse(Path(__file__).parent.parent / "static" / "listvy.html")
 
 
 @app.get("/gravplatser")
 @app.get("/gravplatser/{gravplats_slug:path}")
 async def gravplatser_sida(gravplats_slug: str | None = None):
-    """Gravregister – Visa och Inmatning. URL kan innehålla gravplats, t.ex. /gravplatser/HKG%2001%201%2B2."""
-    return FileResponse(Path(__file__).parent.parent / "static" / "gravplatser.html")
+    """Trädvy på /gravplatser; visar en gravplats på /gravplatser/{slug}; sök på /gravplatser/sok."""
+    if gravplats_slug == "sok":
+        return FileResponse(Path(__file__).parent.parent / "static" / "gravplatser-sok.html")
+    if gravplats_slug is None:
+        return FileResponse(Path(__file__).parent.parent / "static" / "gravplatser-trad.html")
+    return FileResponse(Path(__file__).parent.parent / "static" / "gravplatser-visa.html")
 
 
 @app.get("/api/mappar")
@@ -581,6 +586,53 @@ async def gravplatser_trad(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/gravplatser/forslag/kyrkogardar")
+async def forslag_kyrkogardar(q: str = "", limit: int = 30, db: Session = Depends(get_db)):
+    """Lazy-förslag på kyrkogårdar (prefix-match)."""
+    q = (q or "").strip()
+    if not q:
+        return {"forslag": []}
+    rows = (
+        db.query(Gravplats.kyrkogard)
+        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+        .filter(Gravplats.kyrkogard.ilike(q + "%"))
+        .distinct()
+        .order_by(Gravplats.kyrkogard)
+        .limit(max(1, min(limit, 100)))
+        .all()
+    )
+    forslag = [r[0].strip() for r in rows if r[0] and r[0].strip()]
+    return {"forslag": forslag}
+
+
+@app.get("/api/gravplatser/forslag/kvarter")
+async def forslag_kvarter(
+    q: str = "",
+    kyrkogard: str | None = None,
+    limit: int = 30,
+    db: Session = Depends(get_db),
+):
+    """Lazy-förslag på kvarter (prefix-match). Valfritt filtrera på kyrkogård."""
+    q = (q or "").strip()
+    if not q:
+        return {"forslag": []}
+    query = (
+        db.query(Gravplats.kvarter)
+        .filter(Gravplats.kvarter.isnot(None), Gravplats.kvarter != "")
+        .filter(Gravplats.kvarter.ilike(q + "%"))
+    )
+    if kyrkogard and kyrkogard.strip():
+        query = query.filter(Gravplats.kyrkogard == kyrkogard.strip())
+    rows = (
+        query.distinct()
+        .order_by(Gravplats.kvarter)
+        .limit(max(1, min(limit, 100)))
+        .all()
+    )
+    forslag = [r[0].strip() for r in rows if r[0] is not None and str(r[0]).strip()]
+    return {"forslag": forslag}
+
+
 @app.get("/api/gravplatser")
 async def list_gravplats_global(
     kyrkogard: str,
@@ -624,6 +676,247 @@ async def list_gravplats_global(
 
     out.sort(key=lambda x: (ledande_tal(x.get("gravplatsnummer") or ""), (x.get("gravplatsnummer") or "")))
     return {"gravplatser": out}
+
+
+@app.get("/api/gravplatser/sok")
+async def sok_gravplatser(q: str = "", limit: int = 25, db: Session = Depends(get_db)):
+    """
+    Sök/förslag på gravplatser efter fullständigt gravplatsnummer (kyrkogård + kvarter + gravplatsnummer).
+    q tolkas som prefix: "HKG" → kyrkogård som börjar på HKG, "HKG 01" → + kvarter som börjar på 01, etc.
+    Returnerar lista för autocomplete.
+    """
+    q = (q or "").strip()
+    if not q:
+        return {"gravplatser": []}
+    parts = [p.strip() for p in q.split() if p.strip()]
+    qry = (
+        db.query(Gravplats, MappConfig.namn)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+    )
+    if len(parts) >= 1:
+        qry = qry.filter(Gravplats.kyrkogard.ilike(parts[0] + "%"))
+    if len(parts) >= 2:
+        qry = qry.filter(Gravplats.kvarter.ilike(parts[1] + "%"))
+    if len(parts) >= 3:
+        qry = qry.filter(Gravplats.gravplatsnummer.ilike(parts[2] + "%"))
+    items = (
+        qry.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida)
+        .limit(max(1, min(limit, 50)))
+        .all()
+    )
+    def ledande_tal(nr: str) -> int:
+        s = (nr or "").strip()
+        n = 0
+        for c in s:
+            if c.isdigit():
+                n = n * 10 + int(c)
+            elif n > 0:
+                break
+        return n if n > 0 else -1
+    out = []
+    for g, mapp_namn in items:
+        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        out.append({
+            "id": g.id,
+            "kyrkogard": g.kyrkogard,
+            "kvarter": g.kvarter,
+            "gravplatsnummer": g.gravplatsnummer,
+            "fullstandigt": fullstandigt,
+            "mapp_namn": mapp_namn,
+        })
+    out.sort(key=lambda x: (x["kyrkogard"] or "", x["kvarter"] or "", ledande_tal(x.get("gravplatsnummer") or ""), (x.get("gravplatsnummer") or "")))
+    return {"gravplatser": out}
+
+
+def _ar_ur_datumstr(s: str | None) -> int | None:
+    """
+    Plocka ut fyrsiffrigt årtal ur en datumsträng (t.ex. 1800, 1800-01, 1800-01-15).
+    Ofullständiga datum (endast år eller år-månad) räknas med utifrån året vid sökning mellan årtal.
+    """
+    if not s or not s.strip():
+        return None
+    # Matcha fyrsiffrigt årtal (t.ex. 1600–2099) så att ofullständiga datum inkluderas
+    m = re.search(r"\b(1[6-9]\d{2}|20\d{2})\b", s.strip())
+    return int(m.group(0)) if m else None
+
+
+@app.get("/api/gravplatser/avancerad-sok")
+async def avancerad_sok_gravplatser(
+    db: Session = Depends(get_db),
+    kyrkogard: str | None = None,
+    kvarter: str | None = None,
+    innehavare_fornamn: str | None = None,
+    innehavare_efternamn: str | None = None,
+    innehavare_yrke: str | None = None,
+    anhorig_fornamn: str | None = None,
+    anhorig_efternamn: str | None = None,
+    gravsatt_fornamn: str | None = None,
+    gravsatt_efternamn: str | None = None,
+    gravsatt_fodda_fran: int | None = None,
+    gravsatt_fodda_till: int | None = None,
+    gravsatt_doda_fran: int | None = None,
+    gravsatt_doda_till: int | None = None,
+    gravsatt_gravsatta_fran: int | None = None,
+    gravsatt_gravsatta_till: int | None = None,
+    har_extramaterial: bool | None = None,
+    utfardad_fran: int | None = None,
+    utfardad_till: int | None = None,
+    limit: int = 500,
+):
+    """
+    Avancerad sökning: filtrera gravplatser på kyrkogård, kvarter, gravrättsinnehavare,
+    närmast anhöriga, gravsatta (namn, födda/döda/begravda mellan årtal), extramaterial, graven utfärdad mellan årtal.
+    """
+    q = db.query(Gravplats).join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+    if kyrkogard and kyrkogard.strip():
+        q = q.filter(Gravplats.kyrkogard.ilike("%" + kyrkogard.strip() + "%"))
+    if kvarter and kvarter.strip():
+        q = q.filter(Gravplats.kvarter.ilike("%" + kvarter.strip() + "%"))
+
+    if innehavare_fornamn and innehavare_fornamn.strip():
+        sq = (
+            db.query(GravplatsInnehavare.gravplats_id)
+            .filter(GravplatsInnehavare.fornamn.ilike("%" + innehavare_fornamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+    if innehavare_efternamn and innehavare_efternamn.strip():
+        sq = (
+            db.query(GravplatsInnehavare.gravplats_id)
+            .filter(GravplatsInnehavare.efternamn.ilike("%" + innehavare_efternamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+    if innehavare_yrke and innehavare_yrke.strip():
+        sq = (
+            db.query(GravplatsInnehavare.gravplats_id)
+            .filter(GravplatsInnehavare.yrke.ilike("%" + innehavare_yrke.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+
+    if anhorig_fornamn and anhorig_fornamn.strip():
+        sq = (
+            db.query(GravplatsNarmastAnhorig.gravplats_id)
+            .filter(GravplatsNarmastAnhorig.fornamn.ilike("%" + anhorig_fornamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+    if anhorig_efternamn and anhorig_efternamn.strip():
+        sq = (
+            db.query(GravplatsNarmastAnhorig.gravplats_id)
+            .filter(GravplatsNarmastAnhorig.efternamn.ilike("%" + anhorig_efternamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+
+    if gravsatt_fornamn and gravsatt_fornamn.strip():
+        sq = (
+            db.query(Gravsatt.gravplats_id)
+            .filter(Gravsatt.fornamn.ilike("%" + gravsatt_fornamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+    if gravsatt_efternamn and gravsatt_efternamn.strip():
+        sq = (
+            db.query(Gravsatt.gravplats_id)
+            .filter(Gravsatt.efternamn.ilike("%" + gravsatt_efternamn.strip() + "%"))
+            .distinct()
+        )
+        q = q.filter(Gravplats.id.in_(sq))
+    if gravsatt_fodda_fran is not None or gravsatt_fodda_till is not None:
+        sq = db.query(Gravsatt.gravplats_id).distinct()
+        if gravsatt_fodda_fran is not None:
+            sq = sq.filter(Gravsatt.fodelse_ar >= gravsatt_fodda_fran)
+        if gravsatt_fodda_till is not None:
+            sq = sq.filter(Gravsatt.fodelse_ar <= gravsatt_fodda_till)
+        q = q.filter(Gravplats.id.in_(sq))
+    if gravsatt_doda_fran is not None or gravsatt_doda_till is not None:
+        sq = db.query(Gravsatt.gravplats_id).distinct()
+        if gravsatt_doda_fran is not None:
+            sq = sq.filter(Gravsatt.dods_ar >= gravsatt_doda_fran)
+        if gravsatt_doda_till is not None:
+            sq = sq.filter(Gravsatt.dods_ar <= gravsatt_doda_till)
+        q = q.filter(Gravplats.id.in_(sq))
+    if gravsatt_gravsatta_fran is not None or gravsatt_gravsatta_till is not None:
+        sub = db.query(Gravsatt.gravplats_id, Gravsatt.gravsatt_den).filter(
+            Gravsatt.gravsatt_den != "", Gravsatt.gravsatt_den.isnot(None)
+        ).all()
+        gp_ids = set()
+        for gid, den in sub:
+            ar = _ar_ur_datumstr(den)
+            if ar is None:
+                continue
+            if gravsatt_gravsatta_fran is not None and ar < gravsatt_gravsatta_fran:
+                continue
+            if gravsatt_gravsatta_till is not None and ar > gravsatt_gravsatta_till:
+                continue
+            gp_ids.add(gid)
+        q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
+
+    if har_extramaterial:
+        sub = (
+            db.query(Extramaterial.mapp_id, Extramaterial.grav_start_sida)
+            .filter(Extramaterial.grav_start_sida.isnot(None))
+            .distinct()
+            .all()
+        )
+        gp_with_em = set()
+        for mapp_id, start_sida in sub:
+            g = db.query(Gravplats.id).filter(
+                Gravplats.mapp_id == mapp_id,
+                Gravplats.start_sida == start_sida,
+            ).first()
+            if g:
+                gp_with_em.add(g[0])
+        if gp_with_em:
+            q = q.filter(Gravplats.id.in_(gp_with_em))
+        else:
+            q = q.filter(False)
+
+    if utfardad_fran is not None or utfardad_till is not None:
+        sub = db.query(GravplatsInmatning.gravplats_id, GravplatsInmatning.utfordat_den).filter(
+            GravplatsInmatning.utfordat_den != "", GravplatsInmatning.utfordat_den.isnot(None)
+        ).all()
+        gp_ids = set()
+        for gid, den in sub:
+            ar = _ar_ur_datumstr(den)
+            if ar is None:
+                continue
+            if utfardad_fran is not None and ar < utfardad_fran:
+                continue
+            if utfardad_till is not None and ar > utfardad_till:
+                continue
+            gp_ids.add(gid)
+        q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
+
+    q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 1000)))
+    rows = q.all()
+    out = []
+    for g in rows:
+        mapp_namn = db.query(MappConfig.namn).filter(MappConfig.id == g.mapp_id).scalar() or ""
+        out.append({
+            "id": g.id,
+            "kyrkogard": g.kyrkogard,
+            "kvarter": g.kvarter,
+            "gravplatsnummer": g.gravplatsnummer,
+            "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
+            "mapp_namn": mapp_namn,
+        })
+
+    def ledande_tal(nr: str) -> int:
+        s = (nr or "").strip()
+        n = 0
+        for c in s:
+            if c.isdigit():
+                n = n * 10 + int(c)
+            elif n > 0:
+                break
+        return n if n > 0 else -1
+
+    out.sort(key=lambda x: (x["kyrkogard"] or "", x["kvarter"] or "", ledande_tal(x.get("gravplatsnummer") or ""), (x.get("gravplatsnummer") or "")))
+    return {"gravplatser": out, "antal": len(out)}
 
 
 def _format_fullstandigt(kyrkogard: str | None, kvarter: str, gravplatsnummer: str) -> str:

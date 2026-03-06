@@ -174,17 +174,12 @@ async function fyllGravplatsLista(kyrkogard, kvarter, listEl) {
   });
 }
 
-/** Välj en specifik gravplats från trädet och visa den (stänger trädvyn). */
+/** Välj en specifik gravplats från trädet – navigera till visaren för den gravplatsen. */
 function valjGravplats(kyrkogard, kvarter, lista, index) {
-  valdKyrkogard = kyrkogard;
-  valdKvarter = kvarter;
-  gravplatserLista = lista;
-  currentIndex = Math.max(0, Math.min(index, lista.length - 1));
-  const tradVy = document.getElementById('gp-trad-vy');
-  tradVy.hidden = true;
-  tradVy.classList.remove('gravplatser-trad-panel');
-  document.getElementById('gp-innehall').hidden = false;
-  uppdateraVy();
+  const gp = lista[Math.max(0, Math.min(index, lista.length - 1))];
+  if (!gp) return;
+  const slug = slugForGravplats(gp);
+  if (slug) window.location.href = '/gravplatser/' + slug;
 }
 
 function valjKvarter(kyrkogard, kvarter) {
@@ -545,9 +540,7 @@ function nasta() {
 }
 
 document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', () => {
-  if (valdKyrkogard) {
-    toggleTradMeny();
-  }
+  window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', tillbaka);
 document.getElementById('gp-btn-nasta')?.addEventListener('click', nasta);
@@ -1205,15 +1198,19 @@ function applyVyFromUrl() {
 async function initFromUrl() {
   applyVyFromUrl();
   const parsed = parseGravplatsSlugFromPath();
+  const tradVy = document.getElementById('gp-trad-vy');
+  const innehall = document.getElementById('gp-innehall');
   if (!parsed) {
+    if (tradVy) tradVy.hidden = false;
+    if (innehall) innehall.hidden = true;
     laddaTrad();
     return;
   }
   await laddaTrad();
   valdKyrkogard = parsed.kyrkogard;
   valdKvarter = parsed.kvarter;
-  document.getElementById('gp-trad-vy').hidden = true;
-  document.getElementById('gp-innehall').hidden = false;
+  if (tradVy) tradVy.hidden = true;
+  if (innehall) innehall.hidden = false;
   await laddaGravplatserForKvarter(parsed.gravplatsnummer);
   applyVyFromUrl();
 }

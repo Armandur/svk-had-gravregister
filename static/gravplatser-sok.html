@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Avancerad sökning</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/gravplatser.css" />
+  <style>
+    .gp-sok-main { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
+    .gp-sok-main h1 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--accent, #2563eb); }
+    .gp-sok-sektion { margin-bottom: 1.25rem; }
+    .gp-sok-sektion h2 { font-size: 1rem; margin: 0 0 0.5rem 0; color: #475569; }
+    .gp-sok-falt { position: relative; margin-bottom: 0.5rem; }
+    .gp-sok-input, .gp-sok-select {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      font-size: 1rem;
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .gp-sok-input:focus, .gp-sok-select:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .gp-sok-input::placeholder { color: #94a3b8; }
+    .gp-sok-rad { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: nowrap; }
+    .gp-sok-rad label { flex: 1 1 0; min-width: 6rem; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+    .gp-sok-rad label span { color: #64748b; }
+    .gp-sok-falt { width: 100%; box-sizing: border-box; }
+    .gp-sok-list {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 100%;
+      margin-top: 2px;
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      max-height: 20rem;
+      overflow-y: auto;
+      z-index: 100;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .gp-sok-list[hidden] { display: none !important; }
+    .gp-sok-item { padding: 0.5rem 0.75rem; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+    .gp-sok-item:last-child { border-bottom: none; }
+    .gp-sok-item:hover, .gp-sok-item.gp-sok-item-active { background: #f1f5f9; }
+    .gp-sok-item small { color: #64748b; font-size: 0.85em; }
+    .gp-sok-hjalp { font-size: 0.9rem; color: #64748b; margin-bottom: 1rem; }
+    .gp-sok-btn { padding: 0.6rem 1.25rem; font-size: 1rem; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 6px; margin-top: 0.5rem; }
+    .gp-sok-btn:hover { filter: brightness(1.05); }
+    .gp-sok-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .gp-sok-checkbox { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .gp-sok-checkbox input { width: auto; }
+    .gp-sok-resultat { margin-top: 1.5rem; }
+    .gp-sok-resultat h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .gp-sok-resultat-lista { list-style: none; padding: 0; margin: 0; }
+    .gp-sok-resultat-lista li { margin-bottom: 0.25rem; }
+    .gp-sok-resultat-lista a { color: var(--accent); text-decoration: none; }
+    .gp-sok-resultat-lista a:hover { text-decoration: underline; }
+    .gp-sok-resultat-tom { color: #64748b; font-style: italic; }
+    .gp-sok-lank-bladdra { display: inline-block; margin-top: 1.5rem; color: var(--accent); }
+    .gp-sok-lank-bladdra + .gp-sok-lank-bladdra { margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <header class="gravplatser-topbar">
+    <a href="/">← Tillbaka till menyn</a>
+  </header>
+
+  <main class="gp-sok-main">
+    <h1>Avancerad sökning</h1>
+
+    <form id="gp-sok-form" class="gp-sok-sektion">
+      <h2>Kyrkogård och kvarter</h2>
+      <div class="gp-sok-rad">
+        <label class="gp-sok-falt-wrapper">
+          <span>Kyrkogård</span>
+          <div class="gp-sok-falt">
+            <input type="text" id="gp-sok-kyrkogard" name="kyrkogard" class="gp-sok-input" placeholder="t.ex. HKG" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kyrkogard-list" />
+            <ul id="gp-sok-kyrkogard-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kyrkogårdar"></ul>
+          </div>
+        </label>
+        <label class="gp-sok-falt-wrapper">
+          <span>Kvarter</span>
+          <div class="gp-sok-falt">
+            <input type="text" id="gp-sok-kvarter" name="kvarter" class="gp-sok-input" placeholder="t.ex. 01" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kvarter-list" />
+            <ul id="gp-sok-kvarter-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kvarter"></ul>
+          </div>
+        </label>
+      </div>
+
+      <h2>Gravrättsinnehavare</h2>
+      <div class="gp-sok-rad">
+        <label><span>Förnamn</span><input type="text" name="innehavare_fornamn" class="gp-sok-input" /></label>
+        <label><span>Efternamn</span><input type="text" name="innehavare_efternamn" class="gp-sok-input" /></label>
+      </div>
+      <div class="gp-sok-rad">
+        <label><span>Yrke</span><input type="text" name="innehavare_yrke" class="gp-sok-input" /></label>
+      </div>
+
+      <h2>Närmast anhörig</h2>
+      <div class="gp-sok-rad">
+        <label><span>Förnamn</span><input type="text" name="anhorig_fornamn" class="gp-sok-input" /></label>
+        <label><span>Efternamn</span><input type="text" name="anhorig_efternamn" class="gp-sok-input" /></label>
+      </div>
+
+      <h2>Gravsatta</h2>
+      <div class="gp-sok-rad">
+        <label><span>Förnamn</span><input type="text" name="gravsatt_fornamn" class="gp-sok-input" /></label>
+        <label><span>Efternamn</span><input type="text" name="gravsatt_efternamn" class="gp-sok-input" /></label>
+      </div>
+      <div class="gp-sok-rad">
+        <label><span>Födda mellan (datum)</span><input type="text" name="gravsatt_fodda_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_fodda_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
+      </div>
+      <div class="gp-sok-rad">
+        <label><span>Döda mellan (datum)</span><input type="text" name="gravsatt_doda_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_doda_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
+      </div>
+      <div class="gp-sok-rad">
+        <label><span>Gravsatta (begravda) mellan (datum)</span><input type="text" name="gravsatt_gravsatta_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_gravsatta_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
+      </div>
+
+      <h2>Övrigt</h2>
+      <div class="gp-sok-checkbox">
+        <input type="checkbox" name="har_extramaterial" id="gp-sok-extramaterial" value="1" />
+        <label for="gp-sok-extramaterial">Gravplatser som har extramaterial</label>
+      </div>
+      <div class="gp-sok-rad">
+        <label><span>Graven utfärdad mellan (datum)</span><input type="text" name="utfardad_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="utfardad_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
+      </div>
+
+      <button type="submit" id="gp-sok-submit" class="gp-sok-btn">Sök</button>
+    </form>
+
+    <div id="gp-sok-resultat" class="gp-sok-resultat" hidden>
+      <h2 id="gp-sok-resultat-rubrik">Träffar</h2>
+      <ul id="gp-sok-resultat-lista" class="gp-sok-resultat-lista"></ul>
+      <p id="gp-sok-resultat-tom" class="gp-sok-resultat-tom" hidden>Inga gravplatser matchade filtren.</p>
+    </div>
+
+    <a href="/" class="gp-sok-lank-bladdra">← Tillbaka till startsidan</a>
+    <a href="/gravplatser" class="gp-sok-lank-bladdra">Bläddra via kyrkogård, kvarter och gravplats</a>
+  </main>
+
+  <script src="/static/gravplatser-sok.js"></script>
+</body>
+</html>

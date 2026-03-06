@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bläddra – kyrkogård, kvarter och gravplats</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/gravplatser.css" />
+</head>
+<body>
+  <header class="gravplatser-topbar">
+    <a href="/">← Tillbaka till menyn</a>
+  </header>
+
+  <main class="gravplatser-main">
+    <div id="gp-trad-vy" class="gravplatser-trad-vy">
+      <div class="gravplatser-trad-wrap">
+        <h2>Välj kyrkogård och kvarter</h2>
+        <div id="gp-trad" aria-label="Trädstruktur kyrkogårdar och kvarter"></div>
+      </div>
+      <p id="gp-trad-tom" class="gravplatser-tom" hidden>Inga kyrkogårdar eller kvarter registrerade än.</p>
+    </div>
+  </main>
+
+  <script src="/static/gravplatser.js"></script>
+</body>
+</html>
