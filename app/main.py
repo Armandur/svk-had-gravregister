@@ -1244,6 +1244,7 @@ class GravsattItem(BaseModel):
     ar_beteckning: bool = False
     fornamn: str = ""
     efternamn: str = ""
+    yrke: str = ""
     adress: str = ""
     fodelse_ar: int | None = None
     fodelse_manad: int | None = None
@@ -1326,6 +1327,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "ar_beteckning": g.ar_beteckning,
             "fornamn": _gs_fornamn_efternamn(g)[0],
             "efternamn": _gs_fornamn_efternamn(g)[1],
+            "yrke": getattr(g, "yrke", None) or "",
             "adress": g.adress,
             "fodelse_ar": g.fodelse_ar,
             "fodelse_manad": g.fodelse_manad,
@@ -1458,6 +1460,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             namn=(fn + " " + en).strip(),
             fornamn=fn,
             efternamn=en,
+            yrke=gs.yrke or "",
             adress=gs.adress or "",
             fodelse_ar=gs.fodelse_ar,
             fodelse_manad=gs.fodelse_manad,

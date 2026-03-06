@@ -767,6 +767,30 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   box-sizing: border-box;
   vertical-align: middle;
 }
+.gp-ocr-falt-wrap.gp-ocr-falt-wrap-namn {
+  padding-right: 4.5rem;
+}
+.gp-ocr-falt-ikon-grupp {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* Inuti gruppen ska knapparna inte vara absolutpositionerade – då staplas de sida vid sida */
+.gp-ocr-falt-ikon-grupp .gp-ocr-falt-ikon {
+  position: static;
+  transform: none;
+}
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-ef,
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-fe {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
 
 .gp-ocr-falt-wrap input,
 .gp-ocr-falt-wrap textarea {
@@ -848,6 +872,11 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   overflow-y: hidden;
   min-height: 2.25rem;
 }
+.gp-ocr-modal-text[hidden],
+.gp-ocr-modal-hint[hidden],
+.gp-ocr-modal-knappar[hidden] {
+  display: none !important;
+}
 
 .gp-ocr-modal-knappar {
   display: flex;
@@ -866,6 +895,66 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 
 .gp-ocr-btn:hover {
   background: #e2e8f0;
+}
+
+.gp-ocr-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* OCR namn-split: monospace text med klickbara delningspositioner */
+.gp-ocr-modal-namn-wrap .gp-ocr-namn-text {
+  font-family: Consolas, "Liberation Mono", Monaco, monospace;
+  font-size: 1rem;
+  line-height: 1.6;
+  padding: 0.5rem 0.4rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #f8fafc;
+  position: relative;
+  min-height: 2.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.gp-ocr-namn-char {
+  display: inline;
+  letter-spacing: 0.12em;
+}
+.gp-ocr-namn-split {
+  display: inline-block;
+  width: 10px;
+  min-width: 10px;
+  height: 1.4em;
+  vertical-align: middle;
+  cursor: pointer;
+  position: relative;
+  margin: 0 -3px;
+}
+.gp-ocr-namn-split::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.1s;
+}
+.gp-ocr-namn-split:hover::after,
+.gp-ocr-namn-split.gp-ocr-namn-split-hover::after {
+  background: #0ea5e9;
+  width: 4px;
+  left: 3px;
+}
+.gp-ocr-namn-split.gp-ocr-namn-split-vald::after {
+  background: #059669;
+  width: 3px;
+  left: 3px;
+}
+.gp-ocr-modal-namn-wrap .gp-ocr-modal-hint {
+  margin-bottom: 0.35rem;
 }
 
 .gp-ocr-btn-prim {

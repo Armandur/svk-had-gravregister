@@ -89,9 +89,13 @@
 
   <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-label="Extraherad text">
     <div class="gp-ocr-modal-inner">
-      <h3 class="gp-ocr-modal-rubrik">Extraherad text</h3>
-      <p class="gp-ocr-modal-hint">Redigera vid behov. Enter för att infoga.</p>
+      <h3 class="gp-ocr-modal-rubrik" id="gp-ocr-modal-rubrik">Extraherad text</h3>
+      <p class="gp-ocr-modal-hint" id="gp-ocr-modal-hint">Redigera vid behov. Enter för att infoga.</p>
       <textarea class="gp-ocr-modal-text" id="gp-ocr-modal-text" rows="1"></textarea>
+      <div class="gp-ocr-modal-namn-wrap" id="gp-ocr-modal-namn" hidden>
+        <p class="gp-ocr-modal-hint" id="gp-ocr-modal-namn-hint">Klicka mellan två tecken för att ange var namnet ska delas.</p>
+        <div class="gp-ocr-namn-text" id="gp-ocr-namn-text" aria-live="polite"></div>
+      </div>
       <div class="gp-ocr-modal-knappar">
         <button type="button" id="gp-ocr-anvand" class="gp-ocr-btn gp-ocr-btn-prim">Använd</button>
         <button type="button" id="gp-ocr-avbryt" class="gp-ocr-btn">Avbryt</button>

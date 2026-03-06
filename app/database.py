@@ -167,6 +167,7 @@ class Gravsatt(Base):
     namn: Mapped[str] = mapped_column(default="")  # deprecated, använd fornamn+efternamn
     fornamn: Mapped[str] = mapped_column(default="")
     efternamn: Mapped[str] = mapped_column(default="")
+    yrke: Mapped[str] = mapped_column(default="")
     adress: Mapped[str] = mapped_column(default="")
     fodelse_ar: Mapped[int | None] = mapped_column(nullable=True)
     fodelse_manad: Mapped[int | None] = mapped_column(nullable=True)
@@ -229,6 +230,9 @@ def init_db():
             cols_gs = [row[1] for row in r]
             if "kommentar" not in cols_gs:
                 conn.execute(text("ALTER TABLE gravsatt ADD COLUMN kommentar TEXT DEFAULT ''"))
+                conn.commit()
+            if "yrke" not in cols_gs:
+                conn.execute(text("ALTER TABLE gravsatt ADD COLUMN yrke TEXT DEFAULT ''"))
                 conn.commit()
         except Exception:
             pass
