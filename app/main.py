@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func, update
+from sqlalchemy import func, tuple_, update
 from sqlalchemy.orm import Session
 
 from app.config import KÄLLDATA_DIR
@@ -891,11 +891,44 @@ async def avancerad_sok_gravplatser(
             gp_ids.add(gid)
         q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
 
-    q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 1000)))
+    q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 5000)))
     rows = q.all()
+    ids = [g.id for g in rows]
+    inv_map = {}
+    na_map = {}
+    gs_map = {}
+    utfordat_map = {}
+    em_map = {}
+    if ids:
+        for gid, cnt in db.query(GravplatsInnehavare.gravplats_id, func.count(GravplatsInnehavare.id)).filter(
+            GravplatsInnehavare.gravplats_id.in_(ids)
+        ).group_by(GravplatsInnehavare.gravplats_id).all():
+            inv_map[gid] = cnt
+        for gid, cnt in db.query(GravplatsNarmastAnhorig.gravplats_id, func.count(GravplatsNarmastAnhorig.id)).filter(
+            GravplatsNarmastAnhorig.gravplats_id.in_(ids)
+        ).group_by(GravplatsNarmastAnhorig.gravplats_id).all():
+            na_map[gid] = cnt
+        for gid, cnt in db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id)).filter(
+            Gravsatt.gravplats_id.in_(ids)
+        ).group_by(Gravsatt.gravplats_id).all():
+            gs_map[gid] = cnt
+        for gid, den in db.query(GravplatsInmatning.gravplats_id, GravplatsInmatning.utfordat_den).filter(
+            GravplatsInmatning.gravplats_id.in_(ids)
+        ).all():
+            utfordat_map[gid] = den or ""
+        pairs = [(g.mapp_id, g.start_sida) for g in rows]
+        for mapp_id, start_sida, cnt in db.query(
+            Extramaterial.mapp_id, Extramaterial.grav_start_sida, func.count(Extramaterial.id)
+        ).filter(
+            Extramaterial.grav_start_sida.isnot(None),
+            tuple_(Extramaterial.mapp_id, Extramaterial.grav_start_sida).in_(pairs),
+        ).group_by(Extramaterial.mapp_id, Extramaterial.grav_start_sida).all():
+            em_map[(mapp_id, start_sida)] = cnt
+
     out = []
     for g in rows:
         mapp_namn = db.query(MappConfig.namn).filter(MappConfig.id == g.mapp_id).scalar() or ""
+        antal_em = em_map.get((g.mapp_id, g.start_sida), 0)
         out.append({
             "id": g.id,
             "kyrkogard": g.kyrkogard,
@@ -903,6 +936,12 @@ async def avancerad_sok_gravplatser(
             "gravplatsnummer": g.gravplatsnummer,
             "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
             "mapp_namn": mapp_namn,
+            "antal_innehavare": inv_map.get(g.id, 0),
+            "antal_narmast_anhoriga": na_map.get(g.id, 0),
+            "antal_gravsatta": gs_map.get(g.id, 0),
+            "utfordat_den": utfordat_map.get(g.id, ""),
+            "har_extramaterial": antal_em > 0,
+            "antal_extramaterial": antal_em,
         })
 
     def ledande_tal(nr: str) -> int:

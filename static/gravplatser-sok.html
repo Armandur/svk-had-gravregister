@@ -7,9 +7,16 @@
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/gravplatser.css" />
   <style>
-    .gp-sok-main { max-width: 42rem; margin: 2rem auto; padding: 0 1rem; }
+    .gp-sok-main { max-width: 72rem; margin: 2rem auto; padding: 0 1rem; }
     .gp-sok-main h1 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--accent, #2563eb); }
-    .gp-sok-sektion { margin-bottom: 1.25rem; }
+    .gp-sok-form-grid { display: flex; flex-direction: column; gap: 1rem; }
+    @media (min-width: 900px) {
+      .gp-sok-form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem 2rem; }
+    }
+    @media (min-width: 1200px) {
+      .gp-sok-form-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .gp-sok-sektion { margin-bottom: 0; }
     .gp-sok-sektion h2 { font-size: 1rem; margin: 0 0 0.5rem 0; color: #475569; }
     .gp-sok-falt { position: relative; margin-bottom: 0.5rem; }
     .gp-sok-input, .gp-sok-select {
@@ -22,10 +29,11 @@
     }
     .gp-sok-input:focus, .gp-sok-select:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
     .gp-sok-input::placeholder { color: #94a3b8; }
-    .gp-sok-rad { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: nowrap; }
+    .gp-sok-rad { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
     .gp-sok-rad label { flex: 1 1 0; min-width: 6rem; display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
     .gp-sok-rad label span { color: #64748b; }
     .gp-sok-falt { width: 100%; box-sizing: border-box; }
+    .gp-sok-form .gp-sok-btn { margin-top: 0.75rem; }
     .gp-sok-list {
       position: absolute;
       left: 0;
@@ -48,19 +56,44 @@
     .gp-sok-item:last-child { border-bottom: none; }
     .gp-sok-item:hover, .gp-sok-item.gp-sok-item-active { background: #f1f5f9; }
     .gp-sok-item small { color: #64748b; font-size: 0.85em; }
-    .gp-sok-hjalp { font-size: 0.9rem; color: #64748b; margin-bottom: 1rem; }
-    .gp-sok-btn { padding: 0.6rem 1.25rem; font-size: 1rem; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 6px; margin-top: 0.5rem; }
+    .gp-sok-btn { padding: 0.6rem 1.25rem; font-size: 1rem; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 6px; }
     .gp-sok-btn:hover { filter: brightness(1.05); }
     .gp-sok-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .gp-sok-checkbox { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
     .gp-sok-checkbox input { width: auto; }
+    .gp-sok-datum-rad-wrap .gp-sok-rad label { max-width: 100%; }
+    .gp-sok-datum-rad { display: flex; align-items: center; gap: 0.35rem; flex-wrap: nowrap; }
+    .gp-sok-datum-rad .gp-sok-datum { width: 8.5rem; min-width: 8.5rem; max-width: 8.5rem; }
+    .gp-sok-datum-fel { display: block; font-size: 0.85rem; color: #b91c1c; margin-top: 0.2rem; }
+    .gp-sok-datum-fel[hidden] { display: none !important; }
     .gp-sok-resultat { margin-top: 1.5rem; }
-    .gp-sok-resultat h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
-    .gp-sok-resultat-lista { list-style: none; padding: 0; margin: 0; }
-    .gp-sok-resultat-lista li { margin-bottom: 0.25rem; }
-    .gp-sok-resultat-lista a { color: var(--accent); text-decoration: none; }
-    .gp-sok-resultat-lista a:hover { text-decoration: underline; }
-    .gp-sok-resultat-tom { color: #64748b; font-style: italic; }
+    .gp-sok-resultat-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .gp-sok-resultat-toolbar h2 { font-size: 1.1rem; margin: 0; }
+    .gp-sok-resultat-kontroller { display: flex; align-items: center; gap: 0.75rem; margin-left: auto; position: relative; }
+    .gp-sok-pagesize-label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+    .gp-sok-pagesize-label .gp-sok-select { width: auto; padding: 0.3rem 0.5rem; }
+    .gp-sok-kolumner-btn { padding: 0.35rem 0.6rem; font-size: 0.9rem; background: #f1f5f9; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; }
+    .gp-sok-kolumner-btn:hover { background: #e2e8f0; }
+    .gp-sok-kolumner-popup { position: absolute; top: 100%; right: 0; margin-top: 2px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 0.5rem; z-index: 50; min-width: 12rem; }
+    .gp-sok-kolumner-popup[hidden] { display: none !important; }
+    .gp-sok-kolumner-list { display: flex; flex-direction: column; gap: 0.25rem; }
+    .gp-sok-kolumner-list label { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; cursor: pointer; }
+    .gp-sok-resultat-tabell-wrap { overflow-x: auto; margin-bottom: 0.75rem; }
+    .gp-sok-tabell { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .gp-sok-tabell th, .gp-sok-tabell td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+    .gp-sok-tabell th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+    .gp-sok-tabell th .gp-sok-th-sort { background: none; border: none; font: inherit; color: inherit; cursor: pointer; padding: 0.25rem 0.15rem 0.25rem 0; text-align: left; display: inline-block; }
+    .gp-sok-tabell th .gp-sok-th-sort:hover { text-decoration: underline; }
+    .gp-sok-tabell tbody tr:hover { background: #f8fafc; }
+    .gp-sok-tabell a { color: var(--accent); text-decoration: none; }
+    .gp-sok-tabell a:hover { text-decoration: underline; }
+    .gp-sok-paginering { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+    .gp-sok-paginering #gp-sok-paginering-text { font-size: 0.9rem; color: #64748b; margin-right: 0.5rem; }
+    .gp-sok-page-btn { padding: 0.35rem 0.6rem; font-size: 0.9rem; cursor: pointer; background: #f1f5f9; border: 1px solid var(--border); border-radius: 4px; }
+    .gp-sok-page-btn:hover:not(:disabled) { background: #e2e8f0; }
+    .gp-sok-page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .gp-sok-visa-alla-wrap { display: flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; margin-left: auto; }
+    .gp-sok-resultat-tom { color: #64748b; font-style: italic; margin-top: 0.5rem; }
     .gp-sok-lank-bladdra { display: inline-block; margin-top: 1.5rem; color: var(--accent); }
     .gp-sok-lank-bladdra + .gp-sok-lank-bladdra { margin-top: 0.5rem; }
   </style>
@@ -73,70 +106,113 @@
   <main class="gp-sok-main">
     <h1>Avancerad sökning</h1>
 
-    <form id="gp-sok-form" class="gp-sok-sektion">
-      <h2>Kyrkogård och kvarter</h2>
-      <div class="gp-sok-rad">
-        <label class="gp-sok-falt-wrapper">
-          <span>Kyrkogård</span>
-          <div class="gp-sok-falt">
-            <input type="text" id="gp-sok-kyrkogard" name="kyrkogard" class="gp-sok-input" placeholder="t.ex. HKG" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kyrkogard-list" />
-            <ul id="gp-sok-kyrkogard-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kyrkogårdar"></ul>
+    <form id="gp-sok-form" class="gp-sok-form">
+      <div class="gp-sok-form-grid">
+        <section class="gp-sok-sektion">
+          <h2>Kyrkogård och kvarter</h2>
+          <div class="gp-sok-rad">
+            <label class="gp-sok-falt-wrapper">
+              <span>Kyrkogård</span>
+              <div class="gp-sok-falt">
+                <input type="text" id="gp-sok-kyrkogard" name="kyrkogard" class="gp-sok-input" placeholder="t.ex. HKG" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kyrkogard-list" />
+                <ul id="gp-sok-kyrkogard-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kyrkogårdar"></ul>
+              </div>
+            </label>
+            <label class="gp-sok-falt-wrapper">
+              <span>Kvarter</span>
+              <div class="gp-sok-falt">
+                <input type="text" id="gp-sok-kvarter" name="kvarter" class="gp-sok-input" placeholder="t.ex. 01" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kvarter-list" />
+                <ul id="gp-sok-kvarter-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kvarter"></ul>
+              </div>
+            </label>
           </div>
-        </label>
-        <label class="gp-sok-falt-wrapper">
-          <span>Kvarter</span>
-          <div class="gp-sok-falt">
-            <input type="text" id="gp-sok-kvarter" name="kvarter" class="gp-sok-input" placeholder="t.ex. 01" autocomplete="off" aria-autocomplete="list" aria-controls="gp-sok-kvarter-list" />
-            <ul id="gp-sok-kvarter-list" class="gp-sok-list gp-sok-forslag-list" hidden role="listbox" aria-label="Förslag kvarter"></ul>
+        </section>
+
+        <section class="gp-sok-sektion">
+          <h2>Gravrättsinnehavare</h2>
+          <div class="gp-sok-rad">
+            <label><span>Förnamn</span><input type="text" name="innehavare_fornamn" class="gp-sok-input" /></label>
+            <label><span>Efternamn</span><input type="text" name="innehavare_efternamn" class="gp-sok-input" /></label>
+            <label><span>Yrke</span><input type="text" name="innehavare_yrke" class="gp-sok-input" /></label>
           </div>
-        </label>
-      </div>
+        </section>
 
-      <h2>Gravrättsinnehavare</h2>
-      <div class="gp-sok-rad">
-        <label><span>Förnamn</span><input type="text" name="innehavare_fornamn" class="gp-sok-input" /></label>
-        <label><span>Efternamn</span><input type="text" name="innehavare_efternamn" class="gp-sok-input" /></label>
-      </div>
-      <div class="gp-sok-rad">
-        <label><span>Yrke</span><input type="text" name="innehavare_yrke" class="gp-sok-input" /></label>
-      </div>
+        <section class="gp-sok-sektion">
+          <h2>Närmast anhörig</h2>
+          <div class="gp-sok-rad">
+            <label><span>Förnamn</span><input type="text" name="anhorig_fornamn" class="gp-sok-input" /></label>
+            <label><span>Efternamn</span><input type="text" name="anhorig_efternamn" class="gp-sok-input" /></label>
+          </div>
+        </section>
 
-      <h2>Närmast anhörig</h2>
-      <div class="gp-sok-rad">
-        <label><span>Förnamn</span><input type="text" name="anhorig_fornamn" class="gp-sok-input" /></label>
-        <label><span>Efternamn</span><input type="text" name="anhorig_efternamn" class="gp-sok-input" /></label>
-      </div>
+        <section class="gp-sok-sektion">
+          <h2>Gravsatta</h2>
+          <div class="gp-sok-rad">
+            <label><span>Förnamn</span><input type="text" name="gravsatt_fornamn" class="gp-sok-input" /></label>
+            <label><span>Efternamn</span><input type="text" name="gravsatt_efternamn" class="gp-sok-input" /></label>
+          </div>
+        </section>
 
-      <h2>Gravsatta</h2>
-      <div class="gp-sok-rad">
-        <label><span>Förnamn</span><input type="text" name="gravsatt_fornamn" class="gp-sok-input" /></label>
-        <label><span>Efternamn</span><input type="text" name="gravsatt_efternamn" class="gp-sok-input" /></label>
-      </div>
-      <div class="gp-sok-rad">
-        <label><span>Födda mellan (datum)</span><input type="text" name="gravsatt_fodda_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_fodda_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
-      </div>
-      <div class="gp-sok-rad">
-        <label><span>Döda mellan (datum)</span><input type="text" name="gravsatt_doda_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_doda_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
-      </div>
-      <div class="gp-sok-rad">
-        <label><span>Gravsatta (begravda) mellan (datum)</span><input type="text" name="gravsatt_gravsatta_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="gravsatt_gravsatta_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
-      </div>
+        <section class="gp-sok-sektion">
+          <h2>Datum</h2>
+          <div class="gp-sok-rad gp-sok-datum-rad-wrap">
+            <label><span>Födda mellan</span><span class="gp-sok-datum-rad"><input type="text" name="gravsatt_fodda_fran" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /> – <input type="text" name="gravsatt_fodda_till" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /></span><span class="gp-sok-datum-fel" data-fran="gravsatt_fodda_fran" data-till="gravsatt_fodda_till" role="alert" aria-live="polite"></span></label>
+          </div>
+          <div class="gp-sok-rad gp-sok-datum-rad-wrap">
+            <label><span>Döda mellan</span><span class="gp-sok-datum-rad"><input type="text" name="gravsatt_doda_fran" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /> – <input type="text" name="gravsatt_doda_till" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /></span><span class="gp-sok-datum-fel" data-fran="gravsatt_doda_fran" data-till="gravsatt_doda_till" role="alert" aria-live="polite"></span></label>
+          </div>
+          <div class="gp-sok-rad gp-sok-datum-rad-wrap">
+            <label><span>Gravsatta (begravda) mellan</span><span class="gp-sok-datum-rad"><input type="text" name="gravsatt_gravsatta_fran" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /> – <input type="text" name="gravsatt_gravsatta_till" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /></span><span class="gp-sok-datum-fel" data-fran="gravsatt_gravsatta_fran" data-till="gravsatt_gravsatta_till" role="alert" aria-live="polite"></span></label>
+          </div>
+          <div class="gp-sok-rad gp-sok-datum-rad-wrap">
+            <label><span>Graven utfärdad mellan</span><span class="gp-sok-datum-rad"><input type="text" name="utfardad_fran" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /> – <input type="text" name="utfardad_till" class="gp-sok-input gp-sok-datum" placeholder="YYYY-MM-DD" maxlength="10" /></span><span class="gp-sok-datum-fel" data-fran="utfardad_fran" data-till="utfardad_till" role="alert" aria-live="polite"></span></label>
+          </div>
+        </section>
 
-      <h2>Övrigt</h2>
-      <div class="gp-sok-checkbox">
-        <input type="checkbox" name="har_extramaterial" id="gp-sok-extramaterial" value="1" />
-        <label for="gp-sok-extramaterial">Gravplatser som har extramaterial</label>
+        <section class="gp-sok-sektion">
+          <h2>Övrigt</h2>
+          <div class="gp-sok-checkbox">
+            <input type="checkbox" name="har_extramaterial" id="gp-sok-extramaterial" value="1" />
+            <label for="gp-sok-extramaterial">Gravplatser som har extramaterial</label>
+          </div>
+        </section>
       </div>
-      <div class="gp-sok-rad">
-        <label><span>Graven utfärdad mellan (datum)</span><input type="text" name="utfardad_fran" class="gp-sok-input gp-sok-datum" placeholder="Från (ÅÅÅÅ-MM-DD)" maxlength="10" /> – <input type="text" name="utfardad_till" class="gp-sok-input gp-sok-datum" placeholder="Till (ÅÅÅÅ-MM-DD)" maxlength="10" /></label>
-      </div>
-
       <button type="submit" id="gp-sok-submit" class="gp-sok-btn">Sök</button>
     </form>
 
     <div id="gp-sok-resultat" class="gp-sok-resultat" hidden>
-      <h2 id="gp-sok-resultat-rubrik">Träffar</h2>
-      <ul id="gp-sok-resultat-lista" class="gp-sok-resultat-lista"></ul>
+      <div class="gp-sok-resultat-toolbar">
+        <h2 id="gp-sok-resultat-rubrik">Träffar</h2>
+        <div class="gp-sok-resultat-kontroller">
+          <label class="gp-sok-pagesize-label">
+            <span>Visa</span>
+            <select id="gp-sok-pagesize" class="gp-sok-select" aria-label="Antal per sida">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="alla">alla</option>
+            </select>
+            <span>per sida</span>
+          </label>
+          <button type="button" id="gp-sok-kolumner-btn" class="gp-sok-kolumner-btn" aria-haspopup="true" aria-expanded="false">Välj kolumner</button>
+          <div id="gp-sok-kolumner-popup" class="gp-sok-kolumner-popup" hidden>
+            <div class="gp-sok-kolumner-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="gp-sok-resultat-tabell-wrap">
+        <table id="gp-sok-resultat-tabell" class="gp-sok-tabell" role="grid">
+          <thead id="gp-sok-tabell-head"></thead>
+          <tbody id="gp-sok-tabell-body"></tbody>
+        </table>
+      </div>
+      <div class="gp-sok-paginering">
+        <span id="gp-sok-paginering-text"></span>
+        <button type="button" id="gp-sok-prev" class="gp-sok-page-btn" disabled>Föregående</button>
+        <button type="button" id="gp-sok-next" class="gp-sok-page-btn" disabled>Nästa</button>
+        <label class="gp-sok-visa-alla-wrap"><input type="checkbox" id="gp-sok-visa-alla" /> Visa hela resultatet</label>
+      </div>
       <p id="gp-sok-resultat-tom" class="gp-sok-resultat-tom" hidden>Inga gravplatser matchade filtren.</p>
     </div>
 

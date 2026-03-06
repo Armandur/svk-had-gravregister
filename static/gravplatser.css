@@ -140,6 +140,15 @@
 
 .trad-gravplats-list li {
   margin: 0;
+  break-inside: avoid;
+}
+
+/* På bredare skärmar: visa gravplatslistan i så många kolumner som får plats */
+@media (min-width: 640px) {
+  .trad-gravplats-list {
+    columns: 10rem;
+    column-gap: 1rem;
+  }
 }
 
 .trad-gravplats-btn {
