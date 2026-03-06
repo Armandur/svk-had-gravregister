@@ -1222,6 +1222,7 @@ class InnehavareItem(BaseModel):
     efternamn: str = ""
     yrke: str = ""
     adress: str = ""
+    kommentar: str = ""
     sort_order: int = 0
 
 
@@ -1233,6 +1234,7 @@ class NarmastAnhorigItem(BaseModel):
     postnummer: str = ""
     postort: str = ""
     telefon: str = ""
+    kommentar: str = ""
     sort_order: int = 0
 
 
@@ -1292,10 +1294,10 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
 
     if not innehavare_rows and row and (row.gravrattsinnehavare or row.yrke or row.adress):
         fn, en = (row.gravrattsinnehavare or "", "") if row.gravrattsinnehavare else ("", "")
-        innehavare_list = [{"fornamn": fn, "efternamn": en, "yrke": row.yrke or "", "adress": row.adress or "", "sort_order": 0}]
+        innehavare_list = [{"fornamn": fn, "efternamn": en, "yrke": row.yrke or "", "adress": row.adress or "", "kommentar": "", "sort_order": 0}]
     else:
         innehavare_list = [
-            {"fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": n.yrke or "", "adress": n.adress or "", "sort_order": n.sort_order}
+            {"fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": n.yrke or "", "adress": n.adress or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order}
             for n in innehavare_rows
         ]
     narmast = (
@@ -1343,7 +1345,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         return {
             "gravplats_id": gravplats_id,
             "innehavare": innehavare_list,
-            "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "sort_order": n.sort_order} for n in narmast],
+            "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
             "storlek": "",
             "underhall_text": "",
             "underhall_overstruket": False,
@@ -1361,7 +1363,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
     return {
         "gravplats_id": gravplats_id,
         "innehavare": innehavare_list,
-        "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "sort_order": n.sort_order} for n in narmast],
+        "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
         "storlek": row.storlek or "",
         "underhall_text": row.underhall_text or "",
         "underhall_overstruket": row.underhall_overstruket,
@@ -1425,6 +1427,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             efternamn=en,
             yrke=inv.yrke or "",
             adress=inv.adress or "",
+            kommentar=inv.kommentar or "",
         ))
     db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id == gravplats_id).delete()
     for i, na in enumerate(body.narmast_anhoriga):
@@ -1440,6 +1443,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
                 postort=na.postort or "",
                 telefon=na.telefon or "",
                 sort_order=i,
+                kommentar=na.kommentar or "",
             ))
     db.query(Gravsatt).filter(Gravsatt.gravplats_id == gravplats_id).delete()
     for i, gs in enumerate(body.gravsatta):

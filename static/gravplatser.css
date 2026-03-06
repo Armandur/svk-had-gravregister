@@ -1054,6 +1054,24 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   filter: brightness(1.1);
 }
 
+.gp-sektion-kommentar {
+  display: block;
+  margin-top: 0.75rem;
+}
+
+.gp-sektion-kommentar textarea,
+.gp-inv-kommentar,
+.gp-na-kommentar {
+  min-height: 2.5em;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.gp-innehavare-rad .gp-inv-kommentar,
+.gp-na-rad .gp-na-kommentar {
+  margin-top: 0.35rem;
+}
+
 .gp-lagg-till-innehavare,
 .gp-lagg-till-na,
 .gp-lagg-till-gravsatt {

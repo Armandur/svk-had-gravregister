@@ -110,6 +110,7 @@ class GravplatsInnehavare(Base):
     efternamn: Mapped[str] = mapped_column(default="")
     yrke: Mapped[str] = mapped_column(default="")
     adress: Mapped[str] = mapped_column(default="")
+    kommentar: Mapped[str] = mapped_column(default="")
 
 
 class GravplatsInmatning(Base):
@@ -151,6 +152,7 @@ class GravplatsNarmastAnhorig(Base):
     postort: Mapped[str] = mapped_column(default="")
     telefon: Mapped[str] = mapped_column(default="")
     sort_order: Mapped[int] = mapped_column(default=0)
+    kommentar: Mapped[str] = mapped_column(default="")
 
 
 class Gravsatt(Base):
@@ -239,6 +241,16 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+        # Migration: kommentar på gravplats_innehavare och gravplats_narmast_anhorig
+        for tbl, col in (("gravplats_innehavare", "kommentar"), ("gravplats_narmast_anhorig", "kommentar")):
+            try:
+                r = conn.execute(text(f"PRAGMA table_info({tbl})"))
+                cols_t = [row[1] for row in r]
+                if col not in cols_t:
+                    conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT DEFAULT ''"))
+                    conn.commit()
+            except Exception:
+                pass
         # Migration: dold på extramaterial
         try:
             r = conn.execute(text("PRAGMA table_info(extramaterial)"))

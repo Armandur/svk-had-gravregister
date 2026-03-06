@@ -1426,7 +1426,8 @@ function renderInmatningSektionLäs(sektion) {
       const namn = [fn, en].filter(Boolean).join(' ') || '';
       const rader = radOmFyllt('Namn', namn) +
         radOmFyllt('Yrke', i.yrke) +
-        radOmFyllt('Adress', i.adress);
+        radOmFyllt('Adress', i.adress) +
+        radOmFyllt('Kommentar', i.kommentar);
       if (!rader) return '<li class="gp-las-kort"><span class="gp-las-tom">—</span></li>';
       return `<li class="gp-las-kort">${rader}</li>`;
     }).join('') + '</ul></div>';
@@ -1446,7 +1447,8 @@ function renderInmatningSektionLäs(sektion) {
       const rader = radOmFyllt('Namn', namn) +
         radOmFyllt('Gatuadress', n.adress) +
         radOmFyllt('Postnummer / ort', postOrt || null) +
-        radOmFyllt('Telefon', n.telefon);
+        radOmFyllt('Telefon', n.telefon) +
+        radOmFyllt('Kommentar', n.kommentar);
       if (!rader) return '<li class="gp-las-kort"><span class="gp-las-tom">—</span></li>';
       return `<li class="gp-las-kort">${rader}</li>`;
     }).join('') + '</ul></div>';
@@ -1514,6 +1516,7 @@ function renderInmatningSektion(sektion) {
         <label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1">${esc(i.efternamn)}</textarea></label>
         <label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1">${esc(i.yrke)}</textarea></label>
         <label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1">${esc(i.adress)}</textarea></label>
+        <label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2">${esc(i.kommentar || '')}</textarea></label>
         <button type="button" class="gp-rad-ta-bort">Ta bort</button>
       </div>`).join('');
     html += '<button type="button" class="gp-lagg-till-innehavare">+ Lägg till innehavare</button>';
@@ -1527,7 +1530,7 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-innehavare')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-innehavare-rad';
-      rad.innerHTML = '<label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-innehavare'));
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       rad.querySelector('.gp-rad-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
@@ -1548,6 +1551,7 @@ function renderInmatningSektion(sektion) {
         <label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1">${esc(n.postnummer)}</textarea></label>
         <label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1">${esc(n.postort)}</textarea></label>
         <label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1">${esc(n.telefon)}</textarea></label>
+        <label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2">${esc(n.kommentar || '')}</textarea></label>
         <button type="button" class="gp-na-ta-bort">Ta bort</button>
       </div>`).join('');
     html += '<button type="button" class="gp-lagg-till-na">+ Lägg till närmast anhörig</button>';
@@ -1561,7 +1565,7 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-na')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-na-rad';
-      rad.innerHTML = '<label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-na'));
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       rad.querySelector('.gp-na-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
@@ -1960,10 +1964,11 @@ function samlaInmatningData() {
       const efternamn = (rad.querySelector('[name="inv_efternamn"]')?.value ?? '').trim();
       const yrke = (rad.querySelector('[name="inv_yrke"]')?.value ?? '').trim();
       const adress = (rad.querySelector('[name="inv_adress"]')?.value ?? '').trim();
-      innehavare.push({ fornamn, efternamn, yrke, adress, sort_order: innehavare.length });
+      const kommentar = (rad.querySelector('.gp-inv-kommentar')?.value ?? '').trim();
+      innehavare.push({ fornamn, efternamn, yrke, adress, kommentar, sort_order: innehavare.length });
     });
   } else {
-    innehavare = (d.innehavare || []).map((i, idx) => ({ fornamn: i.fornamn || '', efternamn: i.efternamn || '', yrke: i.yrke || '', adress: i.adress || '', sort_order: idx }));
+    innehavare = (d.innehavare || []).map((i, idx) => ({ fornamn: i.fornamn || '', efternamn: i.efternamn || '', yrke: i.yrke || '', adress: i.adress || '', kommentar: i.kommentar || '', sort_order: idx }));
   }
 
   let narmast_anhoriga = [];
@@ -1976,11 +1981,12 @@ function samlaInmatningData() {
       const postnummer = (rad.querySelector('[name="na_postnummer"]')?.value ?? '').trim();
       const postort = (rad.querySelector('[name="na_postort"]')?.value ?? '').trim();
       const telefon = (rad.querySelector('[name="na_telefon"]')?.value ?? '').trim();
-      if (fornamn || efternamn) narmast_anhoriga.push({ fornamn, efternamn, adress, postnummer, postort, telefon, sort_order: narmast_anhoriga.length });
+      const kommentar = (rad.querySelector('.gp-na-kommentar')?.value ?? '').trim();
+      if (fornamn || efternamn) narmast_anhoriga.push({ fornamn, efternamn, adress, postnummer, postort, telefon, kommentar, sort_order: narmast_anhoriga.length });
     });
   } else {
     narmast_anhoriga = (d.narmast_anhoriga || []).map((n, idx) => ({
-      fornamn: n.fornamn || '', efternamn: n.efternamn || '', adress: n.adress || '', postnummer: n.postnummer || '', postort: n.postort || '', telefon: n.telefon || '', sort_order: idx,
+      fornamn: n.fornamn || '', efternamn: n.efternamn || '', adress: n.adress || '', postnummer: n.postnummer || '', postort: n.postort || '', telefon: n.telefon || '', kommentar: n.kommentar || '', sort_order: idx,
     }));
   }
 
