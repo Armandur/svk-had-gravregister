@@ -12,6 +12,8 @@ let startSida = 1; // 1-baserat: första innehållssidan för aktuell gravplats
 let currentFilnamn1 = '', currentFilnamn2 = '', currentFilnamn3 = '';
 /** Post för varje ruta: antingen { t: 'f', v: filnamn } eller { t: 'b', id: number } – för menyval. */
 let currentItem1 = null, currentItem2 = null, currentItem3 = null;
+/** Aktuella bild-URL:er för ruta 1–3 (för listvy-lightbox). */
+let currentRutaUrls = [];
 /** Urklipp: filnamn som användaren "klippt ut" för att infoga som extramaterial på gravplats eller mapp. */
 let urklipp = [];
 /** Ökas vid extramaterial-ändring så att bild-URL:er får ny query och cache ogiltigförklaras. */
@@ -51,6 +53,7 @@ async function valjMapp(mappNamn) {
     valdMapp = null;
     filer = [];
     seriesStartSida = null;
+    currentRutaUrls = [];
     document.getElementById('visning').hidden = true;
     return;
   }
@@ -251,6 +254,8 @@ function uppdateraPdfBilder() {
     url3 = `${sidaBase}/${s3}/halva?${offsetQ}&halva=ovre&split=${splitSida1och3}&${cacheQ}${excludeQ}`;
   }
 
+  currentRutaUrls = [url1, url2, url3];
+
   // Horisontell vy: samma tre bilder
   document.getElementById('img-sida-1').src = url1;
   document.getElementById('img-sida-2').src = url2;
@@ -317,6 +322,51 @@ function uppdateraSerieVisning() {
   const slutVisa = document.getElementById('serie-slut-visa');
   if (startVisa) startVisa.textContent = seriesStartSida != null ? 'Start: sida ' + seriesStartSida : 'Start: –';
   if (slutVisa) slutVisa.textContent = 'Slut: sida ' + startSida;
+}
+
+let listvyLightboxIndex = 0;
+
+function updateListvyLightboxButtons() {
+  const prevBtn = document.getElementById('listvy-lightbox-prev');
+  const nextBtn = document.getElementById('listvy-lightbox-next');
+  const n = currentRutaUrls.length;
+  if (prevBtn) prevBtn.disabled = n <= 1 || listvyLightboxIndex <= 0;
+  if (nextBtn) nextBtn.disabled = n <= 1 || listvyLightboxIndex >= n - 1;
+}
+
+function openListvyLightbox(index) {
+  if (currentRutaUrls.length === 0) return;
+  const idx = Math.max(0, Math.min(index, currentRutaUrls.length - 1));
+  listvyLightboxIndex = idx;
+  const lightbox = document.getElementById('listvy-lightbox');
+  const imgEl = document.getElementById('listvy-lightbox-img');
+  if (lightbox && imgEl) {
+    imgEl.src = currentRutaUrls[listvyLightboxIndex];
+    imgEl.alt = '';
+    lightbox.hidden = false;
+    updateListvyLightboxButtons();
+  }
+}
+
+function closeListvyLightbox() {
+  const lightbox = document.getElementById('listvy-lightbox');
+  if (lightbox) lightbox.hidden = true;
+}
+
+function listvyLightboxPrev() {
+  if (currentRutaUrls.length <= 1 || listvyLightboxIndex <= 0) return;
+  listvyLightboxIndex--;
+  const imgEl = document.getElementById('listvy-lightbox-img');
+  if (imgEl) imgEl.src = currentRutaUrls[listvyLightboxIndex];
+  updateListvyLightboxButtons();
+}
+
+function listvyLightboxNext() {
+  if (currentRutaUrls.length <= 1 || listvyLightboxIndex >= currentRutaUrls.length - 1) return;
+  listvyLightboxIndex++;
+  const imgEl = document.getElementById('listvy-lightbox-img');
+  if (imgEl) imgEl.src = currentRutaUrls[listvyLightboxIndex];
+  updateListvyLightboxButtons();
 }
 
 /** Parsar inledande heltal från gravplatsnummer (t.ex. "5" → 5, "1+2" → 1). */
@@ -893,6 +943,15 @@ function onTaBortExtramaterialClick(e) {
 document.addEventListener('click', onTaBortExtramaterialClick, true);
 
 document.querySelector('.visning')?.addEventListener('click', (e) => {
+  const img = e.target;
+  if (img && img.id && currentRutaUrls.length >= 3) {
+    const rutaIndex = { 'img-sida-1': 0, 'img-sida-2': 1, 'img-sida-3': 2, 'halva-img-1': 0, 'halva-img-2': 1, 'halva-img-3': 2 }[img.id];
+    if (rutaIndex !== undefined) {
+      openListvyLightbox(rutaIndex);
+      e.stopPropagation();
+      return;
+    }
+  }
   const menyKnapp = e.target.closest('.meny-knapp');
   const menyItem = e.target.closest('.meny-item');
   if (menyKnapp) {
@@ -931,6 +990,21 @@ document.querySelector('.visning')?.addEventListener('click', (e) => {
 });
 
 document.addEventListener('click', () => stangAllaMenyDropdowns());
+
+document.getElementById('listvy-lightbox-stang')?.addEventListener('click', closeListvyLightbox);
+document.getElementById('listvy-lightbox-prev')?.addEventListener('click', listvyLightboxPrev);
+document.getElementById('listvy-lightbox-next')?.addEventListener('click', listvyLightboxNext);
+document.getElementById('listvy-lightbox')?.addEventListener('click', (e) => {
+  if (e.target.id === 'listvy-lightbox') closeListvyLightbox();
+});
+document.addEventListener('keydown', (e) => {
+  const lb = document.getElementById('listvy-lightbox');
+  if (lb && !lb.hidden) {
+    if (e.key === 'Escape') closeListvyLightbox();
+    else if (e.key === 'ArrowLeft') { listvyLightboxPrev(); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { listvyLightboxNext(); e.preventDefault(); }
+  }
+});
 
 /** Hämtar och renderar listan "extramaterial knutet till mappen". Anropas vid öppning och efter Ta bort. */
 async function uppdateraExtramaterialMappLista() {

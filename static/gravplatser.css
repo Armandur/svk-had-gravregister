@@ -295,7 +295,7 @@
 .gravplatser-halvor {
   display: flex;
   flex-direction: row;
-  gap: 2px;
+  gap: 4px;
   align-items: stretch;
 }
 
@@ -313,11 +313,10 @@
 .gravplatser-halva {
   flex: 1 1 0;
   min-width: 0;
+  margin: 0;
   display: flex;
   cursor: pointer;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 4px;
   overflow: hidden;
   background: #fafafa;
 }
