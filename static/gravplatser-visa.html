@@ -42,7 +42,10 @@
         </div>
         <div id="gp-innehall-hoger" class="gp-innehall-hoger">
       <section class="gp-inmatning" id="gp-inmatning" aria-label="Inmatning av data">
-        <h2 class="gp-inmatning-overskrift">Inmatning</h2>
+        <div class="gp-inmatning-header">
+          <button type="button" id="gp-btn-fardigtranskriberad" class="gp-inmatning-btn-fardigtranskriberad gp-fardigtranskriberad-nej" disabled title="Markera om all information från bilderna har förts över">Ej färdigtranskriberad</button>
+          <button type="button" id="gp-btn-redigera" class="gp-inmatning-btn-redigera">Redigera gravplatsen</button>
+        </div>
         <section class="gp-inmatning-sektion" id="gp-sektion-innehavare" aria-label="Gravrättsinnehavare">
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="innehavare" aria-expanded="false">Gravrättsinnehavare</button>
           <div class="gp-inmatning-innehall" id="gp-innehall-innehavare" hidden></div>
@@ -63,7 +66,7 @@
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="gravsatta" aria-expanded="false">Gravsatta</button>
           <div class="gp-inmatning-innehall" id="gp-innehall-gravsatta" hidden></div>
         </section>
-        <div class="gp-inmatning-spara-wrap">
+        <div class="gp-inmatning-spara-wrap gp-inmatning-spara-wrap-edit" id="gp-inmatning-spara-wrap" hidden>
           <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
           <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
         </div>

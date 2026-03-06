@@ -22,6 +22,8 @@ let currentGravplatsId = null;
 let lastInmatningGravplatsId = null;
 let inmatningData = null;
 let inmatningDirty = false;
+/** true = visa formulärfält (redigera), false = visa läsvy (layout). */
+let inmatningRedigerar = false;
 
 /** Bygg URL-slug för aktuell gravplats (t.ex. "HKG 01 1+2" → "HKG%2001%201%2B2"). */
 function slugForGravplats(gp) {
@@ -245,11 +247,17 @@ async function uppdateraVy() {
     inmatningData = null;
     lastInmatningGravplatsId = null;
     inmatningDirty = false;
+    inmatningRedigerar = false;
+    const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
+    if (sparaWrap) sparaWrap.hidden = true;
+    const redigeraBtn = document.getElementById('gp-btn-redigera');
+    if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
     uppdateraInmatningSparaKnapp();
     currentExtramaterial = [];
     currentHalvorUrls = [];
     uppdateraExtramaterialSektion([], null);
     uppdateraInmatningRubrikCounts();
+    uppdateraFardigtranskriberadKnapp();
     return;
   }
 
@@ -343,11 +351,17 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   if (currentGravplatsId == null) {
     inmatningData = null;
     lastInmatningGravplatsId = null;
+    uppdateraFardigtranskriberadKnapp();
     return;
   }
   inmatningData = null;
   lastInmatningGravplatsId = null;
   inmatningDirty = false;
+  inmatningRedigerar = false;
+  const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
+  if (sparaWrap) sparaWrap.hidden = true;
+  const redigeraBtn = document.getElementById('gp-btn-redigera');
+  if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
   uppdateraInmatningSparaKnapp();
   uppdateraInmatningRubrikCounts();
   const ok = await ensureInmatningData();
@@ -359,6 +373,7 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
     });
     oppna.forEach((s) => renderInmatningSektion(s));
   }
+  uppdateraFardigtranskriberadKnapp();
 }
 
 function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
@@ -605,6 +620,7 @@ async function ensureInmatningData() {
     inmatningData = data;
     lastInmatningGravplatsId = currentGravplatsId;
     uppdateraInmatningRubrikCounts();
+    uppdateraFardigtranskriberadKnapp();
     return true;
   } catch (e) {
     return false;
@@ -630,6 +646,16 @@ function uppdateraInmatningRubrikCounts() {
 function uppdateraInmatningSparaKnapp() {
   const btn = document.getElementById('gp-inmatning-spara');
   if (btn) btn.disabled = !inmatningDirty;
+}
+
+function uppdateraFardigtranskriberadKnapp() {
+  const btn = document.getElementById('gp-btn-fardigtranskriberad');
+  if (!btn) return;
+  const arFardig = inmatningData && inmatningData.fardigtranskriberad === true;
+  btn.classList.remove('gp-fardigtranskriberad-ja', 'gp-fardigtranskriberad-nej');
+  btn.classList.add(arFardig ? 'gp-fardigtranskriberad-ja' : 'gp-fardigtranskriberad-nej');
+  btn.textContent = arFardig ? 'Färdigtranskriberad' : 'Ej färdigtranskriberad';
+  btn.disabled = currentGravplatsId == null || !inmatningRedigerar;
 }
 
 function markInmatningDirty() {
@@ -659,10 +685,102 @@ function toggleInmatningSektion(sektion) {
   });
 }
 
+/** Läsvy: rendera sektionens innehåll som text/layout utan formulärfält. */
+function renderInmatningSektionLäs(sektion) {
+  const d = inmatningData || {};
+  const innehall = document.getElementById(`gp-innehall-${sektion}`);
+  if (!innehall) return;
+  const v = (x) => (x != null && String(x).trim() !== '' ? esc(String(x).trim()) : '');
+  const rad = (label, value) => {
+    const val = value != null && String(value).trim() !== '' ? String(value).trim() : '';
+    return `<div class="gp-las-rad"><span class="gp-las-label">${esc(label)}</span><span class="gp-las-varde ${val ? '' : 'gp-las-tom'}">${val ? esc(val) : '—'}</span></div>`;
+  };
+
+  if (sektion === 'innehavare') {
+    const inv = d.innehavare || [];
+    if (inv.length === 0) {
+      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga gravrättsinnehavare registrerade.</p></div>';
+      return;
+    }
+    innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + inv.map((i) => {
+      const fn = v(i.fornamn); const en = v(i.efternamn); const yrke = v(i.yrke); const adr = v(i.adress);
+      const namn = [fn, en].filter(Boolean).join(' ') || '—';
+      return `<li class="gp-las-kort"><div class="gp-las-rad"><span class="gp-las-label">Namn</span><span class="gp-las-varde">${namn}</span></div>` +
+        (yrke ? rad('Yrke', i.yrke) : '') +
+        (adr ? rad('Adress', i.adress) : '') + '</li>';
+    }).join('') + '</ul></div>';
+    return;
+  }
+
+  if (sektion === 'narmast_anhoriga') {
+    const na = d.narmast_anhoriga || [];
+    if (na.length === 0) {
+      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga närmast anhöriga registrerade.</p></div>';
+      return;
+    }
+    innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + na.map((n) => {
+      const fn = v(n.fornamn); const en = v(n.efternamn);
+      const namn = [fn, en].filter(Boolean).join(' ') || '—';
+      let html = `<li class="gp-las-kort"><div class="gp-las-rad"><span class="gp-las-label">Namn</span><span class="gp-las-varde">${namn}</span></div>`;
+      if (n.adress) html += rad('Gatuadress', n.adress);
+      if (n.postnummer || n.postort) html += rad('Postnummer / ort', [n.postnummer, n.postort].filter(Boolean).join(' '));
+      if (n.telefon) html += rad('Telefon', n.telefon);
+      return html + '</li>';
+    }).join('') + '</ul></div>';
+    return;
+  }
+
+  if (sektion === 'gravplatsen') {
+    const r = (lbl, val) => rad(lbl, val);
+    innehall.innerHTML = '<div class="gp-inmatning-las">' +
+      r('Underhåll inbetalt för alla framtid den', d.underhall_text) +
+      (d.underhall_overstruket ? '<div class="gp-las-rad"><span class="gp-las-label"></span><span class="gp-las-varde">"För all framtid" överstruket</span></div>' : '') +
+      r('Gravrättstid', d.gravrattstid) +
+      r('Monument', d.monument) +
+      r('Gravens utformning', d.gravens_utformning) +
+      '<h4 class="gp-inmatning-delrubrik">Övrigt</h4>' +
+      r('Karta nr', d.karta_nr) +
+      r('Gravbrev nr', d.gravbrev_nr) +
+      r('Utfärdat den', d.utfordat_den) +
+      r('Kommentar', d.kommentar) +
+      '</div>';
+    return;
+  }
+
+  if (sektion === 'skiss') {
+    innehall.innerHTML = '<div class="gp-inmatning-las">' + rad('Storlek', d.storlek) + '<p class="gp-skiss-info">Här kommer du senare kunna ange/croppa skiss från bilden.</p></div>';
+    return;
+  }
+
+  if (sektion === 'gravsatta') {
+    const gs = d.gravsatta || [];
+    if (gs.length === 0) {
+      innehall.innerHTML = '<div class="gp-inmatning-las"><p class="gp-las-tom">Inga gravsatta registrerade.</p></div>';
+      return;
+    }
+    innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + gs.map((g, idx) => {
+      const namn = [v(g.fornamn), v(g.efternamn)].filter(Boolean).join(' ') || '—';
+      const fodelse = formatDatum(g.fodelse_ar, g.fodelse_manad, g.fodelse_dag);
+      const dods = formatDatum(g.dods_ar, g.dods_manad, g.dods_dag);
+      let html = `<li class="gp-las-kort"><h4 class="gp-inmatning-delrubrik">Gravsatt ${idx + 1}</h4>`;
+      if (g.ar_beteckning) html += '<div class="gp-las-rad"><span class="gp-las-label"></span><span class="gp-las-varde">Använd som beteckning (t.ex. familjegrav)</span></div>';
+      html += rad('Namn', namn) + rad('Adress', g.adress) + rad('Födelsedatum', fodelse) + rad('Födelsenummer', g.fod_nr) +
+        rad('Dödsdatum', dods) + rad('Db. nummer', g.dodsbok_nr) + rad('Gravsatt den', g.gravsatt_den) + rad('Urna/Kista', g.urna);
+      return html + '</li>';
+    }).join('') + '</ul></div>';
+    return;
+  }
+}
+
 function renderInmatningSektion(sektion) {
   const d = inmatningData || {};
   const innehall = document.getElementById(`gp-innehall-${sektion}`);
   if (!innehall) return;
+
+  if (!inmatningRedigerar) {
+    renderInmatningSektionLäs(sektion);
+    return;
+  }
 
   if (sektion === 'innehavare') {
     const inv = d.innehavare || [];
@@ -728,7 +846,7 @@ function renderInmatningSektion(sektion) {
 
   if (sektion === 'gravplatsen') {
     innehall.innerHTML = `
-      <label>Underhåll inbetalt för alla framtid den <input type="text" name="underhall_text" value="${esc(d.underhall_text)}" /></label>
+      <label>Underhåll inbetalt för all framtid den <input type="text" name="underhall_text" value="${esc(d.underhall_text)}" /></label>
       <label><input type="checkbox" name="underhall_overstruket" ${d.underhall_overstruket ? 'checked' : ''} /> "För all framtid" överstruket</label>
       <label>Gravrättstid <input type="text" name="gravrattstid" value="${esc(d.gravrattstid)}" /></label>
       <label>Monument <input type="text" name="monument" value="${esc(d.monument)}" /></label>
@@ -1087,6 +1205,7 @@ function samlaInmatningData() {
   const gravbrev_nr = gravplatsenOppnad ? get('gravbrev_nr') : (d.gravbrev_nr || '');
   const utfordat_den = gravplatsenOppnad ? get('utfordat_den') : (d.utfordat_den || '');
   const kommentar = gravplatsenOppnad ? (root.querySelector('textarea[name="kommentar"]')?.value ?? '').trim() : (d.kommentar || '');
+  const fardigtranskriberad = inmatningData && inmatningData.fardigtranskriberad === true;
 
   return {
     innehavare,
@@ -1101,6 +1220,7 @@ function samlaInmatningData() {
     gravbrev_nr,
     utfordat_den,
     kommentar,
+    fardigtranskriberad,
     gravsatta,
     skiss_bild_b64: null,
   };
@@ -1185,6 +1305,50 @@ if (gpInmatningEl) {
   gpInmatningEl.addEventListener('change', () => { inmatningDirty = true; uppdateraInmatningSparaKnapp(); });
 }
 uppdateraInmatningSparaKnapp();
+
+function toggleRedigeraVy() {
+  if (inmatningRedigerar) {
+    if (inmatningDirty) {
+      if (!confirm('Du har osparade ändringar. Visa vy utan att spara?')) return;
+      inmatningDirty = false;
+    }
+    inmatningRedigerar = false;
+    lastInmatningGravplatsId = null;
+    const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
+    if (sparaWrap) sparaWrap.hidden = true;
+    const btn = document.getElementById('gp-btn-redigera');
+    if (btn) btn.textContent = 'Redigera gravplatsen';
+    const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+    sektioner.forEach((s) => {
+      const innehall = document.getElementById(`gp-innehall-${s}`);
+      if (innehall && !innehall.hidden) ensureInmatningData().then((ok) => { if (ok) renderInmatningSektion(s); });
+    });
+    uppdateraFardigtranskriberadKnapp();
+  } else {
+    inmatningRedigerar = true;
+    const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
+    if (sparaWrap) sparaWrap.hidden = false;
+    const btn = document.getElementById('gp-btn-redigera');
+    if (btn) btn.textContent = 'Visa vy';
+    const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+    sektioner.forEach((s) => {
+      const innehall = document.getElementById(`gp-innehall-${s}`);
+      if (innehall && !innehall.hidden) renderInmatningSektion(s);
+    });
+    uppdateraInmatningSparaKnapp();
+    uppdateraFardigtranskriberadKnapp();
+  }
+}
+
+document.getElementById('gp-btn-redigera')?.addEventListener('click', toggleRedigeraVy);
+
+document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click', () => {
+  if (!inmatningRedigerar || currentGravplatsId == null || !inmatningData) return;
+  inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
+  markInmatningDirty();
+  uppdateraFardigtranskriberadKnapp();
+  uppdateraInmatningSparaKnapp();
+});
 
 function applyVyFromUrl() {
   const params = new URLSearchParams(window.location.search);

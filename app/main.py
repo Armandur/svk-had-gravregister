@@ -762,6 +762,7 @@ async def avancerad_sok_gravplatser(
     har_extramaterial: bool | None = None,
     utfardad_fran: int | None = None,
     utfardad_till: int | None = None,
+    ej_fardigtranskriberad: bool | None = None,
     limit: int = 500,
 ):
     """
@@ -890,6 +891,13 @@ async def avancerad_sok_gravplatser(
                 continue
             gp_ids.add(gid)
         q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
+
+    if ej_fardigtranskriberad:
+        # Visa endast gravplatser som inte är markerade som färdigtranskriberade (saknar rad eller fardigtranskriberad = False)
+        subq = db.query(GravplatsInmatning.gravplats_id).filter(
+            GravplatsInmatning.fardigtranskriberad == True
+        ).distinct()
+        q = q.filter(~Gravplats.id.in_(subq))
 
     q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 5000)))
     rows = q.all()
@@ -1180,6 +1188,7 @@ class InmatningSchema(BaseModel):
     gravbrev_nr: str = ""
     utfordat_den: str = ""
     kommentar: str = ""
+    fardigtranskriberad: bool = False
     gravsatta: list[GravsattItem] = []
     skiss_bild_b64: str | None = None
 
@@ -1263,6 +1272,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "gravbrev_nr": "",
             "utfordat_den": "",
             "kommentar": "",
+            "fardigtranskriberad": False,
             "has_skiss": False,
             "gravsatta": gravsatta_list,
         }
@@ -1280,6 +1290,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         "gravbrev_nr": row.gravbrev_nr or "",
         "utfordat_den": row.utfordat_den or "",
         "kommentar": row.kommentar or "",
+        "fardigtranskriberad": getattr(row, "fardigtranskriberad", False),
         "has_skiss": row.skiss_bild is not None and len(row.skiss_bild) > 0,
         "gravsatta": gravsatta_list,
     }
@@ -1315,6 +1326,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
     row.gravbrev_nr = body.gravbrev_nr or ""
     row.utfordat_den = body.utfordat_den or ""
     row.kommentar = body.kommentar or ""
+    row.fardigtranskriberad = body.fardigtranskriberad
     if body.skiss_bild_b64 is not None:
         try:
             row.skiss_bild = base64.b64decode(body.skiss_bild_b64) if body.skiss_bild_b64 else None

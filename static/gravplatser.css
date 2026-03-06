@@ -541,6 +541,119 @@
   margin: 0 0 0.5rem 0;
 }
 
+.gp-inmatning-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.gp-inmatning-header .gp-inmatning-overskrift {
+  margin: 0;
+}
+
+.gp-inmatning-btn-redigera {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-inmatning-btn-redigera:hover {
+  filter: brightness(1.1);
+}
+
+/* Färdigtranskriberad-knapp: grön när klar, röd när ej klar; i Visa vy är den inte klickbar */
+.gp-inmatning-btn-fardigtranskriberad {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.gp-inmatning-btn-fardigtranskriberad.gp-fardigtranskriberad-ja {
+  background: #0a6b0a;
+  color: white;
+}
+
+.gp-inmatning-btn-fardigtranskriberad.gp-fardigtranskriberad-nej {
+  background: #b91c1c;
+  color: white;
+}
+
+.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-ja:hover,
+.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-nej:hover {
+  filter: brightness(1.15);
+}
+
+.gp-inmatning-btn-fardigtranskriberad:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+/* Läsvy: information utan formulärfält */
+.gp-inmatning-las {
+  font-size: 0.9rem;
+}
+
+.gp-las-rad {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  margin-bottom: 0.35rem;
+}
+
+.gp-las-label {
+  color: var(--text-muted, #555);
+}
+
+.gp-las-varde {
+  word-break: break-word;
+}
+
+.gp-las-varde.gp-las-tom {
+  color: var(--text-muted, #888);
+  font-style: italic;
+}
+
+.gp-las-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gp-las-kort {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+}
+
+.gp-las-kort:last-child {
+  margin-bottom: 0;
+}
+
+.gp-las-kort .gp-las-rad {
+  margin-bottom: 0.25rem;
+}
+
+.gp-las-kort .gp-las-rad:last-child {
+  margin-bottom: 0;
+}
+
+.gp-inmatning-spara-wrap-edit[hidden] {
+  display: none !important;
+}
+
 .gp-inmatning-sektion {
   margin-bottom: 0.5rem;
 }
@@ -634,7 +747,8 @@
 .gp-gravsatt-ta-bort {
   padding: 0.2rem 0.5rem;
   font-size: 0.8rem;
-  background: #ddd;
+  background: var(--accent);
+  color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -643,7 +757,7 @@
 .gp-rad-ta-bort:hover,
 .gp-na-ta-bort:hover,
 .gp-gravsatt-ta-bort:hover {
-  background: #ccc;
+  filter: brightness(1.1);
 }
 
 .gp-lagg-till-innehavare,

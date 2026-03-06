@@ -69,7 +69,7 @@ Rubriker i **fallande rader** (ovanifrån och nedåt):
 4. Närmast anhörig  
 5. Storlek  
 6. En skiss på gravplatsen *(lagras i databasen som bild)*  
-7. Underhåll inbetalt för alla framtid den *(ibland är "för all framtid" överstruket – då gällde underhållet bara viss tid)*  
+7. Underhåll inbetalt för all framtid den *(ibland är "för all framtid" överstruket – då gällde underhållet bara viss tid)*  
 8. Gravrättstid  
 9. Monument  
 10. Gravens utformning  

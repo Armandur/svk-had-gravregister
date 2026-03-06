@@ -122,6 +122,7 @@ class GravplatsInmatning(Base):
     utfordat_den: Mapped[str] = mapped_column(default="")
     kommentar: Mapped[str] = mapped_column(default="")
     skiss_bild: Mapped[bytes | None] = mapped_column(nullable=True)  # PNG/JPEG blob
+    fardigtranskriberad: Mapped[bool] = mapped_column(default=False)  # All info från bilderna har förts över
 
 
 class GravplatsNarmastAnhorig(Base):
@@ -207,6 +208,15 @@ def init_db():
                         conn.commit()
             except Exception:
                 pass
+        # Migration: fardigtranskriberad på gravplats_inmatning
+        try:
+            r = conn.execute(text("PRAGMA table_info(gravplats_inmatning)"))
+            cols_inm = [row[1] for row in r]
+            if "fardigtranskriberad" not in cols_inm:
+                conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN fardigtranskriberad INTEGER DEFAULT 0"))
+                conn.commit()
+        except Exception:
+            pass
     # MappSidaRedanHalva skapas av create_all
 
 

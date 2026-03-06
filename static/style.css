@@ -660,15 +660,15 @@ body {
 .em-ta-bort {
   padding: 0.15rem 0.4rem;
   font-size: 0.75rem;
-  background: #e8e8e8;
-  border: 1px solid #ccc;
+  background: var(--accent);
+  color: white;
+  border: none;
   border-radius: 3px;
   cursor: pointer;
 }
 
 .em-ta-bort:hover {
-  background: #f0d0d0;
-  border-color: #c88;
+  filter: brightness(1.1);
 }
 
 .em-redan-halva-label {
