@@ -49,6 +49,10 @@
         <div class="gp-inmatning-header">
           <button type="button" id="gp-btn-fardigtranskriberad" class="gp-inmatning-btn-fardigtranskriberad gp-fardigtranskriberad-nej" disabled title="Markera om all information från bilderna har förts över">Ej färdigtranskriberad</button>
           <button type="button" id="gp-btn-redigera" class="gp-inmatning-btn-redigera">Redigera gravplatsen</button>
+          <div class="gp-inmatning-spara-wrap gp-inmatning-spara-wrap-edit" id="gp-inmatning-spara-wrap" hidden>
+            <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
+            <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
+          </div>
         </div>
         <section class="gp-inmatning-sektion" id="gp-sektion-innehavare" aria-label="Gravrättsinnehavare">
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="innehavare" aria-expanded="false">Gravrättsinnehavare</button>
@@ -70,10 +74,6 @@
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="gravsatta" aria-expanded="false">Gravsatta</button>
           <div class="gp-inmatning-innehall" id="gp-innehall-gravsatta" hidden></div>
         </section>
-        <div class="gp-inmatning-spara-wrap gp-inmatning-spara-wrap-edit" id="gp-inmatning-spara-wrap" hidden>
-          <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
-          <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
-        </div>
       </section>
         </div>
       </div>
@@ -87,6 +87,19 @@
     <button type="button" class="gp-lightbox-next" id="gp-lightbox-next" aria-label="Nästa">→</button>
   </div>
 
+  <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-label="Extraherad text">
+    <div class="gp-ocr-modal-inner">
+      <h3 class="gp-ocr-modal-rubrik">Extraherad text</h3>
+      <p class="gp-ocr-modal-hint">Redigera vid behov. Enter för att infoga.</p>
+      <textarea class="gp-ocr-modal-text" id="gp-ocr-modal-text" rows="1"></textarea>
+      <div class="gp-ocr-modal-knappar">
+        <button type="button" id="gp-ocr-anvand" class="gp-ocr-btn gp-ocr-btn-prim">Använd</button>
+        <button type="button" id="gp-ocr-avbryt" class="gp-ocr-btn">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <script src="/static/gravplatser.js"></script>
 </body>
 </html>

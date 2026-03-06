@@ -176,6 +176,7 @@ class Gravsatt(Base):
     dodsbok_nr: Mapped[str] = mapped_column(default="")
     gravsatt_den: Mapped[str] = mapped_column(default="")
     urna: Mapped[str] = mapped_column(default="")
+    kommentar: Mapped[str] = mapped_column(default="")
 
 
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
@@ -220,6 +221,15 @@ def init_db():
                         conn.commit()
             except Exception:
                 pass
+        # Migration: kommentar på gravsatt
+        try:
+            r = conn.execute(text("PRAGMA table_info(gravsatt)"))
+            cols_gs = [row[1] for row in r]
+            if "kommentar" not in cols_gs:
+                conn.execute(text("ALTER TABLE gravsatt ADD COLUMN kommentar TEXT DEFAULT ''"))
+                conn.commit()
+        except Exception:
+            pass
         # Migration: fardigtranskriberad på gravplats_inmatning
         try:
             r = conn.execute(text("PRAGMA table_info(gravplats_inmatning)"))

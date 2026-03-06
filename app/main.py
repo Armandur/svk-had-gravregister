@@ -1253,6 +1253,7 @@ class GravsattItem(BaseModel):
     dodsbok_nr: str = ""
     gravsatt_den: str = ""
     urna: str = ""
+    kommentar: str = ""
 
 
 class InmatningSchema(BaseModel):
@@ -1334,6 +1335,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "dodsbok_nr": g.dodsbok_nr,
             "gravsatt_den": g.gravsatt_den,
             "urna": g.urna,
+            "kommentar": getattr(g, "kommentar", None) or "",
         }
         for g in gravsatta
     ]
@@ -1463,6 +1465,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             dodsbok_nr=gs.dodsbok_nr or "",
             gravsatt_den=gs.gravsatt_den or "",
             urna=gs.urna or "",
+            kommentar=gs.kommentar or "",
         ))
     db.commit()
     return _inmatning_response(gravplats_id, db)
