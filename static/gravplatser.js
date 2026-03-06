@@ -4,7 +4,9 @@
 
 const API = '/api';
 
-let tradData = { kyrkogardar: [], kvarter_per_kyrkogard: {} };
+let tradData = { kyrkogardar: [], kvarter_per_kyrkogard: {}, antal_per_kvarter: {}, antal_per_kyrkogard: {} };
+/** Cache av gravplatslistor per kyrkogård+kvarter (för trädets utfallna kvarter). */
+let gravplatserTradCache = {};
 let valdKyrkogard = null;
 let valdKvarter = null;
 let gravplatserLista = [];
@@ -67,9 +69,11 @@ async function laddaTrad() {
     tradData = {
       kyrkogardar: data.kyrkogardar || [],
       kvarter_per_kyrkogard: data.kvarter_per_kyrkogard || {},
+      antal_per_kvarter: data.antal_per_kvarter || {},
+      antal_per_kyrkogard: data.antal_per_kyrkogard || {},
     };
   } catch (e) {
-    tradData = { kyrkogardar: [], kvarter_per_kyrkogard: {} };
+    tradData = { kyrkogardar: [], kvarter_per_kyrkogard: {}, antal_per_kvarter: {}, antal_per_kyrkogard: {} };
   }
   container.innerHTML = '';
   if (tradData.kyrkogardar.length === 0) {
@@ -85,20 +89,46 @@ async function laddaTrad() {
     btn.type = 'button';
     btn.className = 'trad-kyrkogard-btn';
     btn.setAttribute('aria-expanded', 'false');
-    btn.innerHTML = `<span class="trad-pil" aria-hidden="true">▶</span> ${kg}`;
+    const kgAntal = (tradData.antal_per_kyrkogard && tradData.antal_per_kyrkogard[kg]) ?? 0;
+    const kgPil = document.createElement('span');
+    kgPil.className = 'trad-pil';
+    kgPil.setAttribute('aria-hidden', 'true');
+    btn.appendChild(kgPil);
+    btn.appendChild(document.createTextNode(` ${kg} (${kgAntal})`));
     const ul = document.createElement('ul');
     ul.className = 'trad-kvarter-list';
     ul.hidden = true;
     kvarterLista.forEach((kv) => {
       const li = document.createElement('li');
+      const kvWrap = document.createElement('div');
+      kvWrap.className = 'trad-kvarter';
       const kvBtn = document.createElement('button');
       kvBtn.type = 'button';
       kvBtn.className = 'trad-kvarter-btn';
-      kvBtn.textContent = kv;
+      kvBtn.setAttribute('aria-expanded', 'false');
+      const kvAntal = (tradData.antal_per_kvarter && tradData.antal_per_kvarter[kg] && tradData.antal_per_kvarter[kg][kv]) ?? 0;
+      const pilSpan = document.createElement('span');
+      pilSpan.className = 'trad-pil';
+      pilSpan.setAttribute('aria-hidden', 'true');
+      kvBtn.appendChild(pilSpan);
+      kvBtn.appendChild(document.createTextNode(` ${kv} (${kvAntal})`));
       kvBtn.dataset.kyrkogard = kg;
       kvBtn.dataset.kvarter = kv;
-      kvBtn.addEventListener('click', () => valjKvarter(kg, kv));
-      li.appendChild(kvBtn);
+      const gpList = document.createElement('ul');
+      gpList.className = 'trad-gravplats-list';
+      gpList.hidden = true;
+      kvBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const expanded = kvBtn.getAttribute('aria-expanded') === 'true';
+        kvBtn.setAttribute('aria-expanded', !expanded);
+        gpList.hidden = expanded;
+        if (!expanded && gpList.children.length === 0) {
+          await fyllGravplatsLista(kg, kv, gpList);
+        }
+      });
+      kvWrap.appendChild(kvBtn);
+      kvWrap.appendChild(gpList);
+      li.appendChild(kvWrap);
       ul.appendChild(li);
     });
     btn.addEventListener('click', () => {
@@ -110,6 +140,49 @@ async function laddaTrad() {
     div.appendChild(ul);
     container.appendChild(div);
   });
+}
+
+/** Fyller en ul.trad-gravplats-list med gravplatser för kyrkogård+kvarter (hämtar vid behov, cachar). */
+async function fyllGravplatsLista(kyrkogard, kvarter, listEl) {
+  const cacheKey = `${kyrkogard}\n${kvarter}`;
+  if (!gravplatserTradCache[cacheKey]) {
+    try {
+      const params = new URLSearchParams({ kyrkogard: kyrkogard, kvarter: kvarter });
+      const res = await fetch(`${API}/gravplatser?${params}`);
+      const data = await res.json();
+      gravplatserTradCache[cacheKey] = sorteradLista(data.gravplatser || []);
+    } catch (e) {
+      gravplatserTradCache[cacheKey] = [];
+    }
+  }
+  const lista = gravplatserTradCache[cacheKey];
+  listEl.innerHTML = '';
+  lista.forEach((gp, idx) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'trad-gravplats-btn';
+    btn.textContent = gp.gravplatsnummer || gp.fullstandigt || `#${idx + 1}`;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      valjGravplats(kyrkogard, kvarter, lista, idx);
+    });
+    li.appendChild(btn);
+    listEl.appendChild(li);
+  });
+}
+
+/** Välj en specifik gravplats från trädet och visa den (stänger trädvyn). */
+function valjGravplats(kyrkogard, kvarter, lista, index) {
+  valdKyrkogard = kyrkogard;
+  valdKvarter = kvarter;
+  gravplatserLista = lista;
+  currentIndex = Math.max(0, Math.min(index, lista.length - 1));
+  const tradVy = document.getElementById('gp-trad-vy');
+  tradVy.hidden = true;
+  tradVy.classList.remove('gravplatser-trad-panel');
+  document.getElementById('gp-innehall').hidden = false;
+  uppdateraVy();
 }
 
 function valjKvarter(kyrkogard, kvarter) {

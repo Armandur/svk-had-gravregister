@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import update
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.config import KÄLLDATA_DIR
@@ -531,7 +531,7 @@ async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Sess
 
 @app.get("/api/gravplatser/trad")
 async def gravplatser_trad(db: Session = Depends(get_db)):
-    """Trädstruktur: kyrkogårdar med underliggande kvarter (distinct från registrerade gravplatser)."""
+    """Trädstruktur: kyrkogårdar med underliggande kvarter (distinct från registrerade gravplatser) och antal gravplatser."""
     rows = (
         db.query(Gravplats.kyrkogard, Gravplats.kvarter)
         .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
@@ -552,7 +552,33 @@ async def gravplatser_trad(db: Session = Depends(get_db)):
         trad[k] = sorted(trad[k], key=lambda x: (x.lower(), x))
     # Sortera kyrkogårdar (t.ex. HKG, HKN)
     kyrkogardar = sorted(trad.keys(), key=lambda x: (x.upper(), x))
-    return {"kyrkogardar": kyrkogardar, "kvarter_per_kyrkogard": {k: trad[k] for k in kyrkogardar}}
+
+    # Antal gravplatser per kyrkogård och kvarter
+    count_rows = (
+        db.query(Gravplats.kyrkogard, Gravplats.kvarter, func.count(Gravplats.id).label("antal"))
+        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+        .group_by(Gravplats.kyrkogard, Gravplats.kvarter)
+        .all()
+    )
+    antal_per_kvarter: dict[str, dict[str, int]] = {}
+    antal_per_kyrkogard: dict[str, int] = {}
+    for kyrkogard, kvarter, antal in count_rows:
+        k = (kyrkogard or "").strip()
+        kv = (kvarter or "").strip()
+        if not k:
+            continue
+        if k not in antal_per_kvarter:
+            antal_per_kvarter[k] = {}
+        if kv:
+            antal_per_kvarter[k][kv] = antal
+        antal_per_kyrkogard[k] = antal_per_kyrkogard.get(k, 0) + antal
+
+    return {
+        "kyrkogardar": kyrkogardar,
+        "kvarter_per_kyrkogard": {k: trad[k] for k in kyrkogardar},
+        "antal_per_kvarter": antal_per_kvarter,
+        "antal_per_kyrkogard": antal_per_kyrkogard,
+    }
 
 
 @app.get("/api/gravplatser")

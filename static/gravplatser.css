@@ -86,6 +86,13 @@
 .trad-pil {
   display: inline-block;
   transition: transform 0.15s;
+  /* CSS-triangel så pilen alltid syns (oberoende av teckensnitt) */
+  width: 0;
+  height: 0;
+  border-left: 0.4em solid currentColor;
+  border-top: 0.3em solid transparent;
+  border-bottom: 0.3em solid transparent;
+  vertical-align: middle;
 }
 
 .trad-kvarter-list {
@@ -98,6 +105,10 @@
   margin: 0;
 }
 
+.trad-kvarter {
+  margin-bottom: 0.25rem;
+}
+
 .trad-kvarter-btn {
   background: none;
   border: none;
@@ -108,10 +119,43 @@
   width: 100%;
   border-radius: 4px;
   color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .trad-kvarter-btn:hover {
   background: #f1f5f9;
+}
+
+.trad-kvarter-btn[aria-expanded="true"] .trad-pil {
+  transform: rotate(90deg);
+}
+
+.trad-gravplats-list {
+  list-style: none;
+  margin: 0 0 0 1.25rem;
+  padding: 0;
+}
+
+.trad-gravplats-list li {
+  margin: 0;
+}
+
+.trad-gravplats-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  text-align: left;
+  width: 100%;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.trad-gravplats-btn:hover {
+  background: #e2e8f0;
 }
 
 .gravplatser-tom {
