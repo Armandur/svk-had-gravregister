@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF-listvy – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Meny</a> Gravregister</h1>
+    <div class="topbar-falt">
+      <label for="mapp">Mapp:</label>
+      <select id="mapp" disabled>
+        <option value="">– laddar –</option>
+      </select>
+      <span id="mapp-status" class="status"></span>
+    </div>
+  </header>
+
+  <main class="innehall" id="main-innehall">
+    <section class="visning" id="visning" hidden>
+      <div class="visning-rad">
+        <div class="vy-val">
+          <label><input type="radio" name="vy" value="hela" checked /> Horisontellt</label>
+          <label><input type="radio" name="vy" value="halvor" /> Vertikalt</label>
+          <label class="toggle-hela-sidor"><input type="checkbox" id="visa-hela-sidor" /> Visa hela sidor</label>
+        </div>
+      </div>
+      <div class="vy-hela-wrapper" id="vy-hela">
+        <div class="pdf-rutor">
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 1 – Gravrätt</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="link-sida-1" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-1">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp" data-ruta="1" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="meny-sida-1" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="img-sida-1" alt="PDF sida 1" />
+          </div>
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 2 – Gravsatta 1–5</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="link-sida-2" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-2">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp" data-ruta="2" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="meny-sida-2" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="img-sida-2" alt="PDF sida 2" />
+          </div>
+          <div class="ruta">
+            <div class="ruta-rubrik">
+              <span>Sida 3 – Gravsatta 6–10</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="link-sida-3" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-3">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp" data-ruta="3" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="meny-sida-3" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="img-sida-3" alt="PDF sida 3" />
+          </div>
+        </div>
+        <div class="inmatning-horisontell" aria-label="Plats för inmatning">
+          <!-- Inmatningsfält kommer under rutorna i horisontellt läge -->
+        </div>
+      </div>
+      <div class="halvvy" id="vy-halvor" hidden>
+        <div class="halvvy-innehall">
+          <div class="halvor-stack">
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravrätt</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="halva-link-1" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-1">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp halva-meny" data-ruta="1" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="halva-meny-1" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="halva-img-1" alt="Gravrätt" />
+          </div>
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravsatta 1–5</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="halva-link-2" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-2">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp halva-meny" data-ruta="2" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="halva-meny-2" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="halva-img-2" alt="Gravsatta 1–5" />
+          </div>
+          <div class="halva-ruta">
+            <div class="halva-rubrik">
+              <span>Gravsatta 6–10</span>
+              <div class="ruta-rubrik-hoger">
+                <a id="halva-link-3" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-3">–</span></a>
+                <div class="meny-wrapper">
+                  <button type="button" class="meny-knapp halva-meny" data-ruta="3" aria-label="Meny för extramaterial" title="Extramaterial">⋯</button>
+                  <div class="meny-dropdown" id="halva-meny-3" hidden>
+                    <button type="button" class="meny-item" data-action="klipp-ut">Klipp ut som extramaterial</button>
+                    <button type="button" class="meny-item" data-action="infoga-tom-sida">Infoga tom sida efter</button>
+                    <button type="button" class="meny-item" data-action="ta-bort-infogad">Ta bort infogad sida</button>
+                    <button type="button" class="meny-item" data-action="flytta-vanster">Flytta vänster</button>
+                    <button type="button" class="meny-item" data-action="flytta-hoger">Flytta höger</button>
+                    <button type="button" class="meny-item" data-action="redan-halva-flode">Markera som redan halva</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <img id="halva-img-3" alt="Gravsatta 6–10" />
+          </div>
+        </div>
+        <aside class="inmatning-vertikal" aria-label="Plats för inmatning">
+          <!-- Inmatningsfält kommer till höger i vertikalt läge -->
+        </aside>
+        </div>
+      </div>
+      <div class="inmatning-under-rutor">
+        <label>Kyrkogård:</label>
+        <select id="kyrkogard">
+          <option value="">–</option>
+          <option value="HKG">HKG</option>
+          <option value="HKN">HKN</option>
+        </select>
+        <label>Kvarter:</label>
+        <input type="text" id="gravkvarter" placeholder="t.ex. Allm, 1, U" title="Behålls mellan sidbyten tills du byter" />
+        <label>Gravplatsnr:</label>
+        <input type="text" id="gravplatsnummer" placeholder="t.ex. 1+2" title="Från handlingen; sparas när du går till nästa gravplats" size="8" />
+        <label class="enter-nasta-label"><input type="checkbox" id="enter-ga-nasta" /> Enter → nästa gravplats</label>
+        <a href="/gravplatser" class="lank-gravplatsvy">Gravplatsvy</a>
+      </div>
+      <div class="visning-meny-under">
+        <div class="navigering">
+          <span id="gravplats-registrerat" class="gravplats-registrerat" aria-live="polite"></span>
+          <div class="halva-koppling" id="halva-koppling">
+            <label title="Sida 3 övre halva (gravsatta 6–10) tillhör nästa grav"><input type="checkbox" id="sida3-ovre-nasta" /> Sida 3 övre → nästa grav</label>
+          </div>
+          <button type="button" id="btn-föregående">← Föregående</button>
+          <button type="button" id="btn-spara-gravplats">Spara</button>
+          <button type="button" id="btn-nästa">Nästa gravplats →</button>
+          <span class="hoppa-saknad-wrap">
+            <span class="hoppa-saknad-label">Hoppa till gravplats som saknar:</span>
+            <span class="saknad-item">
+              <span class="saknad-count" id="saknar-kyrkogard-count" aria-hidden="true">(0)</span>
+              <label><input type="checkbox" id="saknar-kyrkogard" /> Kyrkogård</label>
+            </span>
+            <span class="saknad-item">
+              <span class="saknad-count" id="saknar-kvarter-count" aria-hidden="true">(0)</span>
+              <label><input type="checkbox" id="saknar-kvarter" /> Kvarter</label>
+            </span>
+            <span class="saknad-item">
+              <span class="saknad-count" id="saknar-gravplatsnummer-count" aria-hidden="true">(0)</span>
+              <label><input type="checkbox" id="saknar-gravplatsnummer" /> Gravplatsnr</label>
+            </span>
+            <button type="button" id="btn-föregående-saknad" title="Föregående gravplats som saknar valt fält">← Saknad</button>
+            <button type="button" id="btn-nasta-saknad" title="Nästa gravplats som saknar valt fält">Saknad →</button>
+            <span id="hoppa-saknad-tooltip" class="hoppa-saknad-tooltip" role="status" aria-live="polite"></span>
+          </span>
+        </div>
+        <div class="serie-gravplats-rad" id="serie-gravplats-rad">
+          <span class="serie-label">Serie gravplatsnummer:</span>
+          <button type="button" id="btn-serie-start" title="Använd aktuell position som start">Sätt start</button>
+          <span id="serie-start-visa">Start: –</span>
+          <label>Startgravplatsnr: <input type="text" id="serie-start-nr" placeholder="t.ex. 1" size="6" title="Första numret i serien" /></label>
+          <span id="serie-slut-visa">Slut: aktuell position</span>
+          <button type="button" id="btn-serie-verkstall" title="Fyll gravplatsnummer i nummerföljd från start till aktuell position">Verkställ serie</button>
+          <span id="serie-tooltip" class="hoppa-saknad-tooltip" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="extramaterial-sektion">
+        <button type="button" class="extramaterial-utfällbar-rubrik" id="em-rubrik" aria-expanded="true">
+          <span class="em-rubrik-ikon" aria-hidden="true">▼</span>
+          <span>Extramaterial</span>
+        </button>
+        <div class="extramaterial-innehall" id="em-innehall">
+          <div class="em-gravplats-block">
+            <h4>För denna gravplats (startSida <span id="em-current-start">1</span>)</h4>
+            <div id="extramaterial-lista" class="extramaterial-lista"></div>
+          </div>
+          <div class="em-urklipp-block">
+            <h4>Urklipp</h4>
+            <p class="em-urklipp-status" id="em-urklipp-status">Inga sidor i urklippet.</p>
+            <div class="em-urklipp-aktioner" id="em-urklipp-aktioner" hidden>
+              <label>Typ (valfritt): <input type="text" id="em-urklipp-typ" placeholder="t.ex. lapp, brev, karta" size="14" /></label>
+              <label class="em-redan-halva-label" title="Kort som redan skannats som en halva (visas som en halva i gravplatsvyn)"><input type="checkbox" id="em-urklipp-redan-halva" /> Redan halva</label>
+              <button type="button" id="em-infoga-grav">Infoga på denna gravplats</button>
+              <button type="button" id="em-infoga-mapp">Infoga på mappen</button>
+            </div>
+          </div>
+          <div class="extramaterial-mapp-sektion">
+            <button type="button" id="em-visa-mapp" aria-expanded="false">Visa extramaterial knutet till mappen</button>
+            <div id="extramaterial-mapp-lista" class="extramaterial-mapp-lista" hidden></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="dev-meny" id="dev-meny">
+    <button type="button" class="dev-meny-toggle" id="dev-meny-toggle" title="Dev-menyn">Dev</button>
+    <div class="dev-meny-innehall" id="dev-meny-innehall" hidden>
+      <button type="button" id="dev-nolla-cache">Nolla cachning</button>
+      <button type="button" id="dev-stang-av">Stäng av appen</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

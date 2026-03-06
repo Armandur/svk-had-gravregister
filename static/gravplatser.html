@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gravregister – Visa och Inmatning</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/gravplatser.css" />
+</head>
+<body>
+  <header class="gravplatser-topbar">
+    <a href="/">← Tillbaka till menyn</a>
+  </header>
+
+  <main class="gravplatser-main">
+    <div id="gp-trad-vy" class="gravplatser-trad-vy">
+      <div class="gravplatser-trad-wrap">
+        <h2>Välj kyrkogård och kvarter</h2>
+        <div id="gp-trad" aria-label="Trädstruktur kyrkogårdar och kvarter"></div>
+      </div>
+      <p id="gp-trad-tom" class="gravplatser-tom" hidden>Inga kyrkogårdar eller kvarter registrerade än.</p>
+    </div>
+
+    <div id="gp-innehall" class="gravplatser-innehall" hidden>
+      <div class="gravplatser-innehall-topp">
+        <button type="button" id="gp-btn-tillbaka-kvarter" class="gravplatser-btn-byt-kvarter">Byt kyrkogård/kvarter</button>
+        <h1 class="gravplatser-rubrik" id="gp-rubrik"></h1>
+      </div>
+      <div class="gravplatser-menyrad">
+        <button type="button" id="gp-btn-tillbaka" class="gravplatser-menyrad-hoger">← Föregående</button>
+        <button type="button" id="gp-btn-nasta">Nästa →</button>
+        <button type="button" id="gp-btn-toggle-hela" class="gravplatser-btn-toggle-hela">Visa hela sidan</button>
+        <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Vertikal vy</button>
+      </div>
+      <div id="gp-innehall-body" class="gp-innehall-body">
+        <div id="gp-innehall-vanster" class="gp-innehall-vanster">
+          <div class="gravplatser-halvor-wrap">
+            <div class="gravplatser-halvor" id="gp-halvor"></div>
+          </div>
+          <section class="gp-extramaterial" id="gp-extramaterial" aria-label="Extramaterial">
+            <button type="button" class="gp-em-rubrik" id="gp-em-rubrik" aria-expanded="false" disabled>Extramaterial (0)</button>
+            <div class="gp-em-innehall" id="gp-em-innehall" hidden>
+              <div class="gp-em-galleri">
+                <button type="button" class="gp-em-pil gp-em-pil-vanster" id="gp-em-prev" aria-label="Föregående">←</button>
+                <div class="gp-em-miniatyrer" id="gp-em-miniatyrer"></div>
+                <button type="button" class="gp-em-pil gp-em-pil-hoger" id="gp-em-next" aria-label="Nästa">→</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div id="gp-innehall-hoger" class="gp-innehall-hoger">
+      <section class="gp-inmatning" id="gp-inmatning" aria-label="Inmatning av data">
+        <h2 class="gp-inmatning-overskrift">Inmatning</h2>
+        <section class="gp-inmatning-sektion" id="gp-sektion-innehavare" aria-label="Gravrättsinnehavare">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="innehavare" aria-expanded="false">Gravrättsinnehavare</button>
+          <div class="gp-inmatning-innehall" id="gp-innehall-innehavare" hidden></div>
+        </section>
+        <section class="gp-inmatning-sektion" id="gp-sektion-narmast-anhoriga" aria-label="Närmast anhöriga">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="narmast_anhoriga" aria-expanded="false">Närmast anhöriga</button>
+          <div class="gp-inmatning-innehall" id="gp-innehall-narmast_anhoriga" hidden></div>
+        </section>
+        <section class="gp-inmatning-sektion" id="gp-sektion-gravplatsen" aria-label="Gravplatsen">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="gravplatsen" aria-expanded="false">Gravplatsen</button>
+          <div class="gp-inmatning-innehall" id="gp-innehall-gravplatsen" hidden></div>
+        </section>
+        <section class="gp-inmatning-sektion" id="gp-sektion-skiss" aria-label="Skiss">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="skiss" aria-expanded="false">Skiss</button>
+          <div class="gp-inmatning-innehall" id="gp-innehall-skiss" hidden></div>
+        </section>
+        <section class="gp-inmatning-sektion" id="gp-sektion-gravsatta" aria-label="Gravsatta">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="gravsatta" aria-expanded="false">Gravsatta</button>
+          <div class="gp-inmatning-innehall" id="gp-innehall-gravsatta" hidden></div>
+        </section>
+        <div class="gp-inmatning-spara-wrap">
+          <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
+          <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
+        </div>
+      </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="gp-lightbox" id="gp-lightbox" hidden aria-modal="true" role="dialog" aria-label="Förstoring">
+    <button type="button" class="gp-lightbox-stang" id="gp-lightbox-stang" aria-label="Stäng">×</button>
+    <button type="button" class="gp-lightbox-prev" id="gp-lightbox-prev" aria-label="Föregående">←</button>
+    <img class="gp-lightbox-img" id="gp-lightbox-img" alt="" />
+    <button type="button" class="gp-lightbox-next" id="gp-lightbox-next" aria-label="Nästa">→</button>
+  </div>
+
+  <script src="/static/gravplatser.js"></script>
+</body>
+</html>

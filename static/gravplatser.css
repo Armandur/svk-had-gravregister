@@ -1,0 +1,742 @@
+/* Gravplatser-sida: samma fullskärmslayout som listvy, halvor horisontellt */
+
+.gravplatser-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 1rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.gravplatser-topbar a {
+  font-size: 0.9rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.gravplatser-topbar a:hover {
+  text-decoration: underline;
+}
+
+.gravplatser-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 1rem 1rem;
+}
+
+/* Trädvy: kyrkogårdar och kvarter */
+.gravplatser-trad-vy {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* När trädet visas som panel (togglet från visningsläget) */
+.gravplatser-trad-vy.gravplatser-trad-panel {
+  flex: 0 0 auto;
+  max-height: 45vh;
+  overflow: auto;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.gravplatser-trad-wrap {
+  margin-bottom: 1.5rem;
+}
+
+.gravplatser-trad-wrap h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--text-muted, #555);
+}
+
+.trad-kyrkogard {
+  margin-bottom: 0.5rem;
+}
+
+.trad-kyrkogard-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.trad-kyrkogard-btn:hover {
+  text-decoration: underline;
+}
+
+.trad-kyrkogard-btn[aria-expanded="true"] .trad-pil {
+  transform: rotate(90deg);
+}
+
+.trad-pil {
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+.trad-kvarter-list {
+  list-style: none;
+  margin: 0 0 0 1.25rem;
+  padding: 0;
+}
+
+.trad-kvarter-list li {
+  margin: 0;
+}
+
+.trad-kvarter-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.95rem;
+  text-align: left;
+  width: 100%;
+  border-radius: 4px;
+  color: var(--text);
+}
+
+.trad-kvarter-btn:hover {
+  background: #f1f5f9;
+}
+
+.gravplatser-tom {
+  font-size: 0.95rem;
+  color: var(--text-muted, #555);
+}
+
+/* Visningsläge: fyller skärmen som listvy */
+.gravplatser-innehall {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  overflow-y: auto;
+}
+
+.gravplatser-innehall-topp {
+  flex-shrink: 0;
+  margin-bottom: 0.35rem;
+}
+
+.gravplatser-menyrad {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.gravplatser-menyrad button {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+}
+
+.gravplatser-menyrad button:hover {
+  filter: brightness(1.1);
+}
+
+.gravplatser-menyrad button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gravplatser-menyrad-hoger {
+  margin-left: auto;
+}
+
+.gravplatser-btn-byt-kvarter {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  margin-bottom: 0.35rem;
+}
+
+.gravplatser-btn-byt-kvarter:hover {
+  filter: brightness(1.1);
+}
+
+.gravplatser-rubrik {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 0.35rem 0;
+}
+
+
+.gravplatser-counter {
+  font-size: 0.9rem;
+  color: var(--text-muted, #555);
+}
+
+/* Body-wrapper: horisontell vy = kolumn, vertikal vy = rad med två skrollbara kolumner */
+.gp-innehall-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gravplatser-innehall.gp-vertikal-vy .gp-innehall-body {
+  flex-direction: row;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.gp-innehall-vanster {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gravplatser-innehall.gp-vertikal-vy .gp-innehall-vanster {
+  flex: 0 1 45%;
+  min-width: 200px;
+  overflow-y: auto;
+}
+
+.gp-innehall-hoger {
+  flex: 0 0 auto;
+}
+
+.gravplatser-innehall.gp-vertikal-vy .gp-innehall-hoger {
+  flex: 1 1 55%;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* I vertikal vy ska endast kolumnerna scrolla, inte hela innehållet */
+.gravplatser-innehall.gp-vertikal-vy {
+  overflow: hidden;
+}
+
+/* Halvor horisontellt – höjd begränsad till innehållet (högsta bilden), ska inte krympa så att Extramaterial hamnar under */
+.gravplatser-halvor-wrap {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gravplatser-halvor {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  align-items: stretch;
+}
+
+/* Vertikal vy: bilder staplade ovanpå varandra till vänster */
+.gravplatser-innehall.gp-vertikal-vy .gravplatser-halvor {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gravplatser-innehall.gp-vertikal-vy .gravplatser-halva {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.gravplatser-halva {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.gravplatser-halva img {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  object-fit: contain;
+  object-position: top;
+  display: block;
+}
+
+.gravplatser-halva-figcap {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.35rem 0.4rem;
+  background: #eee;
+  align-items: center;
+}
+
+.gravplatser-halva-knapp {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: var(--accent);
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.gravplatser-halva-knapp:hover {
+  filter: brightness(1.1);
+}
+
+.gravplatser-fel {
+  font-size: 0.9rem;
+  color: #c00;
+  padding: 0.5rem;
+}
+
+/* Utfällbar Extramaterial-sektion */
+.gp-extramaterial {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.gp-em-rubrik {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  background: #eee;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.gp-em-rubrik:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.gp-em-rubrik:disabled {
+  cursor: default;
+  opacity: 0.9;
+}
+
+.gp-em-innehall {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0;
+}
+
+.gp-em-galleri {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gp-em-pil {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  font-size: 1.25rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-em-pil:hover {
+  filter: brightness(1.1);
+}
+
+.gp-em-miniatyrer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.25rem 0;
+  scroll-behavior: smooth;
+}
+
+.gp-em-miniatyr {
+  flex: 0 0 auto;
+  width: 120px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.gp-em-miniatyr:hover {
+  border-color: var(--accent);
+}
+
+.gp-em-miniatyr img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
+}
+
+/* Lightbox */
+.gp-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.gp-lightbox.hidden,
+.gp-lightbox[hidden] {
+  display: none !important;
+}
+
+.gp-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.gp-lightbox-stang {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  background: #fff;
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-lightbox-stang:hover {
+  background: #eee;
+}
+
+.gp-lightbox-prev,
+.gp-lightbox-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-lightbox-prev {
+  left: 1rem;
+}
+
+.gp-lightbox-next {
+  right: 1rem;
+}
+
+.gp-lightbox-prev:hover,
+.gp-lightbox-next:hover {
+  background: #fff;
+}
+
+/* Inmatning – utfällbara sektioner */
+.gp-inmatning {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.gp-inmatning-overskrift {
+  font-size: 1.1rem;
+  margin: 0 0 0.5rem 0;
+}
+
+.gp-inmatning-sektion {
+  margin-bottom: 0.5rem;
+}
+
+.gp-inmatning-sektion .gp-sektion-rubrik {
+  margin-bottom: 0;
+}
+
+.gp-inmatning-innehall {
+  margin-top: 0.35rem;
+  padding: 0.5rem 0;
+}
+
+.gp-inmatning-delrubrik {
+  font-size: 0.95rem;
+  margin: 0.75rem 0 0.35rem 0;
+  color: var(--text-muted, #555);
+}
+
+.gp-inmatning label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  color: var(--text-muted, #555);
+}
+
+/* Checkbox: behåll kryssruta till vänster om texten */
+.gp-inmatning label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  align-items: center;
+}
+
+.gp-inmatning input[type="text"],
+.gp-inmatning input[type="number"],
+.gp-inmatning textarea {
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.gp-inmatning textarea {
+  min-height: 2.5rem;
+  resize: vertical;
+}
+
+.gp-inmatning input[type="checkbox"] {
+  margin-right: 0.35rem;
+}
+
+.gp-inmatning-rad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+.gp-inmatning-rad label {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.gp-inmatning-rad label:first-child {
+  margin-top: 0;
+}
+
+.gp-inmatning-rad input {
+  max-width: 16rem;
+}
+
+.gp-na-rad input[name="na_gatuadress"] {
+  min-width: 12rem;
+  max-width: 22rem;
+}
+
+.gp-na-rad input[name="na_postnummer"] {
+  max-width: 6rem;
+}
+
+.gp-rad-ta-bort,
+.gp-na-ta-bort,
+.gp-gravsatt-ta-bort {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  background: #ddd;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-rad-ta-bort:hover,
+.gp-na-ta-bort:hover,
+.gp-gravsatt-ta-bort:hover {
+  background: #ccc;
+}
+
+.gp-lagg-till-innehavare,
+.gp-lagg-till-na,
+.gp-lagg-till-gravsatt {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 0.35rem;
+}
+
+.gp-lagg-till-innehavare:hover,
+.gp-lagg-till-na:hover,
+.gp-lagg-till-gravsatt:hover {
+  filter: brightness(1.1);
+}
+
+.gp-gravsatt-block {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fafafa;
+}
+
+.gp-gravsatt-drag-handle {
+  cursor: grab;
+  margin-right: 0.35rem;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.gp-gravsatt-drag-handle:active {
+  cursor: grabbing;
+}
+
+.gp-gravsatt-block.gp-gravsatt-dragging {
+  opacity: 0.6;
+}
+
+.gp-gravsatt-block.gp-gravsatt-drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.gp-gravsatt-block h4 {
+  font-size: 0.95rem;
+  margin: 0 0 0.35rem 0;
+}
+
+.gp-gravsatt-rad {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 0.35rem;
+}
+
+.gp-gravsatt-rad label {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.gp-gravsatt-rad input,
+.gp-gravsatt-rad select {
+  max-width: 16rem;
+}
+
+.gp-gravsatt-rad .gp-datum-fel {
+  align-self: flex-end;
+  margin-bottom: 0.2rem;
+}
+
+.gp-gravsatt-block select {
+  min-width: 10rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.gp-gravsatt-beteckning {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.gp-datum-fel {
+  display: block;
+  font-size: 0.8rem;
+  color: #c00;
+  margin-top: 0.2rem;
+  margin-bottom: 0.35rem;
+}
+
+.gp-datum-fel[hidden] {
+  display: none;
+}
+
+.gp-skiss-info {
+  font-size: 0.85rem;
+  color: var(--text-muted, #555);
+  font-style: italic;
+  margin: 0.5rem 0 0 0;
+}
+
+.gp-inmatning-spara-wrap {
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.gp-inmatning-status {
+  font-size: 0.9rem;
+}
+
+.gp-inmatning-status[hidden] {
+  display: none;
+}
+
+.gp-inmatning-status-ok {
+  color: #0a6b0a;
+}
+
+.gp-inmatning-status-fel {
+  color: #c00;
+}
+
+.gp-inmatning-spara-wrap .gp-inmatning-spara-btn {
+  padding: 0.4rem 1rem;
+  font-size: 0.95rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gp-inmatning-spara-wrap .gp-inmatning-spara-btn:hover {
+  filter: brightness(1.1);
+}
