@@ -737,6 +737,12 @@
   cursor: pointer;
 }
 
-.gp-inmatning-spara-wrap .gp-inmatning-spara-btn:hover {
+.gp-inmatning-spara-wrap .gp-inmatning-spara-btn:hover:not(:disabled) {
   filter: brightness(1.1);
+}
+
+.gp-inmatning-spara-wrap .gp-inmatning-spara-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--text-muted, #888);
 }

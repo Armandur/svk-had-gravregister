@@ -256,6 +256,8 @@ async function uppdateraVy() {
     currentExtramaterial = [];
     uppdateraExtramaterialSektion([], null);
   }
+  inmatningDirty = false;
+  uppdateraInmatningSparaKnapp();
   uppdateraInmatningSektionerVidGravplatsbyte();
 }
 
