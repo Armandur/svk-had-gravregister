@@ -14,6 +14,8 @@ let currentIndex = 0;
 let cacheBust = Date.now();
 let currentExtramaterial = [];
 let currentExtramaterialMapp = null;
+/** URL:er för aktuell gravplatsens halvor (för lightbox). */
+let currentHalvorUrls = [];
 let visarHelaSidor = false;
 let vertikalVy = false;
 let currentGravplatsId = null;
@@ -250,6 +252,7 @@ async function uppdateraVy() {
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
     currentExtramaterial = [];
+    currentHalvorUrls = [];
     uppdateraExtramaterialSektion([], null);
     uppdateraInmatningRubrikCounts();
     return;
@@ -293,7 +296,7 @@ async function uppdateraVy() {
 
     const initialUrl = (halvaUrl, helaUrl) => (visarHelaSidor && halvaUrl !== helaUrl ? helaUrl : halvaUrl);
 
-    halvorEl.innerHTML = halvor.map((h) => {
+    const halvorMedUrl = halvor.map((h) => {
       let halvaUrl;
       let helaUrl;
       let pdfUrl = null;
@@ -310,13 +313,18 @@ async function uppdateraVy() {
           pdfUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}`;
         }
       }
-      const pdfKnapp = pdfUrl
-        ? `<a href="${pdfUrl}" target="_blank" rel="noopener" class="gravplatser-halva-knapp">Öppna PDF</a>`
+      return { halvaUrl, helaUrl, pdfUrl };
+    });
+    currentHalvorUrls = halvorMedUrl.map((x) => initialUrl(x.halvaUrl, x.helaUrl));
+
+    const esc = (s) => (s || '').replace(/"/g, '&quot;');
+    halvorEl.innerHTML = halvorMedUrl.map((x, i) => {
+      const imgSrc = initialUrl(x.halvaUrl, x.helaUrl);
+      const pdfKnapp = x.pdfUrl
+        ? `<a href="${x.pdfUrl}" target="_blank" rel="noopener" class="gravplatser-halva-knapp">Öppna PDF</a>`
         : '';
-      const esc = (s) => (s || '').replace(/"/g, '&quot;');
-      const imgSrc = initialUrl(halvaUrl, helaUrl);
       const figcap = pdfKnapp ? `<figcaption class="gravplatser-halva-figcap">${pdfKnapp}</figcaption>` : '';
-      return `<figure class="gravplatser-halva" data-halva-url="${esc(halvaUrl)}" data-hela-url="${esc(helaUrl)}" data-kan-hela="${halvaUrl !== helaUrl}">
+      return `<figure class="gravplatser-halva" data-halva-url="${esc(x.halvaUrl)}" data-hela-url="${esc(x.helaUrl)}" data-kan-hela="${x.halvaUrl !== x.helaUrl}" data-index="${i}">
         <img src="${imgSrc}" alt="" />
         ${figcap}
       </figure>`;
@@ -327,6 +335,7 @@ async function uppdateraVy() {
   } catch (e) {
     halvorEl.innerHTML = '<p class="gravplatser-fel">Kunde inte ladda halvor: ' + e.message + '</p>';
     currentExtramaterial = [];
+    currentHalvorUrls = [];
     uppdateraExtramaterialSektion([], null);
   }
   inmatningDirty = false;
@@ -402,9 +411,22 @@ function toggleExtramaterialInnehall() {
 }
 
 let lightboxIndex = 0;
+/** 'extramaterial' | 'halvor' – vilken källa lightboxen visar. */
+let lightboxMode = 'extramaterial';
+/** Vid mode 'halvor': URL:er för aktuell gravplatsens bilder. */
+let lightboxHalvorUrls = [];
+
+function uppdateraLightboxKnappar() {
+  const prevBtn = document.getElementById('gp-lightbox-prev');
+  const nextBtn = document.getElementById('gp-lightbox-next');
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  if (prevBtn) prevBtn.disabled = n <= 1;
+  if (nextBtn) nextBtn.disabled = n <= 1;
+}
 
 function openLightbox(index) {
   if (currentExtramaterial.length === 0 || !currentExtramaterialMapp) return;
+  lightboxMode = 'extramaterial';
   const idx = Math.max(0, Math.min(index, currentExtramaterial.length - 1));
   lightboxIndex = idx;
   const em = currentExtramaterial[idx];
@@ -415,6 +437,29 @@ function openLightbox(index) {
     imgEl.src = bildUrl;
     imgEl.alt = em.filnamn;
     lightbox.hidden = false;
+    uppdateraLightboxKnappar();
+  }
+}
+
+function openLightboxHalvor(index) {
+  const halvorEl = document.getElementById('gp-halvor');
+  const figures = halvorEl ? halvorEl.querySelectorAll('.gravplatser-halva') : [];
+  if (figures.length === 0) return;
+  /* Bygg URL-lista utifrån aktuellt visningsläge (halva vs hela sida). */
+  lightboxHalvorUrls = Array.from(figures).map((fig) => {
+    const useHela = visarHelaSidor && fig.dataset.kanHela === 'true';
+    return useHela ? (fig.dataset.helaUrl || '') : (fig.dataset.halvaUrl || '');
+  }).filter(Boolean);
+  if (lightboxHalvorUrls.length === 0) return;
+  lightboxMode = 'halvor';
+  lightboxIndex = Math.max(0, Math.min(index, lightboxHalvorUrls.length - 1));
+  const lightbox = document.getElementById('gp-lightbox');
+  const imgEl = document.getElementById('gp-lightbox-img');
+  if (lightbox && imgEl) {
+    imgEl.src = lightboxHalvorUrls[lightboxIndex];
+    imgEl.alt = '';
+    lightbox.hidden = false;
+    uppdateraLightboxKnappar();
   }
 }
 
@@ -424,15 +469,27 @@ function closeLightbox() {
 }
 
 function lightboxPrev() {
-  if (currentExtramaterial.length <= 1) return;
-  lightboxIndex = (lightboxIndex - 1 + currentExtramaterial.length) % currentExtramaterial.length;
-  openLightbox(lightboxIndex);
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  if (n <= 1) return;
+  lightboxIndex = (lightboxIndex - 1 + n) % n;
+  if (lightboxMode === 'halvor') {
+    const imgEl = document.getElementById('gp-lightbox-img');
+    if (imgEl) imgEl.src = lightboxHalvorUrls[lightboxIndex];
+  } else {
+    openLightbox(lightboxIndex);
+  }
 }
 
 function lightboxNext() {
-  if (currentExtramaterial.length <= 1) return;
-  lightboxIndex = (lightboxIndex + 1) % currentExtramaterial.length;
-  openLightbox(lightboxIndex);
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  if (n <= 1) return;
+  lightboxIndex = (lightboxIndex + 1) % n;
+  if (lightboxMode === 'halvor') {
+    const imgEl = document.getElementById('gp-lightbox-img');
+    if (imgEl) imgEl.src = lightboxHalvorUrls[lightboxIndex];
+  } else {
+    openLightbox(lightboxIndex);
+  }
 }
 
 function scrollGalleri(riktning) {
@@ -500,6 +557,14 @@ document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy
 document.getElementById('gp-em-rubrik')?.addEventListener('click', toggleExtramaterialInnehall);
 document.getElementById('gp-em-prev')?.addEventListener('click', () => scrollGalleri(-1));
 document.getElementById('gp-em-next')?.addEventListener('click', () => scrollGalleri(1));
+
+document.getElementById('gp-halvor')?.addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const fig = e.target.closest('.gravplatser-halva');
+  if (!fig) return;
+  const idx = fig.getAttribute('data-index');
+  if (idx != null && idx !== '') openLightboxHalvor(parseInt(idx, 10));
+});
 
 document.getElementById('gp-lightbox-stang')?.addEventListener('click', closeLightbox);
 document.getElementById('gp-lightbox-prev')?.addEventListener('click', lightboxPrev);

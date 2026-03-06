@@ -314,6 +314,7 @@
   flex: 1 1 0;
   min-width: 0;
   display: flex;
+  cursor: pointer;
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 4px;
