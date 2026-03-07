@@ -128,4 +128,59 @@
       listEl.setAttribute('aria-expanded', 'false');
     }
   });
+
+  var sokGravsattaBtn = document.getElementById('startsida-sok-gravsatta');
+  if (sokGravsattaBtn) {
+    sokGravsattaBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+    });
+  }
+
+  // Statistik
+  const statListEl = document.getElementById('startsida-statistik-lista');
+  if (statListEl) {
+    fetch(API + '/statistik')
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data) {
+          statListEl.innerHTML = '<li><span>Kunde inte ladda statistik</span><span class="stat-varde">–</span></li>';
+          return;
+        }
+        const rader = [
+          { label: 'Antal mappar (arkivvolymer)', key: 'antal_mappar' },
+          { label: 'Antal PDF:er', key: 'antal_pdf' },
+          { label: 'Gravplatser som saknar kyrkogård, kvarter eller gravplatsnummer', key: 'gravplatser_saknar_kyrkogard_kvarter_eller_nummer' },
+          { label: 'Gravplatser med fullständigt gravplatsnummer', key: 'gravplatser_fullstandiga' },
+          { label: 'Gravplatser markerade som färdigtranskriberade', key: 'gravplatser_fardigtranskriberade' },
+          { label: 'Antal extramaterial', key: 'antal_extramaterial' },
+          { label: 'Antal gravrättsinnehavare', key: 'antal_innehavare' },
+          { label: 'Antal närmast anhöriga', key: 'antal_narmast_anhoriga' },
+          { label: 'Antal gravsatta', key: 'antal_gravsatta' },
+        ];
+        statListEl.innerHTML = rader.map(function (r) {
+          const v = data[r.key];
+          const varde = typeof v === 'number' ? String(v) : '–';
+          return '<li><span>' + escapeHtml(r.label) + '</span><span class="stat-varde">' + escapeHtml(varde) + '</span></li>';
+        }).join('');
+
+        var stapelWrap = document.getElementById('startsida-statistik-stapel-wrap');
+        if (stapelWrap) {
+          var total = data.total_gravplatser;
+          var fardiga = data.gravplatser_fardigtranskriberade;
+          if (typeof total === 'number' && total > 0 && typeof fardiga === 'number') {
+            var procent = Math.min(100, Math.round((fardiga / total) * 100));
+            stapelWrap.innerHTML = '<p class="startsida-statistik-stapel-label">Färdigtranskriberade gravplatser (' + fardiga + ' av ' + total + ', ' + procent + '%)</p><div class="startsida-statistik-stapel" role="img" aria-label="' + procent + ' procent färdigtranskriberade"><div class="startsida-statistik-stapel-fardiga" style="width:' + procent + '%"></div><div class="startsida-statistik-stapel-rest" style="width:' + (100 - procent) + '%"></div></div>';
+            stapelWrap.removeAttribute('hidden');
+            stapelWrap.setAttribute('aria-hidden', 'false');
+          } else {
+            stapelWrap.setAttribute('hidden', '');
+            stapelWrap.setAttribute('aria-hidden', 'true');
+            stapelWrap.innerHTML = '';
+          }
+        }
+      })
+      .catch(function () {
+        if (statListEl) statListEl.innerHTML = '<li><span>Kunde inte ladda statistik</span><span class="stat-varde">–</span></li>';
+      });
+  }
 })();

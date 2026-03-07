@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import func, tuple_, update
+from sqlalchemy import and_, func, or_, tuple_, update
 from sqlalchemy.orm import Session
 
 from app.config import KÄLLDATA_DIR
@@ -123,6 +123,73 @@ async def list_mappar():
         if d.is_dir() and not d.name.startswith(".")
     ]
     return {"mappar": sorted(mappar)}
+
+
+@app.get("/api/statistik")
+async def get_statistik(db: Session = Depends(get_db)):
+    """
+    Aggregerad statistik för startsidan: mappar, PDF:er, gravplatser (saknar/fullständigt),
+    extramaterial, gravrättsinnehavare, närmast anhöriga, gravsatta.
+    """
+    # Antal mappar (arkivvolymer)
+    if not KÄLLDATA_DIR.exists():
+        antal_mappar = 0
+        antal_pdf = 0
+    else:
+        mappar = [
+            d.name
+            for d in KÄLLDATA_DIR.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
+        antal_mappar = len(mappar)
+        antal_pdf = 0
+        for mapp_namn in mappar:
+            try:
+                names = _sorted_pdf_names(mapp_namn)
+                antal_pdf += len(names)
+            except Exception:
+                pass
+
+    # Gravplatser som saknar kyrkogård, kvarter eller gravplatsnummer
+    saknar = or_(
+        Gravplats.kyrkogard.is_(None),
+        Gravplats.kyrkogard == "",
+        Gravplats.kvarter == "",
+        Gravplats.gravplatsnummer == "",
+    )
+    gravplatser_saknar = db.query(Gravplats).filter(saknar).count()
+
+    # Gravplatser med fullständigt gravplatsnummer (alla tre fält ifyllda)
+    fullstandigt = and_(
+        Gravplats.kyrkogard.isnot(None),
+        Gravplats.kyrkogard != "",
+        Gravplats.kvarter != "",
+        Gravplats.gravplatsnummer != "",
+    )
+    gravplatser_fullstandiga = db.query(Gravplats).filter(fullstandigt).count()
+
+    antal_extramaterial = db.query(Extramaterial).count()
+    antal_innehavare = db.query(GravplatsInnehavare).count()
+    antal_narmast_anhoriga = db.query(GravplatsNarmastAnhorig).count()
+    antal_gravsatta = db.query(Gravsatt).count()
+    antal_fardigtranskriberade = db.query(GravplatsInmatning).filter(
+        GravplatsInmatning.fardigtranskriberad == True
+    ).count()
+
+    total_gravplatser = db.query(Gravplats).count()
+
+    return {
+        "antal_mappar": antal_mappar,
+        "antal_pdf": antal_pdf,
+        "gravplatser_saknar_kyrkogard_kvarter_eller_nummer": gravplatser_saknar,
+        "gravplatser_fullstandiga": gravplatser_fullstandiga,
+        "gravplatser_fardigtranskriberade": antal_fardigtranskriberade,
+        "total_gravplatser": total_gravplatser,
+        "antal_extramaterial": antal_extramaterial,
+        "antal_innehavare": antal_innehavare,
+        "antal_narmast_anhoriga": antal_narmast_anhoriga,
+        "antal_gravsatta": antal_gravsatta,
+    }
 
 
 @app.get("/api/mappar/{mapp_namn}/filer")

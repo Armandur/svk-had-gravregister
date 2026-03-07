@@ -1208,6 +1208,32 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+.gp-innehavare-drag-handle,
+.gp-na-drag-handle {
+  cursor: grab;
+  margin-right: 0.35rem;
+  opacity: 0.6;
+  user-select: none;
+  align-self: center;
+}
+
+.gp-innehavare-drag-handle:active,
+.gp-na-drag-handle:active {
+  cursor: grabbing;
+}
+
+.gp-innehavare-rad.gp-innehavare-dragging,
+.gp-na-rad.gp-na-dragging {
+  opacity: 0.6;
+}
+
+.gp-innehavare-rad.gp-innehavare-drag-over,
+.gp-na-rad.gp-na-drag-over {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .gp-gravsatt-block h4 {
   font-size: 0.95rem;
   margin: 0 0 0.35rem 0;

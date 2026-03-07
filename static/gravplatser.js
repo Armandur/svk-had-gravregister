@@ -1144,11 +1144,38 @@ function startOcrOverlay(fig, initialEvent) {
         const lage = ocrNamnLage;
         ocrNamnLage = null;
         const normaliserad = trimmed.replace(/\s+/g, ' ').trim();
+        const parts = normaliserad.split(/\s+/).filter(Boolean);
+        if (parts.length === 2) {
+          const par = getNamnParFalt(ocrTargetElement);
+          if (par && ocrTargetElement) {
+            const part1 = parts[0];
+            const part2 = parts[1];
+            if (lage === 'ef') {
+              par.efternamn.value = part1;
+              par.fornamn.value = part2;
+            } else {
+              par.fornamn.value = part1;
+              par.efternamn.value = part2;
+            }
+            if (par.fornamn.tagName === 'TEXTAREA') autoExpandTextarea(par.fornamn);
+            if (par.efternamn.tagName === 'TEXTAREA') autoExpandTextarea(par.efternamn);
+            markInmatningDirty();
+          }
+          return;
+        }
         showOcrModalNamnSplit(normaliserad, lage);
         return;
       }
       if (arDatumFaltForOcr(ocrTargetElement)) {
-        showOcrModal(trimmed);
+        const normaliserat = normaliseraUtfordatDen(trimmed);
+        ocrTargetElement.value = normaliserat || '';
+        ocrTargetElement.focus();
+        const len = ocrTargetElement.value.length;
+        try {
+          ocrTargetElement.setSelectionRange(len, len);
+        } catch (_) {}
+        markInmatningDirty();
+        if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
       } else {
         infogaOcrIFalt(trimmed);
       }
@@ -1320,7 +1347,7 @@ function autoExpandTextarea(ta) {
   ta.style.height = Math.max(ta.scrollHeight, 38) + 'px';
 }
 
-/** Returnerar true om fältet är ett datumfält där OCR-modalen ska visas (transkribering kan behöva granskas). */
+/** Returnerar true om fältet är ett datumfält (t.ex. födelse/döds/gravsatt den) där OCR-text tolkas till YYYY-MM-DD och infogas direkt. */
 function arDatumFaltForOcr(element) {
   const name = element && element.getAttribute('name');
   if (!name) return false;
@@ -1750,10 +1777,10 @@ function renderInmatningSektionLäs(sektion) {
       radOmFyllt('Gravrättstid', d.gravrattstid) +
       radOmFyllt('Monument', d.monument) +
       radOmFyllt('Gravens utformning', d.gravens_utformning);
-    const ovrigt = radOmFyllt('Karta nr', d.karta_nr) +
-      radOmFyllt('Gravbrev nr', d.gravbrev_nr) +
-      radOmFyllt('Utfärdat den', d.utfordat_den) +
-      radOmFyllt('Kommentar', d.kommentar);
+    const ovrigt = radOmFyllt('Utfärdat den', d.utfordat_den) +
+      radOmFyllt('Kommentar', d.kommentar) +
+      radOmFyllt('Karta nr', d.karta_nr) +
+      radOmFyllt('Gravbrev nr', d.gravbrev_nr);
     const innehallHtml = rader + (ovrigt ? '<h4 class="gp-inmatning-delrubrik">Övrigt</h4>' + ovrigt : '');
     innehall.innerHTML = innehallHtml ? '<div class="gp-inmatning-las">' + innehallHtml + '</div>' : '';
     return;
@@ -1806,6 +1833,7 @@ function renderInmatningSektion(sektion) {
     }
     let html = inv.map((i) => `
       <div class="gp-inmatning-rad gp-innehavare-rad">
+        <span class="gp-innehavare-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span>
         <label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1">${esc(i.fornamn)}</textarea></label>
         <label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1">${esc(i.efternamn)}</textarea></label>
         <label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1">${esc(i.yrke)}</textarea></label>
@@ -1816,6 +1844,7 @@ function renderInmatningSektion(sektion) {
     html += '<button type="button" class="gp-lagg-till-innehavare">+ Lägg till innehavare</button>';
     innehall.innerHTML = html;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+    bindInnehavareDragDrop(innehall);
     innehall.querySelectorAll('.gp-innehavare-rad .gp-rad-ta-bort').forEach((b) => b.addEventListener('click', () => {
       b.closest('.gp-innehavare-rad')?.remove();
       markInmatningDirty();
@@ -1824,12 +1853,18 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-innehavare')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-innehavare-rad';
-      rad.innerHTML = '<label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<span class="gp-innehavare-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-innehavare'));
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+      bindInnehavareDragDrop(innehall);
       rad.querySelector('.gp-rad-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
       markInmatningDirty();
       uppdateraInmatningRubrikCounts();
+      const fornamnFalt = rad.querySelector('[name="inv_fornamn"]');
+      if (fornamnFalt) {
+        fornamnFalt.focus();
+        visaOcrIkonForFalt(fornamnFalt);
+      }
     });
     uppdateraInmatningRubrikCounts();
     return;
@@ -1844,6 +1879,7 @@ function renderInmatningSektion(sektion) {
     }
     let html = na.map((n) => `
       <div class="gp-inmatning-rad gp-na-rad">
+        <span class="gp-na-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span>
         <label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1">${esc(n.fornamn)}</textarea></label>
         <label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1">${esc(n.efternamn)}</textarea></label>
         <label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1">${esc(n.adress)}</textarea></label>
@@ -1856,6 +1892,7 @@ function renderInmatningSektion(sektion) {
     html += '<button type="button" class="gp-lagg-till-na">+ Lägg till närmast anhörig</button>';
     innehall.innerHTML = html;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+    bindNaDragDrop(innehall);
     innehall.querySelectorAll('.gp-na-rad .gp-na-ta-bort').forEach((b) => b.addEventListener('click', () => {
       b.closest('.gp-na-rad')?.remove();
       markInmatningDirty();
@@ -1864,12 +1901,18 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-na')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-na-rad';
-      rad.innerHTML = '<label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<span class="gp-na-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-na'));
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+      bindNaDragDrop(innehall);
       rad.querySelector('.gp-na-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
       markInmatningDirty();
       uppdateraInmatningRubrikCounts();
+      const fornamnFalt = rad.querySelector('[name="na_fornamn"]');
+      if (fornamnFalt) {
+        fornamnFalt.focus();
+        visaOcrIkonForFalt(fornamnFalt);
+      }
     });
     uppdateraInmatningRubrikCounts();
     return;
@@ -1883,10 +1926,10 @@ function renderInmatningSektion(sektion) {
       <label>Monument <textarea name="monument" class="gp-falt-expanderbar" rows="1">${esc(d.monument)}</textarea></label>
       <label>Gravens utformning <textarea name="gravens_utformning" class="gp-falt-expanderbar" rows="1">${esc(d.gravens_utformning)}</textarea></label>
       <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-      <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
-      <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
       <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
-      <label>Kommentar <textarea name="kommentar" rows="2">${esc(d.kommentar)}</textarea></label>`;
+      <label>Kommentar <textarea name="kommentar" rows="2">${esc(d.kommentar)}</textarea></label>
+      <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
+      <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
     return;
   }
@@ -1927,6 +1970,11 @@ function renderInmatningSektion(sektion) {
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       markInmatningDirty();
       uppdateraInmatningRubrikCounts();
+      const fornamnFalt = rad.querySelector('[name="gs_fornamn_' + newIndex + '"]');
+      if (fornamnFalt) {
+        fornamnFalt.focus();
+        visaOcrIkonForFalt(fornamnFalt);
+      }
     });
     uppdateraInmatningRubrikCounts();
     return;
@@ -2004,6 +2052,82 @@ function bindGravsattDragDrop(container) {
         uppdateraInmatningRubrikCounts();
       }
     }
+  });
+}
+
+function bindInnehavareDragDrop(container) {
+  const rowSelector = '.gp-innehavare-rad';
+  const handleSelector = '.gp-innehavare-drag-handle';
+  container.querySelectorAll(handleSelector).forEach((handle) => {
+    const row = handle.closest(rowSelector);
+    if (!row) return;
+    handle.addEventListener('dragstart', (e) => {
+      const rows = container.querySelectorAll(rowSelector);
+      const idx = Array.from(rows).indexOf(row);
+      e.dataTransfer.setData('text/plain', String(idx));
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('gp-innehavare-dragging');
+    });
+    handle.addEventListener('dragend', () => row.classList.remove('gp-innehavare-dragging'));
+  });
+  container.querySelectorAll(rowSelector).forEach((row) => {
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll(rowSelector).forEach((r) => r.classList.remove('gp-innehavare-drag-over'));
+      if (!row.classList.contains('gp-innehavare-dragging')) row.classList.add('gp-innehavare-drag-over');
+    });
+    row.addEventListener('dragleave', (e) => e.currentTarget.classList.remove('gp-innehavare-drag-over'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.currentTarget.classList.remove('gp-innehavare-drag-over');
+      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const rows = container.querySelectorAll(rowSelector);
+      const fromRow = rows[fromIndex];
+      const toRow = e.currentTarget;
+      if (!fromRow || fromRow === toRow) return;
+      container.insertBefore(fromRow, toRow);
+      markInmatningDirty();
+      uppdateraInmatningRubrikCounts();
+    });
+  });
+}
+
+function bindNaDragDrop(container) {
+  const rowSelector = '.gp-na-rad';
+  const handleSelector = '.gp-na-drag-handle';
+  container.querySelectorAll(handleSelector).forEach((handle) => {
+    const row = handle.closest(rowSelector);
+    if (!row) return;
+    handle.addEventListener('dragstart', (e) => {
+      const rows = container.querySelectorAll(rowSelector);
+      const idx = Array.from(rows).indexOf(row);
+      e.dataTransfer.setData('text/plain', String(idx));
+      e.dataTransfer.effectAllowed = 'move';
+      row.classList.add('gp-na-dragging');
+    });
+    handle.addEventListener('dragend', () => row.classList.remove('gp-na-dragging'));
+  });
+  container.querySelectorAll(rowSelector).forEach((row) => {
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll(rowSelector).forEach((r) => r.classList.remove('gp-na-drag-over'));
+      if (!row.classList.contains('gp-na-dragging')) row.classList.add('gp-na-drag-over');
+    });
+    row.addEventListener('dragleave', (e) => e.currentTarget.classList.remove('gp-na-drag-over'));
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.currentTarget.classList.remove('gp-na-drag-over');
+      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const rows = container.querySelectorAll(rowSelector);
+      const fromRow = rows[fromIndex];
+      const toRow = e.currentTarget;
+      if (!fromRow || fromRow === toRow) return;
+      container.insertBefore(fromRow, toRow);
+      markInmatningDirty();
+      uppdateraInmatningRubrikCounts();
+    });
   });
 }
 
@@ -2461,12 +2585,34 @@ function toggleRedigeraVy() {
 
 document.getElementById('gp-btn-redigera')?.addEventListener('click', toggleRedigeraVy);
 
-document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click', () => {
+document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click', async () => {
   if (!inmatningRedigerar || currentGravplatsId == null || !inmatningData) return;
   inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
-  markInmatningDirty();
   uppdateraFardigtranskriberadKnapp();
-  uppdateraInmatningSparaKnapp();
+
+  await ensureInmatningData();
+  const payload = samlaInmatningData();
+  if (!payload) return;
+  try {
+    const res = await fetch(`${API}/gravplats/${currentGravplatsId}/inmatning`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Kunde inte spara');
+    const data = await res.json();
+    if (data.gravplats_id != null && data.gravplats_id === currentGravplatsId) {
+      inmatningData = data;
+      lastInmatningGravplatsId = currentGravplatsId;
+    }
+    inmatningDirty = false;
+    uppdateraInmatningSparaKnapp();
+    visaSparStatus('Sparat.', true);
+  } catch (e) {
+    inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
+    uppdateraFardigtranskriberadKnapp();
+    visaSparStatus('Kunde inte spara: ' + (e && e.message ? e.message : 'okänt fel'), false);
+  }
 });
 
 function applyVyFromUrl() {
