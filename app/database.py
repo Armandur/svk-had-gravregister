@@ -38,6 +38,7 @@ class Extramaterial(Base):
     grav_start_sida: Mapped[int | None] = mapped_column(nullable=True)  # null = endast knutet till mappen (exkluderas från visning)
     redan_halva: Mapped[bool] = mapped_column(default=False)  # True = kort skannat som en halva, visas som en halva i gravplatsvy
     dold: Mapped[bool] = mapped_column(default=False)  # True = dölj från gravplatsbilderna, visas i sektion Dolda
+    kommentar: Mapped[str] = mapped_column(default="")  # titel/kommentar visas under extramaterialet på gravplatsen
 
     mapp: Mapped["MappConfig"] = relationship(back_populates="extramaterial")
 
@@ -288,6 +289,9 @@ def init_db():
             cols_em = [row[1] for row in r]
             if "dold" not in cols_em:
                 conn.execute(text("ALTER TABLE extramaterial ADD COLUMN dold INTEGER DEFAULT 0"))
+                conn.commit()
+            if "kommentar" not in cols_em:
+                conn.execute(text("ALTER TABLE extramaterial ADD COLUMN kommentar TEXT DEFAULT ''"))
                 conn.commit()
         except Exception:
             pass

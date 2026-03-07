@@ -13,7 +13,7 @@
   </header>
 
   <main class="gravplatser-main">
-    <div id="gp-innehall" class="gravplatser-innehall">
+    <div id="gp-innehall" class="gravplatser-innehall gp-vertikal-vy">
       <div class="gravplatser-innehall-topp">
         <button type="button" id="gp-btn-tillbaka-kvarter" class="gravplatser-btn-byt-kvarter">Välj gravplats</button>
         <h1 class="gravplatser-rubrik" id="gp-rubrik"></h1>
@@ -22,7 +22,8 @@
         <button type="button" id="gp-btn-tillbaka" class="gravplatser-menyrad-hoger">← Föregående</button>
         <button type="button" id="gp-btn-nasta">Nästa →</button>
         <button type="button" id="gp-btn-toggle-hela" class="gravplatser-btn-toggle-hela">Visa hela sidan</button>
-        <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Vertikal vy</button>
+        <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Horisontell vy</button>
+        <button type="button" id="gp-btn-rapport" class="gravplatser-btn-rapport" title="Skapa rapportutskrift med transkriberad info och bilder">Rapportutskrift</button>
       </div>
       <div id="gp-innehall-body" class="gp-innehall-body">
         <div id="gp-innehall-vanster" class="gp-innehall-vanster">
@@ -66,8 +67,8 @@
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="gravplatsen" aria-expanded="false">Gravplatsen</button>
           <div class="gp-inmatning-innehall" id="gp-innehall-gravplatsen" hidden></div>
         </section>
-        <section class="gp-inmatning-sektion" id="gp-sektion-skiss" aria-label="Skiss">
-          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="skiss" aria-expanded="false">Skiss</button>
+        <section class="gp-inmatning-sektion" id="gp-sektion-skiss" aria-label="Skiss och gravplatsstorlek">
+          <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="skiss" aria-expanded="false">Skiss och gravplatsstorlek</button>
           <div class="gp-inmatning-innehall" id="gp-innehall-skiss" hidden></div>
         </section>
         <section class="gp-inmatning-sektion" id="gp-sektion-gravsatta" aria-label="Gravsatta">
@@ -79,6 +80,30 @@
       </div>
     </div>
   </main>
+
+  <div id="gp-rapport-utskrift" class="gp-rapport-utskrift" aria-hidden="true" hidden></div>
+
+  <div class="gp-rapport-modal" id="gp-rapport-modal" hidden role="dialog" aria-modal="true" aria-label="Rapportutskrift">
+    <div class="gp-rapport-modal-inner">
+      <h3 class="gp-rapport-modal-rubrik">Rapportutskrift</h3>
+      <p class="gp-rapport-modal-hint">Välj vad som ska ingå i rapporten.</p>
+      <div class="gp-rapport-options">
+        <fieldset class="gp-rapport-fieldset">
+          <legend>Gravplatsbilder (sida 2)</legend>
+          <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-halvor" /> Ta med halvor (beskärna delar)</label>
+          <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-hela" /> Ta med fullständiga sidor (PDF-bilder)</label>
+          <p class="gp-rapport-fieldset-hint">Välj en, båda eller inga.</p>
+        </fieldset>
+        <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-dolda" /> Ta med dolda bilder</label>
+        <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-extramaterial" /> Ta med extramaterial</label>
+      </div>
+      <p class="gp-rapport-modal-hint gp-rapport-sidnummer-hint">För sidnummer: aktivera »Sidhuvud och sidfot« i utskriftsdialogen.</p>
+      <div class="gp-rapport-modal-knappar">
+        <button type="button" id="gp-rapport-skapa" class="gp-ocr-btn gp-ocr-btn-prim">Skapa rapport</button>
+        <button type="button" id="gp-rapport-avbryt" class="gp-ocr-btn">Avbryt</button>
+      </div>
+    </div>
+  </div>
 
   <div class="gp-lightbox" id="gp-lightbox" hidden aria-modal="true" role="dialog" aria-label="Förstoring">
     <button type="button" class="gp-lightbox-stang" id="gp-lightbox-stang" aria-label="Stäng">×</button>

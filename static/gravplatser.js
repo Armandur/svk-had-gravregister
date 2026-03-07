@@ -22,7 +22,7 @@ let currentHalvorUrlList = [];
 /** start_sida för aktuell gravplats (för att bygga skiss-bild-URL). */
 let currentGravplatsStartSida = null;
 let visarHelaSidor = false;
-let vertikalVy = false;
+let vertikalVy = true;
 let currentGravplatsId = null;
 let lastInmatningGravplatsId = null;
 let inmatningData = null;
@@ -51,10 +51,23 @@ let focusViaPointer = false;
 function arNamnFaltForOcr(element) {
   const name = element && element.getAttribute('name');
   if (!name) return false;
+  if (isBeteckningFalt(element)) return false;
   return name === 'inv_fornamn' || name === 'inv_efternamn' ||
     name === 'na_fornamn' || name === 'na_efternamn' ||
     (name.startsWith('gs_fornamn_') && /^gs_fornamn_\d+$/.test(name)) ||
     (name.startsWith('gs_efternamn_') && /^gs_efternamn_\d+$/.test(name));
+}
+
+/** True om fältet är Beteckning (efternamn när "Gravsatt använd som beteckning" är ikryssat) – då ska inte FE/EF visas. */
+function isBeteckningFalt(element) {
+  const block = element && element.closest('.gp-gravsatt-block');
+  if (!block) return false;
+  const idx = block.dataset.gsIndex;
+  if (idx === undefined) return false;
+  const name = element.getAttribute('name');
+  if (name !== 'gs_efternamn_' + idx) return false;
+  const cb = block.querySelector(`[name="gs_ar_beteckning_${idx}"]`);
+  return cb ? cb.checked : false;
 }
 
 /** Returnerar { fornamn, efternamn } – DOM-elementen för förnamn och efternamn i samma rad som element. */
@@ -715,6 +728,10 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
     const esc = (s) => (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     const redanHalva = em.redan_halva === true;
     const knappText = redanHalva ? 'Endast i extramaterial' : 'Visa som gravplatsbild';
+    const kommentar = em.kommentar || '';
+    const kommentarHtml = inmatningRedigerar
+      ? `<label class="gp-em-kommentar-label">Kommentar/titel <input type="text" class="gp-em-kommentar-inp" data-em-id="${em.id}" value="${esc(kommentar)}" placeholder="Titel eller kommentar" /></label>`
+      : (kommentar ? `<p class="gp-em-kommentar-text">${esc(kommentar)}</p>` : '');
     return `<div class="gp-em-item">
       <button type="button" class="gp-em-miniatyr" data-em-index="${i}" data-bild-url="${esc(bildUrl)}" title="${esc(em.filnamn)}">
         <img src="${bildUrl}" alt="${esc(em.filnamn)}" loading="lazy" />
@@ -722,6 +739,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
       <div class="gp-em-knapprad">
         <button type="button" class="gp-em-visa-som-grav" data-em-id="${em.id}" data-redan-halva="${redanHalva ? '1' : '0'}" title="${redanHalva ? 'Ta bort från gravplatsbilderna' : 'Lägg till bland gravplatsbilderna'}">${esc(knappText)}</button>
       </div>
+      ${kommentarHtml}
     </div>`;
   }).join('');
 
@@ -731,6 +749,11 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
       const idx = parseInt(btn.dataset.emIndex, 10);
       if (url != null && !isNaN(idx)) openLightbox(idx);
     });
+  });
+
+  miniatyrerEl.querySelectorAll('.gp-em-kommentar-inp').forEach((inp) => {
+    inp.addEventListener('input', () => markInmatningDirty());
+    inp.addEventListener('change', () => markInmatningDirty());
   });
 
   miniatyrerEl.querySelectorAll('.gp-em-visa-som-grav').forEach((btn) => {
@@ -891,6 +914,7 @@ function openLightbox(index) {
   lightboxMode = 'extramaterial';
   const idx = Math.max(0, Math.min(index, currentExtramaterial.length - 1));
   lightboxIndex = idx;
+  lightboxZoom = 1;
   const em = currentExtramaterial[idx];
   const bildUrl = `${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?_v=${cacheBust}`;
   const lightbox = document.getElementById('gp-lightbox');
@@ -899,8 +923,11 @@ function openLightbox(index) {
     imgEl.src = bildUrl;
     imgEl.alt = em.filnamn;
     imgEl.style.transform = '';
+    imgEl.onload = () => lightboxZoomApplicera();
     const z = document.getElementById('gp-lightbox-zoom');
-    if (z) z.hidden = true;
+    if (z) z.hidden = false;
+    const wrap = document.getElementById('gp-lightbox-img-wrap');
+    if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -928,6 +955,8 @@ function openLightboxHalvor(index) {
     imgEl.onload = () => lightboxZoomApplicera();
     const z = document.getElementById('gp-lightbox-zoom');
     if (z) z.hidden = false;
+    const wrap = document.getElementById('gp-lightbox-img-wrap');
+    if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -987,6 +1016,8 @@ function openLightboxSkisser(skisserArray, index) {
   imgEl.onload = () => lightboxZoomApplicera();
   imgEl.alt = 'Skiss';
   if (zoomPanel) zoomPanel.hidden = false;
+  const wrap = document.getElementById('gp-lightbox-img-wrap');
+  if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
   lightbox.hidden = false;
   uppdateraLightboxKnappar();
   const loadingIndex = lightboxIndex;
@@ -1008,8 +1039,20 @@ function lightboxZoomApplicera() {
   const imgEl = document.getElementById('gp-lightbox-img');
   const innerEl = document.getElementById('gp-lightbox-img-inner');
   const nivaEl = document.getElementById('gp-lightbox-zoom-niva');
-  const kanZooma = (lightboxMode === 'skisser' || lightboxMode === 'halvor') && innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0;
-  if (kanZooma) {
+  const wrapEl = document.getElementById('gp-lightbox-img-wrap');
+  const harBild = innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0;
+  const kanZoomaHalvorSkiss = (lightboxMode === 'skisser' || lightboxMode === 'halvor') && harBild;
+  const kanZoomaExtramaterial = lightboxMode === 'extramaterial' && harBild;
+
+  if (kanZoomaHalvorSkiss) {
+    const w = Math.round(imgEl.naturalWidth * lightboxZoom);
+    const h = Math.round(imgEl.naturalHeight * lightboxZoom);
+    innerEl.style.width = w + 'px';
+    innerEl.style.height = h + 'px';
+    innerEl.classList.add('gp-lightbox-zoomed');
+    imgEl.style.transform = '';
+  } else if (kanZoomaExtramaterial) {
+    /* Extramaterial: alltid explicit storlek (inkl. zoom ut < 100 %) så bilden kan skalas ned och få plats */
     const w = Math.round(imgEl.naturalWidth * lightboxZoom);
     const h = Math.round(imgEl.naturalHeight * lightboxZoom);
     innerEl.style.width = w + 'px';
@@ -1025,16 +1068,17 @@ function lightboxZoomApplicera() {
     if (imgEl) imgEl.style.transform = '';
   }
   if (nivaEl) nivaEl.textContent = Math.round(lightboxZoom * 100) + '%';
+  if (wrapEl) { wrapEl.scrollTop = 0; wrapEl.scrollLeft = 0; }
 }
 
 function lightboxZoomIn() {
-  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor') return;
+  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor' && lightboxMode !== 'extramaterial') return;
   lightboxZoom = Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom * LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
 
 function lightboxZoomOut() {
-  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor') return;
+  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor' && lightboxMode !== 'extramaterial') return;
   lightboxZoom = Math.max(LIGHTBOX_ZOOM_MIN, lightboxZoom / LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
@@ -1674,6 +1718,225 @@ document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
 document.getElementById('gp-btn-toggle-hela')?.addEventListener('click', toggleHelaSidor);
 document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy);
 
+/** Bygger HTML för rapportutskrift sida 1 (transkriberad information) från inmatningData. */
+function buildRapportInmatningHtml(d, rubrik, skissDataUrlsParam) {
+  if (!d) return '';
+  const v = (x) => (x != null && String(x).trim() !== '' ? esc(String(x).trim()) : '');
+  const radOmFyllt = (label, value) => {
+    const val = value != null && String(value).trim() !== '' ? String(value).trim() : '';
+    if (!val) return '';
+    return `<div class="gp-las-rad"><span class="gp-las-label">${esc(label)}</span><span class="gp-las-varde">${esc(val)}</span></div>`;
+  };
+  let html = `<h2>${esc(rubrik || 'Gravplats')}</h2>`;
+
+  const inv = d.innehavare || [];
+  if (inv.length > 0) {
+    html += '<div class="gp-rapport-sektion"><h3>Gravrättsinnehavare</h3><ul class="gp-las-lista">';
+    html += inv.map((i) => {
+      const namn = [v(i.fornamn), v(i.efternamn)].filter(Boolean).join(' ') || '';
+      const rader = radOmFyllt('Namn', namn) + radOmFyllt('Yrke', i.yrke) + radOmFyllt('Adress', i.adress) + radOmFyllt('Kommentar', i.kommentar);
+      return `<li class="gp-las-kort">${rader || '<span class="gp-las-tom">—</span>'}</li>`;
+    }).join('') + '</ul></div>';
+  }
+
+  const na = d.narmast_anhoriga || [];
+  if (na.length > 0) {
+    html += '<div class="gp-rapport-sektion"><h3>Närmast anhöriga</h3><ul class="gp-las-lista">';
+    html += na.map((n) => {
+      const namn = [v(n.fornamn), v(n.efternamn)].filter(Boolean).join(' ') || '';
+      const postOrt = [n.postnummer, n.postort].filter(Boolean).join(' ').trim();
+      const rader = radOmFyllt('Namn', namn) + radOmFyllt('Yrke', n.yrke) + radOmFyllt('Gatuadress', n.adress) + radOmFyllt('Postnummer / ort', postOrt || null) + radOmFyllt('Telefon', n.telefon) + radOmFyllt('Kommentar', n.kommentar);
+      return `<li class="gp-las-kort">${rader || '<span class="gp-las-tom">—</span>'}</li>`;
+    }).join('') + '</ul></div>';
+  }
+
+  const raderGp = radOmFyllt('Underhåll inbetalt för all framtid den', d.underhall_text) +
+    (d.underhall_overstruket ? '<div class="gp-las-rad"><span class="gp-las-label"></span><span class="gp-las-varde">"För all framtid" överstruket</span></div>' : '') +
+    radOmFyllt('Gravrättstid', d.gravrattstid) + radOmFyllt('Monument', d.monument) + radOmFyllt('Gravens utformning', d.gravens_utformning);
+  const ovrigt = radOmFyllt('Utfärdat den', d.utfordat_den) + radOmFyllt('Kommentar', d.kommentar) + radOmFyllt('Karta nr', d.karta_nr) + radOmFyllt('Gravbrev nr', d.gravbrev_nr);
+  if (raderGp || ovrigt) {
+    html += '<div class="gp-rapport-sektion"><h3>Gravplatsen</h3><div class="gp-inmatning-las">' + raderGp + (ovrigt ? '<h4 class="gp-inmatning-delrubrik">Övrigt</h4>' + ovrigt : '') + '</div></div>';
+  }
+
+  const skisser = d.skisser || [];
+  const storlek = radOmFyllt('Storlek', d.storlek);
+  const skissDataUrls = typeof skissDataUrlsParam !== 'undefined' ? skissDataUrlsParam : [];
+  let skissHtml = storlek || '';
+  if (skissDataUrls.length > 0) {
+    skissHtml += '<div class="gp-rapport-skisser">';
+    skissDataUrls.forEach((dataUrl, i) => {
+      if (dataUrl) skissHtml += '<figure class="gp-rapport-skiss-fig"><img src="' + (dataUrl.replace(/"/g, '&quot;')) + '" alt="Skiss" /><figcaption>' + (i + 1) + '</figcaption></figure>';
+    });
+    skissHtml += '</div>';
+  }
+  html += '<div class="gp-rapport-sektion"><h3>Skiss och gravplatsstorlek</h3><div class="gp-inmatning-las">' + skissHtml + '</div></div>';
+
+  const gs = d.gravsatta || [];
+  if (gs.length > 0) {
+    html += '<div class="gp-rapport-sektion"><h3>Gravsatta</h3><ul class="gp-las-lista">';
+    html += gs.map((g, idx) => {
+      const namn = [v(g.fornamn), v(g.efternamn)].filter(Boolean).join(' ') || '';
+      const fodelse = formatDatum(g.fodelse_ar, g.fodelse_manad, g.fodelse_dag);
+      const dods = formatDatum(g.dods_ar, g.dods_manad, g.dods_dag);
+      let li = `<li class="gp-las-kort"><h4 class="gp-inmatning-delrubrik">Gravsatt ${idx + 1}</h4>`;
+      if (g.ar_beteckning) li += radOmFyllt('Beteckning', g.efternamn);
+      else li += radOmFyllt('Namn', namn);
+      li += radOmFyllt('Yrke', g.yrke) + radOmFyllt('Adress', g.adress) + radOmFyllt('Födelsedatum', fodelse) + radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) + radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar) + '</li>';
+      return li;
+    }).join('') + '</ul></div>';
+  }
+  return html;
+}
+
+function openRapportModal() {
+  const modal = document.getElementById('gp-rapport-modal');
+  if (!modal) return;
+  modal.hidden = false;
+}
+
+function preloadRapportImages(container) {
+  const imgs = container.querySelectorAll('img[src]');
+  if (imgs.length === 0) return Promise.resolve();
+  return Promise.all(Array.from(imgs).map((img) => {
+    return new Promise((resolve) => {
+      if (img.complete && img.naturalWidth) return resolve();
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+  }));
+}
+
+async function skapaRapportUtskrift() {
+  const modal = document.getElementById('gp-rapport-modal');
+  const container = document.getElementById('gp-rapport-utskrift');
+  if (!modal || !container) return;
+  const medHalvor = document.getElementById('gp-rapport-halvor')?.checked === true;
+  const medHela = document.getElementById('gp-rapport-hela')?.checked === true;
+  const medDolda = document.getElementById('gp-rapport-dolda')?.checked === true;
+  const medExtramaterial = document.getElementById('gp-rapport-extramaterial')?.checked === true;
+
+  const gp = gravplatserLista[currentIndex];
+  if (!gp || currentGravplatsId == null) {
+    alert('Ingen gravplats vald.');
+    return;
+  }
+  const mappNamn = gp.mapp_namn;
+  const rubrik = gp.fullstandigt || [gp.kyrkogard, gp.kvarter, gp.gravplatsnummer].filter(Boolean).join(' ') || '–';
+
+  const ok = await ensureInmatningData();
+  if (!ok) {
+    alert('Kunde inte ladda transkriberad information.');
+    return;
+  }
+
+  const skisser = (inmatningData && inmatningData.skisser) || [];
+  let skissDataUrls = [];
+  if (skisser.length > 0) {
+    skissDataUrls = await Promise.all(skisser.map((s) => loadSkissFullRes(s).catch(() => null)));
+  }
+
+  const params = new URLSearchParams();
+  if (gp.kyrkogard) params.set('kyrkogard', gp.kyrkogard);
+  if (gp.kvarter) params.set('kvarter', gp.kvarter);
+  if (gp.gravplatsnummer) params.set('gravplatsnummer', gp.gravplatsnummer);
+  let halvorData;
+  try {
+    const halvorRes = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats/halvor?${params}`);
+    if (!halvorRes.ok) throw new Error('Kunde inte hämta bilder');
+    halvorData = await halvorRes.json();
+  } catch (e) {
+    alert('Kunde inte hämta gravplatsbilder: ' + (e.message || 'nätverksfel'));
+    return;
+  }
+
+  const halvor = halvorData.halvor || [];
+  const extramaterial = halvorData.extramaterial || [];
+  const dolda = halvorData.dolda || [];
+  const cacheQ = `_v=${cacheBust}`;
+  const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
+  const split1och3 = (727 / 1597).toFixed(4);
+  const split2 = (870 / 1595).toFixed(4);
+  const startSida = halvorData.gravplats?.start_sida ?? gp.start_sida ?? null;
+
+  const halvorMedUrl = halvor.map((h) => {
+    let halvaUrl, helaUrl;
+    if (h.redan_halva && h.filnamn) {
+      halvaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
+      helaUrl = halvaUrl;
+    } else {
+      const pos = h.content_sida - (startSida || 0);
+      const split = pos === 1 ? split2 : split1och3;
+      halvaUrl = `${base}/${h.content_sida}/halva?offset=0&halva=${h.halva}&split=${split}&${cacheQ}`;
+      helaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${h.content_sida}?${cacheQ}`;
+    }
+    return { halvaUrl, helaUrl };
+  });
+
+  let html = '';
+  const headerRubrik = esc(rubrik);
+  html += '<div class="gp-rapport-sida-1"><div class="gp-rapport-print-header" aria-hidden="true">' + headerRubrik + '</div>' + buildRapportInmatningHtml(inmatningData, rubrik, skissDataUrls) + '</div>';
+
+  if (medHalvor && halvorMedUrl.length > 0) {
+    html += '<div class="gp-rapport-sida-halvor"><h3 class="gp-rapport-sektion-rubrik">Gravregisterkort</h3><div class="gp-rapport-halvor">';
+    halvorMedUrl.forEach((x) => {
+      html += `<figure><img src="${esc(x.halvaUrl)}" alt="" /></figure>`;
+    });
+    html += '</div></div>';
+  }
+  if (medHela && halvorMedUrl.length > 0) {
+    html += '<div class="gp-rapport-hela-sidor"><h3 class="gp-rapport-hela-sidor-rubrik">Fullständiga inskanningar</h3>';
+    halvorMedUrl.forEach((x) => {
+      html += `<div class="gp-rapport-hela-sida-sida"><figure><img src="${esc(x.helaUrl)}" alt="" /></figure></div>`;
+    });
+    html += '</div>';
+  }
+
+  if (medExtramaterial && extramaterial.length > 0) {
+    html += '<div class="gp-rapport-extramaterial gp-rapport-bilder-section"><h3>Extramaterial</h3><div class="gp-rapport-bilder-grid">';
+    extramaterial.forEach((em) => {
+      const bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(em.filnamn)}/bild?${cacheQ}`;
+      const cap = (em.kommentar || em.filnamn || '').trim() ? `<figcaption>${esc(em.kommentar || em.filnamn)}</figcaption>` : '';
+      html += `<figure><img src="${esc(bildUrl)}" alt="${esc(em.filnamn)}" />${cap}</figure>`;
+    });
+    html += '</div></div>';
+  }
+
+  if (medDolda && dolda.length > 0) {
+    html += '<div class="gp-rapport-dolda gp-rapport-bilder-section"><h3>Dolda bilder</h3><div class="gp-rapport-bilder-grid">';
+    dolda.forEach((item) => {
+      let bildUrl;
+      if (item.type === 'halva' && item.content_sida != null && item.halva != null) {
+        const pos = startSida != null ? item.content_sida - startSida : 0;
+        const split = pos === 1 ? split2 : split1och3;
+        bildUrl = `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`;
+      } else {
+        bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(item.filnamn)}/bild?${cacheQ}`;
+      }
+      const cap = item.filnamn ? `<figcaption>${esc(item.filnamn)}</figcaption>` : '';
+      html += `<figure><img src="${esc(bildUrl)}" alt="" />${cap}</figure>`;
+    });
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+  container.hidden = false;
+  modal.hidden = true;
+
+  await preloadRapportImages(container);
+  window.print();
+  container.hidden = true;
+  container.innerHTML = '';
+}
+
+document.getElementById('gp-btn-rapport')?.addEventListener('click', openRapportModal);
+document.getElementById('gp-rapport-avbryt')?.addEventListener('click', () => {
+  const m = document.getElementById('gp-rapport-modal');
+  if (m) m.hidden = true;
+});
+document.getElementById('gp-rapport-skapa')?.addEventListener('click', () => {
+  skapaRapportUtskrift().catch((e) => alert('Rapport: ' + (e.message || 'fel')));
+});
+
 document.getElementById('gp-em-rubrik')?.addEventListener('click', toggleExtramaterialInnehall);
 document.getElementById('gp-em-dolda-rubrik')?.addEventListener('click', toggleDoldaInnehall);
 
@@ -2241,21 +2504,21 @@ function renderInmatningSektionLäs(sektion) {
     const skisser = d.skisser || [];
     const rader = radOmFyllt('Storlek', d.storlek);
     if (skisser.length > 0) {
-      innehall.innerHTML = '<div class="gp-inmatning-las">' + (rader || '') + '<p class="gp-skiss-antall">' + skisser.length + ' skiss' + (skisser.length !== 1 ? 'er' : '') + '.</p><div class="gp-skiss-las-galleri" id="gp-skiss-las-galleri"></div></div>';
+      innehall.innerHTML = '<div class="gp-inmatning-las">' + (rader || '') + '<div class="gp-skiss-las-galleri" id="gp-skiss-las-galleri"></div></div>';
       const galleri = innehall.querySelector('#gp-skiss-las-galleri');
       if (galleri) {
-        skisser.forEach((s) => {
-          const wrap = document.createElement('div');
+        skisser.forEach((s, idx) => {
+          const wrap = document.createElement('figure');
           wrap.className = 'gp-skiss-las-item gp-skiss-las-item-klickbar';
           wrap.setAttribute('role', 'button');
           wrap.setAttribute('tabindex', '0');
-          wrap.setAttribute('aria-label', 'Visa skiss i förstoring');
-          wrap.innerHTML = '<div class="gp-skiss-las-miniatyr"></div>';
+          wrap.setAttribute('aria-label', 'Visa skiss ' + (idx + 1) + ' i förstoring');
+          wrap.innerHTML = '<div class="gp-skiss-las-miniatyr"></div><figcaption class="gp-skiss-las-nummer">' + (idx + 1) + '</figcaption>';
           galleri.appendChild(wrap);
           renderSkissCropMiniatyr(wrap.querySelector('.gp-skiss-las-miniatyr'), s);
           wrap.addEventListener('click', () => {
-            const idx = Array.from(galleri.querySelectorAll('.gp-skiss-las-item')).indexOf(wrap);
-            openLightboxSkisser(skisser, idx >= 0 ? idx : 0);
+            const i = Array.from(galleri.querySelectorAll('.gp-skiss-las-item')).indexOf(wrap);
+            openLightboxSkisser(skisser, i >= 0 ? i : 0);
           });
           wrap.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -2282,8 +2545,12 @@ function renderInmatningSektionLäs(sektion) {
       const fodelse = formatDatum(g.fodelse_ar, g.fodelse_manad, g.fodelse_dag);
       const dods = formatDatum(g.dods_ar, g.dods_manad, g.dods_dag);
       let html = `<li class="gp-las-kort"><h4 class="gp-inmatning-delrubrik">Gravsatt ${idx + 1}</h4>`;
-      if (g.ar_beteckning) html += '<div class="gp-las-rad"><span class="gp-las-label"></span><span class="gp-las-varde">Använd som beteckning (t.ex. familjegrav)</span></div>';
-      const rader = radOmFyllt('Namn', namn) + radOmFyllt('Yrke', g.yrke) + radOmFyllt('Adress', g.adress) + radOmFyllt('Födelsedatum', fodelse) +
+      if (g.ar_beteckning) {
+        html += radOmFyllt('Beteckning', g.efternamn);
+      } else {
+        html += radOmFyllt('Namn', namn);
+      }
+      const rader = radOmFyllt('Yrke', g.yrke) + radOmFyllt('Adress', g.adress) + radOmFyllt('Födelsedatum', fodelse) +
         radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) +
         radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar);
       html += rader + '</li>';
@@ -2488,6 +2755,7 @@ function renderInmatningSektion(sektion) {
     html += '<button type="button" class="gp-lagg-till-gravsatt">+ Lägg till gravsatt</button>';
     innehall.innerHTML = html;
     bindDatumValidering(innehall);
+    bindGravsattBeteckningToggle(innehall);
     bindGravsattDragDrop(innehall);
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
     innehall.querySelector('.gp-lagg-till-gravsatt')?.addEventListener('click', () => {
@@ -2502,6 +2770,7 @@ function renderInmatningSektion(sektion) {
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-gravsatt'));
       rad.scrollIntoView({ block: 'start', behavior: 'smooth' });
       bindDatumValidering(rad);
+      bindGravsattBeteckningToggle(innehall);
       bindGravsattDragDrop(innehall);
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       markInmatningDirty();
@@ -2542,6 +2811,25 @@ function renumberGravsattBlocks(container) {
     blk.querySelectorAll('[aria-describedby^="gs_"]').forEach((el) => {
       el.setAttribute('aria-describedby', (el.getAttribute('aria-describedby') || '').replace(/_fel_[0-9]+$/, '_fel_' + i));
     });
+  });
+}
+
+function bindGravsattBeteckningToggle(container) {
+  container.querySelectorAll('.gp-gravsatt-block').forEach((blk) => {
+    const idx = blk.dataset.gsIndex;
+    const cb = blk.querySelector(`[name="gs_ar_beteckning_${idx}"]`);
+    if (!cb) return;
+    const labelSpan = blk.querySelector('.gp-gravsatt-efternamn-label');
+    const updateUi = () => {
+      const checked = cb.checked;
+      blk.classList.toggle('gp-gravsatt-beteckning-checked', checked);
+      if (labelSpan) labelSpan.textContent = checked ? 'Beteckning' : 'Efternamn';
+    };
+    cb.addEventListener('change', () => {
+      updateUi();
+      markInmatningDirty();
+    });
+    updateUi();
   });
 }
 
@@ -2870,21 +3158,26 @@ const URNA_VAL = [
 /** idx = 0-baserat index (används för unika name/data-gs-index). */
 function blockGravsatt(idx, g) {
   const pos = idx + 1;
-  const beteckning = pos === 1
-    ? `<label class="gp-gravsatt-beteckning"><input type="checkbox" name="gs_ar_beteckning_${idx}" ${g.ar_beteckning ? 'checked' : ''} /> Gravsatt använd som beteckning (t.ex. familjegrav)</label>`
+  const arBeteckning = !!g.ar_beteckning;
+  const beteckningCheckbox = pos === 1
+    ? `<label class="gp-gravsatt-beteckning"><input type="checkbox" name="gs_ar_beteckning_${idx}" ${arBeteckning ? 'checked' : ''} /> Gravsatt använd som beteckning (t.ex. familjegrav)</label>`
     : '';
+  const beteckningKlass = arBeteckning ? ' gp-gravsatt-beteckning-checked' : '';
+  const efternamnLabel = arBeteckning ? 'Beteckning' : 'Efternamn';
   const fodelseDatum = formatDatum(g.fodelse_ar, g.fodelse_manad, g.fodelse_dag);
   const dodsDatum = formatDatum(g.dods_ar, g.dods_manad, g.dods_dag);
   const urnaVal = (g.urna || '').toLowerCase();
   const urnaSelected = ['urna', 'kista', 'okant'].includes(urnaVal) ? urnaVal : '';
   const urnaOptions = URNA_VAL.map((o) => `<option value="${esc(o.v)}" ${o.v === urnaSelected ? 'selected' : ''}>${o.l}</option>`).join('');
   return `
-    <div class="gp-gravsatt-block" data-gs-index="${idx}">
+    <div class="gp-gravsatt-block${beteckningKlass}" data-gs-index="${idx}">
       <h4><span class="gp-gravsatt-drag-handle" draggable="true" title="Dra för att ändra ordning">⋮⋮</span> Gravsatt ${pos}</h4>
-      ${beteckning}
+      ${beteckningCheckbox}
       <div class="gp-gravsatt-rad gp-gravsatt-rad-namn-yrke">
-        <label>Förnamn <textarea name="gs_fornamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.fornamn)}</textarea></label>
-        <label>Efternamn <textarea name="gs_efternamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.efternamn)}</textarea></label>
+        <span class="gp-gravsatt-fornamn-wrap">
+          <label>Förnamn <textarea name="gs_fornamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.fornamn)}</textarea></label>
+        </span>
+        <label><span class="gp-gravsatt-efternamn-label">${esc(efternamnLabel)}</span> <textarea name="gs_efternamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.efternamn)}</textarea></label>
         <span class="gp-gravsatt-rad-hoger">
           <label>Yrke <textarea name="gs_yrke_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.yrke || '')}</textarea></label>
           <label>Adress <textarea name="gs_adress_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.adress)}</textarea></label>
@@ -2962,7 +3255,7 @@ function samlaInmatningData() {
     gravsatta.push({
       position: idx + 1,
       ar_beteckning: block.querySelector(`[name="gs_ar_beteckning_${i}"]`)?.checked ?? false,
-      fornamn: p('gs_fornamn'),
+      fornamn: (block.querySelector(`[name="gs_ar_beteckning_${i}"]`)?.checked) ? '' : p('gs_fornamn'),
       efternamn: p('gs_efternamn'),
       yrke: p('gs_yrke'),
       adress: p('gs_adress'),
@@ -2996,6 +3289,12 @@ function samlaInmatningData() {
   const kommentar = gravplatsenOppnad ? (root.querySelector('textarea[name="kommentar"]')?.value ?? '').trim() : (d.kommentar || '');
   const fardigtranskriberad = inmatningData && inmatningData.fardigtranskriberad === true;
 
+  const extramaterial_kommentarer = [];
+  document.querySelectorAll('#gp-em-miniatyrer .gp-em-kommentar-inp').forEach((inp) => {
+    const id = parseInt(inp.dataset.emId, 10);
+    if (!isNaN(id)) extramaterial_kommentarer.push({ id, kommentar: (inp.value || '').trim() });
+  });
+
   return {
     innehavare,
     narmast_anhoriga,
@@ -3012,6 +3311,7 @@ function samlaInmatningData() {
     fardigtranskriberad,
     gravsatta,
     skiss_bild_b64: null,
+    extramaterial_kommentarer,
   };
 }
 
@@ -3053,6 +3353,10 @@ async function sparaInmatning() {
       inmatningData = data;
       lastInmatningGravplatsId = currentGravplatsId;
     }
+    (payload.extramaterial_kommentarer || []).forEach((item) => {
+      const em = currentExtramaterial.find((e) => e.id === item.id);
+      if (em) em.kommentar = item.kommentar || '';
+    });
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
     visaSparStatus('Sparat.', true);
@@ -3103,6 +3407,9 @@ function toggleRedigeraVy() {
     sektioner.forEach((s) => {
       ensureInmatningData().then((ok) => { if (ok) renderInmatningSektion(s); });
     });
+    if (currentExtramaterial.length > 0 && currentExtramaterialMapp) {
+      uppdateraExtramaterialSektion(currentExtramaterial, currentExtramaterialMapp);
+    }
     uppdateraFardigtranskriberadKnapp();
   } else {
     inmatningRedigerar = true;
@@ -3115,6 +3422,9 @@ function toggleRedigeraVy() {
       const innehall = document.getElementById(`gp-innehall-${s}`);
       if (innehall && !innehall.hidden) renderInmatningSektion(s);
     });
+    if (currentExtramaterial.length > 0 && currentExtramaterialMapp) {
+      uppdateraExtramaterialSektion(currentExtramaterial, currentExtramaterialMapp);
+    }
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
   }
@@ -3142,6 +3452,10 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
       inmatningData = data;
       lastInmatningGravplatsId = currentGravplatsId;
     }
+    (payload.extramaterial_kommentarer || []).forEach((item) => {
+      const em = currentExtramaterial.find((e) => e.id === item.id);
+      if (em) em.kommentar = item.kommentar || '';
+    });
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
     visaSparStatus('Sparat.', true);
@@ -3154,7 +3468,7 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
 
 function applyVyFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  vertikalVy = params.get('vy') === 'vertikal';
+  vertikalVy = params.get('vy') !== 'horisontell';
   const innehall = document.getElementById('gp-innehall');
   const btn = document.getElementById('gp-btn-vy');
   if (innehall) innehall.classList.toggle('gp-vertikal-vy', vertikalVy);

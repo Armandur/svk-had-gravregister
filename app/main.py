@@ -529,6 +529,7 @@ class ExtramaterialSchema(BaseModel):
 class ExtramaterialPatchSchema(BaseModel):
     redan_halva: bool | None = None
     dold: bool | None = None
+    kommentar: str | None = None
 
 
 @app.get("/api/mappar/{mapp_namn}/config")
@@ -1130,7 +1131,7 @@ async def get_gravplats_halvor(
     halvor = [h for h in halvor if (h.get("content_sida"), h.get("halva")) not in dold_halvor_set]
     # Alla extramaterial knutna till denna gravplats (ej dolda) – för utfällbar sektion
     extramaterial_lista = [
-        {"id": em.id, "filnamn": em.filnamn, "typ": em.typ or "", "redan_halva": getattr(em, "redan_halva", False)}
+        {"id": em.id, "filnamn": em.filnamn, "typ": em.typ or "", "redan_halva": getattr(em, "redan_halva", False), "kommentar": getattr(em, "kommentar", None) or ""}
         for em in (
             db.query(Extramaterial)
             .filter(
@@ -1344,6 +1345,7 @@ class InmatningSchema(BaseModel):
     fardigtranskriberad: bool = False
     gravsatta: list[GravsattItem] = []
     skiss_bild_b64: str | None = None
+    extramaterial_kommentarer: list[dict] = []  # [{"id": int, "kommentar": str}, ...]
 
 
 def _inmatning_response(gravplats_id: int, db: Session) -> dict:
@@ -1567,6 +1569,17 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             urna=gs.urna or "",
             kommentar=gs.kommentar or "",
         ))
+    for item in body.extramaterial_kommentarer or []:
+        em_id = item.get("id") if isinstance(item, dict) else getattr(item, "id", None)
+        kommentar = item.get("kommentar", "") if isinstance(item, dict) else getattr(item, "kommentar", "")
+        if em_id is not None:
+            em = db.query(Extramaterial).filter(
+                Extramaterial.id == em_id,
+                Extramaterial.mapp_id == g.mapp_id,
+                Extramaterial.grav_start_sida == g.start_sida,
+            ).first()
+            if em:
+                em.kommentar = (kommentar or "").strip() if isinstance(kommentar, str) else ""
     db.commit()
     return _inmatning_response(gravplats_id, db)
 
@@ -1691,6 +1704,7 @@ async def list_extramaterial(mapp_namn: str, db: Session = Depends(get_db)):
                 "typ": em.typ,
                 "grav_start_sida": em.grav_start_sida,
                 "redan_halva": getattr(em, "redan_halva", False),
+                "kommentar": getattr(em, "kommentar", None) or "",
             }
             for em in items
         ],
@@ -1716,6 +1730,7 @@ async def list_extramaterial_mapp(mapp_namn: str, db: Session = Depends(get_db))
                 "filnamn": em.filnamn,
                 "typ": em.typ,
                 "redan_halva": getattr(em, "redan_halva", False),
+                "kommentar": getattr(em, "kommentar", None) or "",
             }
             for em in items
         ],
@@ -1822,6 +1837,8 @@ async def patch_extramaterial(
         em.redan_halva = body.redan_halva
     if body.dold is not None:
         em.dold = body.dold
+    if body.kommentar is not None:
+        em.kommentar = body.kommentar
     db.commit()
     db.refresh(em)
     return {
@@ -1831,6 +1848,7 @@ async def patch_extramaterial(
         "grav_start_sida": em.grav_start_sida,
         "redan_halva": getattr(em, "redan_halva", False),
         "dold": getattr(em, "dold", False),
+        "kommentar": getattr(em, "kommentar", None) or "",
     }
 
 
