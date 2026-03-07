@@ -28,6 +28,7 @@ from app.database import (
     GravplatsInmatning,
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
+    GravplatsSkiss,
     Gravsatt,
     init_db,
     get_db,
@@ -1297,6 +1298,7 @@ class NarmastAnhorigItem(BaseModel):
     id: int | None = None
     fornamn: str = ""
     efternamn: str = ""
+    yrke: str = ""
     adress: str = ""  # Gatuadress
     postnummer: str = ""
     postort: str = ""
@@ -1410,11 +1412,32 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         }
         for g in gravsatta
     ]
+    skisser_rows = (
+        db.query(GravplatsSkiss)
+        .filter(GravplatsSkiss.gravplats_id == gravplats_id)
+        .order_by(GravplatsSkiss.sort_order, GravplatsSkiss.id)
+        .all()
+    )
+    skisser_list = [
+        {
+            "id": s.id,
+            "source_type": s.source_type,
+            "content_sida": s.content_sida,
+            "halva": s.halva,
+            "extramaterial_id": s.extramaterial_id,
+            "x": s.x,
+            "y": s.y,
+            "width": s.width,
+            "height": s.height,
+            "sort_order": s.sort_order,
+        }
+        for s in skisser_rows
+    ]
     if not row:
         return {
             "gravplats_id": gravplats_id,
             "innehavare": innehavare_list,
-            "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
+            "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": getattr(n, "yrke", None) or "", "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
             "storlek": "",
             "underhall_text": "",
             "underhall_overstruket": False,
@@ -1428,11 +1451,12 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "fardigtranskriberad": False,
             "has_skiss": False,
             "gravsatta": gravsatta_list,
+            "skisser": skisser_list,
         }
     return {
         "gravplats_id": gravplats_id,
         "innehavare": innehavare_list,
-        "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
+        "narmast_anhoriga": [{"id": n.id, "fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": getattr(n, "yrke", None) or "", "adress": n.adress or "", "postnummer": n.postnummer or "", "postort": n.postort or "", "telefon": n.telefon or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order} for n in narmast],
         "storlek": row.storlek or "",
         "underhall_text": row.underhall_text or "",
         "underhall_overstruket": row.underhall_overstruket,
@@ -1446,6 +1470,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         "fardigtranskriberad": getattr(row, "fardigtranskriberad", False),
         "has_skiss": row.skiss_bild is not None and len(row.skiss_bild) > 0,
         "gravsatta": gravsatta_list,
+        "skisser": skisser_list,
     }
 
 
@@ -1507,6 +1532,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
                 namn=(fn + " " + en).strip(),
                 fornamn=fn,
                 efternamn=en,
+                yrke=na.yrke or "",
                 adress=na.adress or "",
                 postnummer=na.postnummer or "",
                 postort=na.postort or "",
@@ -1547,11 +1573,106 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
 
 @app.get("/api/gravplats/{gravplats_id:int}/inmatning/skiss")
 async def get_inmatning_skiss(gravplats_id: int, db: Session = Depends(get_db)):
-    """Hämta skissbild för gravplatsen (PNG/JPEG)."""
+    """Hämta skissbild för gravplatsen (PNG/JPEG). Äldre enkelskiss – använd skisser (koordinater) istället."""
     row = db.query(GravplatsInmatning).filter(GravplatsInmatning.gravplats_id == gravplats_id).first()
     if not row or not row.skiss_bild:
         raise HTTPException(status_code=404, detail="Ingen skiss")
     return Response(content=row.skiss_bild, media_type="image/png", headers=CACHE_HEADERS)
+
+
+class SkissCreateBody(BaseModel):
+    source_type: str  # "halva" | "extramaterial"
+    content_sida: int | None = None
+    halva: str | None = None  # "nedre" | "ovre"
+    extramaterial_id: int | None = None
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+
+class SkissOrdningBody(BaseModel):
+    skiss_ids: list[int]  # ordning = index i listan
+
+
+@app.post("/api/gravplats/{gravplats_id:int}/skisser")
+async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Depends(get_db)):
+    """Lägg till en skiss (rektangelmarkering på en bild)."""
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    if body.source_type not in ("halva", "extramaterial"):
+        raise HTTPException(status_code=400, detail="source_type måste vara halva eller extramaterial")
+    if body.source_type == "halva":
+        if body.content_sida is None or body.halva not in ("nedre", "ovre"):
+            raise HTTPException(status_code=400, detail="För halva krävs content_sida och halva (nedre/ovre)")
+    if body.source_type == "extramaterial":
+        if body.extramaterial_id is None:
+            raise HTTPException(status_code=400, detail="För extramaterial krävs extramaterial_id")
+    max_order = (
+        db.query(func.max(GravplatsSkiss.sort_order))
+        .filter(GravplatsSkiss.gravplats_id == gravplats_id)
+        .scalar()
+    )
+    sort_order = (max_order or -1) + 1
+    s = GravplatsSkiss(
+        gravplats_id=gravplats_id,
+        source_type=body.source_type,
+        content_sida=body.content_sida,
+        halva=body.halva,
+        extramaterial_id=body.extramaterial_id,
+        x=max(0, min(1, body.x)),
+        y=max(0, min(1, body.y)),
+        width=max(0, min(1, body.width)),
+        height=max(0, min(1, body.height)),
+        sort_order=sort_order,
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return {
+        "id": s.id,
+        "source_type": s.source_type,
+        "content_sida": s.content_sida,
+        "halva": s.halva,
+        "extramaterial_id": s.extramaterial_id,
+        "x": s.x,
+        "y": s.y,
+        "width": s.width,
+        "height": s.height,
+        "sort_order": s.sort_order,
+    }
+
+
+@app.put("/api/gravplats/{gravplats_id:int}/skisser/ordning")
+async def put_skisser_ordning(gravplats_id: int, body: SkissOrdningBody, db: Session = Depends(get_db)):
+    """Uppdatera ordning på skisser (drag and drop)."""
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    for i, skiss_id in enumerate(body.skiss_ids):
+        row = db.query(GravplatsSkiss).filter(
+            GravplatsSkiss.id == skiss_id,
+            GravplatsSkiss.gravplats_id == gravplats_id,
+        ).first()
+        if row:
+            row.sort_order = i
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/api/gravplats/{gravplats_id:int}/skisser/{skiss_id:int}")
+async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(get_db)):
+    """Ta bort en skiss (ändra inte – ta bort och gör om vid behov)."""
+    row = db.query(GravplatsSkiss).filter(
+        GravplatsSkiss.id == skiss_id,
+        GravplatsSkiss.gravplats_id == gravplats_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Skissen hittades inte")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @app.get("/api/mappar/{mapp_namn}/extramaterial")

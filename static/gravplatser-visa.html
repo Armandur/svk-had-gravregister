@@ -83,8 +83,17 @@
   <div class="gp-lightbox" id="gp-lightbox" hidden aria-modal="true" role="dialog" aria-label="Förstoring">
     <button type="button" class="gp-lightbox-stang" id="gp-lightbox-stang" aria-label="Stäng">×</button>
     <button type="button" class="gp-lightbox-prev" id="gp-lightbox-prev" aria-label="Föregående">←</button>
-    <img class="gp-lightbox-img" id="gp-lightbox-img" alt="" />
+    <div class="gp-lightbox-img-wrap" id="gp-lightbox-img-wrap">
+      <div class="gp-lightbox-img-inner" id="gp-lightbox-img-inner">
+        <img class="gp-lightbox-img" id="gp-lightbox-img" alt="" />
+      </div>
+    </div>
     <button type="button" class="gp-lightbox-next" id="gp-lightbox-next" aria-label="Nästa">→</button>
+    <div class="gp-lightbox-zoom" id="gp-lightbox-zoom" hidden>
+      <button type="button" class="gp-lightbox-zoom-btn" id="gp-lightbox-zoom-out" aria-label="Zooma ut">−</button>
+      <span class="gp-lightbox-zoom-niva" id="gp-lightbox-zoom-niva">100%</span>
+      <button type="button" class="gp-lightbox-zoom-btn" id="gp-lightbox-zoom-in" aria-label="Zooma in">+</button>
+    </div>
   </div>
 
   <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-label="Extraherad text">
@@ -99,6 +108,26 @@
       <div class="gp-ocr-modal-knappar">
         <button type="button" id="gp-ocr-anvand" class="gp-ocr-btn gp-ocr-btn-prim">Använd</button>
         <button type="button" id="gp-ocr-avbryt" class="gp-ocr-btn">Avbryt</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gp-skiss-modal" id="gp-skiss-modal" hidden role="dialog" aria-modal="true" aria-label="Lägg till skiss">
+    <div class="gp-skiss-modal-inner">
+      <h3 class="gp-skiss-modal-rubrik" id="gp-skiss-modal-rubrik">Välj bild</h3>
+      <div class="gp-skiss-modal-bilder" id="gp-skiss-modal-bilder"></div>
+      <div class="gp-skiss-modal-markera" id="gp-skiss-modal-markera" hidden>
+        <p class="gp-skiss-modal-hint">Dra för att markera skissområdet. Klicka sedan Spara.</p>
+        <div class="gp-skiss-modal-img-wrap">
+          <img id="gp-skiss-modal-img" alt="" draggable="false" />
+          <div class="gp-skiss-modal-rect" id="gp-skiss-modal-rect"></div>
+        </div>
+        <div class="gp-skiss-modal-knappar">
+          <button type="button" id="gp-skiss-spara" class="gp-ocr-btn gp-ocr-btn-prim">Spara skiss</button>
+        </div>
+      </div>
+      <div class="gp-skiss-modal-knappar gp-skiss-modal-avbryt-wrap">
+        <button type="button" id="gp-skiss-avbryt" class="gp-ocr-btn">Avbryt</button>
       </div>
     </div>
   </div>

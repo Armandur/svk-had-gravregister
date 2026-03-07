@@ -138,6 +138,23 @@ class GravplatsInmatning(Base):
     fardigtranskriberad: Mapped[bool] = mapped_column(default=False)  # All info från bilderna har förts över
 
 
+class GravplatsSkiss(Base):
+    """En skiss = en rektangelmarkering på en av gravplatsens bilder (halva eller extramaterial)."""
+    __tablename__ = "gravplats_skiss"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column()  # "halva" | "extramaterial"
+    content_sida: Mapped[int | None] = mapped_column(nullable=True)  # för halva: 1-baserat innehållssida
+    halva: Mapped[str | None] = mapped_column(nullable=True)  # "nedre" | "ovre"
+    extramaterial_id: Mapped[int | None] = mapped_column(ForeignKey("extramaterial.id"), nullable=True)  # för extramaterial
+    x: Mapped[float] = mapped_column()  # 0–1, andel av bildbredd
+    y: Mapped[float] = mapped_column()  # 0–1, andel av bildhöjd
+    width: Mapped[float] = mapped_column()  # 0–1
+    height: Mapped[float] = mapped_column()  # 0–1
+    sort_order: Mapped[int] = mapped_column(default=0)
+
+
 class GravplatsNarmastAnhorig(Base):
     """Närmast anhörig – kan vara flera personer per gravplats."""
     __tablename__ = "gravplats_narmast_anhorig"
@@ -147,6 +164,7 @@ class GravplatsNarmastAnhorig(Base):
     namn: Mapped[str] = mapped_column(default="")  # deprecated, använd fornamn+efternamn
     fornamn: Mapped[str] = mapped_column(default="")
     efternamn: Mapped[str] = mapped_column(default="")
+    yrke: Mapped[str] = mapped_column(default="")
     adress: Mapped[str] = mapped_column(default="")  # Gatuadress
     postnummer: Mapped[str] = mapped_column(default="")
     postort: Mapped[str] = mapped_column(default="")
@@ -255,6 +273,15 @@ def init_db():
                     conn.commit()
             except Exception:
                 pass
+        # Migration: yrke på gravplats_narmast_anhorig
+        try:
+            r = conn.execute(text("PRAGMA table_info(gravplats_narmast_anhorig)"))
+            cols_na = [row[1] for row in r]
+            if "yrke" not in cols_na:
+                conn.execute(text("ALTER TABLE gravplats_narmast_anhorig ADD COLUMN yrke TEXT DEFAULT ''"))
+                conn.commit()
+        except Exception:
+            pass
         # Migration: dold på extramaterial
         try:
             r = conn.execute(text("PRAGMA table_info(extramaterial)"))
@@ -264,6 +291,7 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+        # gravplats_skiss skapas av create_all (ny tabell)
     # MappSidaRedanHalva skapas av create_all
 
 

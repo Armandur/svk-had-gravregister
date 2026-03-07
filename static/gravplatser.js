@@ -16,6 +16,11 @@ let currentExtramaterial = [];
 let currentExtramaterialMapp = null;
 /** URL:er för aktuell gravplatsens halvor (för lightbox). */
 let currentHalvorUrls = [];
+/** Halvor + URL-info för att matcha skisser till källbild (samma ordning som halvor). */
+let currentHalvorList = [];
+let currentHalvorUrlList = [];
+/** start_sida för aktuell gravplats (för att bygga skiss-bild-URL). */
+let currentGravplatsStartSida = null;
 let visarHelaSidor = false;
 let vertikalVy = false;
 let currentGravplatsId = null;
@@ -561,6 +566,8 @@ async function uppdateraVy() {
     const extramaterial = halvorData.extramaterial || [];
     currentExtramaterial = extramaterial;
     currentExtramaterialMapp = mappNamn;
+    const gpFromApi = halvorData.gravplats;
+    currentGravplatsStartSida = gpFromApi?.start_sida ?? gp?.start_sida ?? null;
 
     const initialUrl = (halvaUrl, helaUrl) => (visarHelaSidor && halvaUrl !== helaUrl ? helaUrl : halvaUrl);
 
@@ -584,6 +591,8 @@ async function uppdateraVy() {
       return { halvaUrl, helaUrl, pdfUrl };
     });
     currentHalvorUrls = halvorMedUrl.map((x) => initialUrl(x.halvaUrl, x.helaUrl));
+    currentHalvorList = halvor;
+    currentHalvorUrlList = halvorMedUrl;
 
     const esc = (s) => (s || '').replace(/"/g, '&quot;');
     halvorEl.innerHTML = halvorMedUrl.map((x, i) => {
@@ -634,6 +643,9 @@ async function uppdateraVy() {
     halvorEl.innerHTML = '<p class="gravplatser-fel">Kunde inte ladda halvor: ' + e.message + '</p>';
     currentExtramaterial = [];
     currentHalvorUrls = [];
+    currentHalvorList = [];
+    currentHalvorUrlList = [];
+    currentGravplatsStartSida = null;
     uppdateraExtramaterialSektion([], null);
     uppdateraDoldaSektion([], null, null, 0);
   }
@@ -852,15 +864,24 @@ function toggleExtramaterialInnehall() {
 }
 
 let lightboxIndex = 0;
-/** 'extramaterial' | 'halvor' – vilken källa lightboxen visar. */
+/** 'extramaterial' | 'halvor' | 'skisser' – vilken källa lightboxen visar. */
 let lightboxMode = 'extramaterial';
 /** Vid mode 'halvor': URL:er för aktuell gravplatsens bilder. */
 let lightboxHalvorUrls = [];
+/** Vid mode 'skisser': lista med skiss-objekt (för att ladda fullupplöst crop). */
+let lightboxSkisserList = [];
+/** Zoomnivå i lightbox för skisser (1 = 100%). */
+let lightboxZoom = 1;
+const LIGHTBOX_ZOOM_MIN = 0.5;
+const LIGHTBOX_ZOOM_MAX = 4;
+const LIGHTBOX_ZOOM_STEG = 1.25;
 
 function uppdateraLightboxKnappar() {
   const prevBtn = document.getElementById('gp-lightbox-prev');
   const nextBtn = document.getElementById('gp-lightbox-next');
-  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
+    : lightboxMode === 'skisser' ? lightboxSkisserList.length
+    : currentExtramaterial.length;
   if (prevBtn) prevBtn.disabled = n <= 1;
   if (nextBtn) nextBtn.disabled = n <= 1;
 }
@@ -877,6 +898,9 @@ function openLightbox(index) {
   if (lightbox && imgEl) {
     imgEl.src = bildUrl;
     imgEl.alt = em.filnamn;
+    imgEl.style.transform = '';
+    const z = document.getElementById('gp-lightbox-zoom');
+    if (z) z.hidden = true;
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -899,38 +923,172 @@ function openLightboxHalvor(index) {
   if (lightbox && imgEl) {
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
     imgEl.alt = '';
+    imgEl.style.transform = '';
+    const z = document.getElementById('gp-lightbox-zoom');
+    if (z) z.hidden = true;
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
 }
 
+/** Laddar källbilden för en skiss och returnerar en Promise med data-URL för fullupplöst crop. */
+function loadSkissFullRes(s) {
+  return new Promise((resolve, reject) => {
+    if (!s) {
+      reject(new Error('Ingen skiss'));
+      return;
+    }
+    const url = getSkissKallaUrl(s);
+    if (!url) {
+      reject(new Error('Kunde inte hitta källbild'));
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const x = (s.x ?? 0) * w;
+      const y = (s.y ?? 0) * h;
+      const sw = Math.max(1, (s.width ?? 0) * w);
+      const sh = Math.max(1, (s.height ?? 0) * h);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(sw);
+      canvas.height = Math.round(sh);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas stöd saknas'));
+        return;
+      }
+      ctx.drawImage(img, x, y, sw, sh, 0, 0, canvas.width, canvas.height);
+      try {
+        resolve(canvas.toDataURL('image/png'));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error('Kunde inte ladda källbild'));
+    img.src = url;
+  });
+}
+
+function openLightboxSkisser(skisserArray, index) {
+  if (!skisserArray || skisserArray.length === 0) return;
+  lightboxSkisserList = skisserArray;
+  lightboxMode = 'skisser';
+  lightboxIndex = Math.max(0, Math.min(index, skisserArray.length - 1));
+  lightboxZoom = 1;
+  const lightbox = document.getElementById('gp-lightbox');
+  const imgEl = document.getElementById('gp-lightbox-img');
+  const zoomPanel = document.getElementById('gp-lightbox-zoom');
+  if (!lightbox || !imgEl) return;
+  imgEl.onload = () => lightboxZoomApplicera();
+  imgEl.alt = 'Skiss';
+  if (zoomPanel) zoomPanel.hidden = false;
+  lightbox.hidden = false;
+  uppdateraLightboxKnappar();
+  const loadingIndex = lightboxIndex;
+  const s = lightboxSkisserList[loadingIndex];
+  loadSkissFullRes(s).then(
+    (dataUrl) => {
+      if (lightboxMode !== 'skisser' || lightboxIndex !== loadingIndex) return;
+      imgEl.src = dataUrl;
+      lightboxZoomApplicera();
+    },
+    () => {
+      imgEl.src = '';
+      imgEl.alt = 'Kunde inte ladda skiss';
+    }
+  );
+}
+
+function lightboxZoomApplicera() {
+  const imgEl = document.getElementById('gp-lightbox-img');
+  const innerEl = document.getElementById('gp-lightbox-img-inner');
+  const nivaEl = document.getElementById('gp-lightbox-zoom-niva');
+  if (lightboxMode === 'skisser' && innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
+    const w = Math.round(imgEl.naturalWidth * lightboxZoom);
+    const h = Math.round(imgEl.naturalHeight * lightboxZoom);
+    innerEl.style.width = w + 'px';
+    innerEl.style.height = h + 'px';
+    innerEl.classList.add('gp-lightbox-zoomed');
+    imgEl.style.transform = '';
+  } else {
+    if (innerEl) {
+      innerEl.style.width = '';
+      innerEl.style.height = '';
+      innerEl.classList.remove('gp-lightbox-zoomed');
+    }
+    if (imgEl) imgEl.style.transform = '';
+  }
+  if (nivaEl) nivaEl.textContent = Math.round(lightboxZoom * 100) + '%';
+}
+
+function lightboxZoomIn() {
+  if (lightboxMode !== 'skisser') return;
+  lightboxZoom = Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom * LIGHTBOX_ZOOM_STEG);
+  lightboxZoomApplicera();
+}
+
+function lightboxZoomOut() {
+  if (lightboxMode !== 'skisser') return;
+  lightboxZoom = Math.max(LIGHTBOX_ZOOM_MIN, lightboxZoom / LIGHTBOX_ZOOM_STEG);
+  lightboxZoomApplicera();
+}
+
 function closeLightbox() {
   const lightbox = document.getElementById('gp-lightbox');
+  const zoomPanel = document.getElementById('gp-lightbox-zoom');
   if (lightbox) lightbox.hidden = true;
+  if (zoomPanel) zoomPanel.hidden = true;
+  lightboxZoom = 1;
+  lightboxZoomApplicera();
 }
 
 function lightboxPrev() {
-  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
+    : lightboxMode === 'skisser' ? lightboxSkisserList.length
+    : currentExtramaterial.length;
   if (n <= 1) return;
   lightboxIndex = (lightboxIndex - 1 + n) % n;
+  const imgEl = document.getElementById('gp-lightbox-img');
+  if (!imgEl) return;
   if (lightboxMode === 'halvor') {
-    const imgEl = document.getElementById('gp-lightbox-img');
-    if (imgEl) imgEl.src = lightboxHalvorUrls[lightboxIndex];
+    imgEl.src = lightboxHalvorUrls[lightboxIndex];
+  } else if (lightboxMode === 'skisser') {
+    const s = lightboxSkisserList[lightboxIndex];
+    lightboxZoom = 1;
+    loadSkissFullRes(s).then(
+      (dataUrl) => { imgEl.src = dataUrl; lightboxZoomApplicera(); },
+      () => { imgEl.src = ''; }
+    );
   } else {
     openLightbox(lightboxIndex);
   }
+  uppdateraLightboxKnappar();
 }
 
 function lightboxNext() {
-  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length : currentExtramaterial.length;
+  const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
+    : lightboxMode === 'skisser' ? lightboxSkisserList.length
+    : currentExtramaterial.length;
   if (n <= 1) return;
   lightboxIndex = (lightboxIndex + 1) % n;
+  const imgEl = document.getElementById('gp-lightbox-img');
+  if (!imgEl) return;
   if (lightboxMode === 'halvor') {
-    const imgEl = document.getElementById('gp-lightbox-img');
-    if (imgEl) imgEl.src = lightboxHalvorUrls[lightboxIndex];
+    imgEl.src = lightboxHalvorUrls[lightboxIndex];
+  } else if (lightboxMode === 'skisser') {
+    const s = lightboxSkisserList[lightboxIndex];
+    lightboxZoom = 1;
+    loadSkissFullRes(s).then(
+      (dataUrl) => { imgEl.src = dataUrl; lightboxZoomApplicera(); },
+      () => { imgEl.src = ''; }
+    );
   } else {
     openLightbox(lightboxIndex);
   }
+  uppdateraLightboxKnappar();
 }
 
 function uppdateraToggleHelaKnapp() {
@@ -1168,14 +1326,16 @@ function startOcrOverlay(fig, initialEvent) {
       }
       if (arDatumFaltForOcr(ocrTargetElement)) {
         const normaliserat = normaliseraUtfordatDen(trimmed);
-        ocrTargetElement.value = normaliserat || '';
-        ocrTargetElement.focus();
-        const len = ocrTargetElement.value.length;
-        try {
-          ocrTargetElement.setSelectionRange(len, len);
-        } catch (_) {}
-        markInmatningDirty();
-        if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+        if (normaliserat) {
+          ocrTargetElement.value = normaliserat;
+          ocrTargetElement.focus();
+          const len = ocrTargetElement.value.length;
+          try {
+            ocrTargetElement.setSelectionRange(len, len);
+          } catch (_) {}
+          markInmatningDirty();
+          if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+        }
       } else {
         infogaOcrIFalt(trimmed);
       }
@@ -1291,7 +1451,7 @@ function normaliseraUtfordatDen(str) {
     if (m >= 1 && m <= 12 && y >= 1000 && y <= 9999) return `${y}-${pad(m)}-00`;
   }
 
-  return s;
+  return '';
 }
 
 /** Visar textextraheringsikonen i rött bredvid aktuellt fält när ingen text kunde extraheras. */
@@ -1362,14 +1522,23 @@ function showOcrModal(extractedText) {
   const textarea = document.getElementById('gp-ocr-modal-text');
   if (!modal || !textarea) return;
   ocrModalNamnLage = null;
+  /* För datumfält (t.ex. Utfärdat den) visas ingen modal – normalisera och infoga direkt eller inte alls. */
+  if (ocrTargetElement && arDatumFaltForOcr(ocrTargetElement)) {
+    const normaliserat = normaliseraUtfordatDen(extractedText || '');
+    if (normaliserat) {
+      ocrTargetElement.value = normaliserat;
+      ocrTargetElement.focus();
+      const len = ocrTargetElement.value.length;
+      try { ocrTargetElement.setSelectionRange(len, len); } catch (_) {}
+      markInmatningDirty();
+      if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+    }
+    return;
+  }
   document.getElementById('gp-ocr-modal-namn')?.setAttribute('hidden', '');
   document.getElementById('gp-ocr-modal-hint')?.removeAttribute('hidden');
   document.getElementById('gp-ocr-modal-text')?.removeAttribute('hidden');
-  let text = extractedText;
-  if (ocrTargetElement && arDatumFaltForOcr(ocrTargetElement)) {
-    text = normaliseraUtfordatDen(text);
-  }
-  textarea.value = text;
+  textarea.value = extractedText || '';
   modal.hidden = false;
   textarea.focus();
   autoExpandTextarea(textarea);
@@ -1466,6 +1635,10 @@ function closeOcrModal(anvand) {
     let value = textarea.value;
     if (arDatumFaltForOcr(ocrTargetElement)) {
       value = normaliseraUtfordatDen(value);
+      if (value === '') {
+        modal.hidden = true;
+        return;
+      }
     }
     ocrTargetElement.value = value;
     if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
@@ -1578,6 +1751,8 @@ document.getElementById('gp-halvor')?.addEventListener('click', (e) => {
 document.getElementById('gp-lightbox-stang')?.addEventListener('click', closeLightbox);
 document.getElementById('gp-lightbox-prev')?.addEventListener('click', lightboxPrev);
 document.getElementById('gp-lightbox-next')?.addEventListener('click', lightboxNext);
+document.getElementById('gp-lightbox-zoom-in')?.addEventListener('click', lightboxZoomIn);
+document.getElementById('gp-lightbox-zoom-out')?.addEventListener('click', lightboxZoomOut);
 document.getElementById('gp-lightbox')?.addEventListener('click', (e) => {
   if (e.target.id === 'gp-lightbox') closeLightbox();
 });
@@ -1718,6 +1893,275 @@ function toggleInmatningSektion(sektion) {
   });
 }
 
+/** Returnerar källbild-URL för en skiss (halva eller extramaterial). */
+function getSkissKallaUrl(s) {
+  if (!s) return null;
+  const cacheQ = `_v=${cacheBust}`;
+  const mapp = currentExtramaterialMapp;
+  if (!mapp) return null;
+  if (s.source_type === 'halva' && s.content_sida != null && s.halva) {
+    const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
+    const pos = s.content_sida - start;
+    const split1och3 = (727 / 1597).toFixed(4);
+    const split2 = (870 / 1595).toFixed(4);
+    const split = pos === 1 ? split2 : split1och3;
+    const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
+    return `${base}/${s.content_sida}/halva?offset=0&halva=${encodeURIComponent(s.halva)}&split=${split}&${cacheQ}`;
+  }
+  if (s.source_type === 'extramaterial' && s.extramaterial_id != null) {
+    const em = (currentExtramaterial || []).find((e) => e.id === s.extramaterial_id);
+    if (em && em.filnamn) return `${API}/mappar/${encodeURIComponent(mapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?${cacheQ}`;
+  }
+  return null;
+}
+
+/** Rita skissens crop i en container (img eller canvas med crop). */
+function renderSkissCropMiniatyr(container, s) {
+  if (!container || !s) return;
+  const url = getSkissKallaUrl(s);
+  if (!url) {
+    container.innerHTML = '<span class="gp-skiss-miniatyr-placeholder">—</span>';
+    return;
+  }
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const x = (s.x ?? 0) * w;
+    const y = (s.y ?? 0) * h;
+    const sw = Math.max(1, (s.width ?? 0) * w);
+    const sh = Math.max(1, (s.height ?? 0) * h);
+    const maxSize = 120;
+    const cw = sw >= sh ? maxSize : Math.round(maxSize * (sw / sh));
+    const ch = sh >= sw ? maxSize : Math.round(maxSize * (sh / sw));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, cw);
+    canvas.height = Math.max(1, ch);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, x, y, sw, sh, 0, 0, canvas.width, canvas.height);
+      container.innerHTML = '';
+      const thumb = document.createElement('img');
+      thumb.src = canvas.toDataURL('image/png');
+      thumb.alt = 'Skiss';
+      thumb.className = 'gp-skiss-miniatyr-img';
+      container.appendChild(thumb);
+    }
+  };
+  img.onerror = () => {
+    container.innerHTML = '<span class="gp-skiss-miniatyr-placeholder">Kunde inte ladda</span>';
+  };
+  img.src = url;
+}
+
+/** Drag-and-drop för skisser (ändra ordning). */
+function bindSkissDragDrop(container) {
+  if (!container) return;
+  container.querySelectorAll('.gp-skiss-drag-handle').forEach((handle) => {
+    const rad = handle.closest('.gp-skiss-rad');
+    if (!rad) return;
+    handle.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', rad.dataset.skissId || '');
+      e.dataTransfer.effectAllowed = 'move';
+      rad.classList.add('gp-skiss-dragging');
+    });
+    handle.addEventListener('dragend', () => rad.classList.remove('gp-skiss-dragging'));
+  });
+  container.querySelectorAll('.gp-skiss-rad').forEach((rad) => {
+    rad.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.gp-skiss-drag-over').forEach((r) => r.classList.remove('gp-skiss-drag-over'));
+      if (!rad.classList.contains('gp-skiss-dragging')) rad.classList.add('gp-skiss-drag-over');
+    });
+    rad.addEventListener('dragleave', () => rad.classList.remove('gp-skiss-drag-over'));
+    rad.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      rad.classList.remove('gp-skiss-drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      const fromRad = container.querySelector(`.gp-skiss-rad[data-skiss-id="${fromId}"]`);
+      if (!fromRad || fromRad === rad || currentGravplatsId == null) return;
+      const rader = Array.from(container.querySelectorAll('.gp-skiss-rad'));
+      const ids = rader.map((r) => parseInt(r.dataset.skissId, 10)).filter((n) => !isNaN(n));
+      const fromIdx = ids.indexOf(parseInt(fromId, 10));
+      const toIdx = ids.indexOf(parseInt(rad.dataset.skissId, 10));
+      if (fromIdx === -1 || toIdx === -1) return;
+      const newIds = [...ids];
+      newIds.splice(fromIdx, 1);
+      newIds.splice(toIdx, 0, ids[fromIdx]);
+      const res = await fetch(`${API}/gravplats/${currentGravplatsId}/skisser/ordning`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skiss_ids: newIds }),
+      });
+      if (res.ok) {
+        await ensureInmatningData();
+        renderInmatningSektion('skiss');
+      }
+    });
+  });
+}
+
+/** Öppna modal för att lägga till skiss: välj bild, markera område, spara. */
+function oppnaSkissModal() {
+  const modal = document.getElementById('gp-skiss-modal');
+  const rubrik = document.getElementById('gp-skiss-modal-rubrik');
+  const bilderEl = document.getElementById('gp-skiss-modal-bilder');
+  const markeraEl = document.getElementById('gp-skiss-modal-markera');
+  const imgEl = document.getElementById('gp-skiss-modal-img');
+  const rectEl = document.getElementById('gp-skiss-modal-rect');
+  const cacheQ = `_v=${cacheBust}`;
+  const mapp = currentExtramaterialMapp;
+  if (!modal || !bilderEl || !markeraEl || !imgEl || !rectEl || !mapp || currentGravplatsId == null) return;
+
+  let valdKalla = null; // { source_type, content_sida?, halva?, extramaterial_id?, url }
+
+  function visaSteg1() {
+    markeraEl.hidden = true;
+    bilderEl.hidden = false;
+    rubrik.textContent = 'Välj bild att markera skiss på';
+    bilderEl.innerHTML = '';
+    (currentHalvorList || []).forEach((h, i) => {
+      let url;
+      if (h.redan_halva && h.filnamn) {
+        url = `${API}/mappar/${encodeURIComponent(mapp)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
+      } else {
+        const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
+        const pos = (h.content_sida || 0) - start;
+        const split = pos === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
+        url = `${API}/mappar/${encodeURIComponent(mapp)}/sida/${h.content_sida}/halva?offset=0&halva=${encodeURIComponent(h.halva)}&split=${split}&${cacheQ}`;
+      }
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gp-skiss-modal-bild';
+      btn.innerHTML = `<img src="${url}" alt="" /><span>Sida ${h.content_sida || ''} ${h.halva || ''} ${h.filnamn || ''}</span>`;
+      btn.addEventListener('click', () => {
+        valdKalla = {
+          source_type: 'halva',
+          content_sida: h.content_sida,
+          halva: h.halva,
+          url,
+        };
+        visaSteg2();
+      });
+      bilderEl.appendChild(btn);
+    });
+    (currentExtramaterial || []).forEach((em) => {
+      const url = `${API}/mappar/${encodeURIComponent(mapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?${cacheQ}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'gp-skiss-modal-bild';
+      btn.innerHTML = `<img src="${url}" alt="" /><span>${em.filnamn}</span>`;
+      btn.addEventListener('click', () => {
+        valdKalla = { source_type: 'extramaterial', extramaterial_id: em.id, url };
+        visaSteg2();
+      });
+      bilderEl.appendChild(btn);
+    });
+    setAvbrytHandler();
+  }
+
+  function visaSteg2() {
+    if (!valdKalla || !valdKalla.url) return;
+    bilderEl.hidden = true;
+    markeraEl.hidden = false;
+    rubrik.textContent = 'Markera skissområde';
+    imgEl.draggable = false;
+    imgEl.ondragstart = (e) => e.preventDefault();
+    imgEl.src = valdKalla.url;
+    rectEl.style.display = 'none';
+    rectEl.style.left = rectEl.style.top = rectEl.style.width = rectEl.style.height = '';
+
+    let dragStart = null;
+    let currentRect = { x: 0, y: 0, w: 0, h: 0 };
+
+    function updateRectEl() {
+      const ir = imgEl.getBoundingClientRect();
+      const wr = imgEl.parentElement?.getBoundingClientRect();
+      if (!wr) return;
+      rectEl.style.left = (currentRect.x * ir.width + (ir.left - wr.left)) + 'px';
+      rectEl.style.top = (currentRect.y * ir.height + (ir.top - wr.top)) + 'px';
+      rectEl.style.width = (currentRect.w * ir.width) + 'px';
+      rectEl.style.height = (currentRect.h * ir.height) + 'px';
+      rectEl.style.display = currentRect.w > 0 && currentRect.h > 0 ? 'block' : 'none';
+    }
+
+    imgEl.onload = () => {
+      const wrap = imgEl.parentElement;
+      if (!wrap) return;
+      wrap.addEventListener('mousedown', (e) => {
+        if (e.target !== imgEl && e.target !== rectEl && e.target !== wrap) return;
+        e.preventDefault();
+        const ir = imgEl.getBoundingClientRect();
+        const nx = (e.clientX - ir.left) / ir.width;
+        const ny = (e.clientY - ir.top) / ir.height;
+        dragStart = { x: nx, y: ny };
+        currentRect = { x: nx, y: ny, w: 0, h: 0 };
+        updateRectEl();
+      });
+      wrap.addEventListener('mousemove', (e) => {
+        if (!dragStart) return;
+        e.preventDefault();
+        const ir = imgEl.getBoundingClientRect();
+        const nx = (e.clientX - ir.left) / ir.width;
+        const ny = (e.clientY - ir.top) / ir.height;
+        const x = Math.min(dragStart.x, nx);
+        const y = Math.min(dragStart.y, ny);
+        const w = Math.abs(nx - dragStart.x);
+        const h = Math.abs(ny - dragStart.y);
+        currentRect = { x, y, w, h };
+        updateRectEl();
+      });
+      wrap.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        dragStart = null;
+      });
+      wrap.addEventListener('mouseleave', () => { dragStart = null; });
+    };
+
+    document.getElementById('gp-skiss-spara').onclick = async () => {
+      if (currentRect.w < 0.01 || currentRect.h < 0.01) {
+        alert('Markera ett område genom att dra på bilden.');
+        return;
+      }
+      const body = {
+        source_type: valdKalla.source_type,
+        content_sida: valdKalla.content_sida ?? null,
+        halva: valdKalla.halva ?? null,
+        extramaterial_id: valdKalla.extramaterial_id ?? null,
+        x: currentRect.x,
+        y: currentRect.y,
+        width: currentRect.w,
+        height: currentRect.h,
+      };
+      const res = await fetch(`${API}/gravplats/${currentGravplatsId}/skisser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        alert('Kunde inte spara skiss.');
+        return;
+      }
+      modal.hidden = true;
+      lastInmatningGravplatsId = null;
+      await ensureInmatningData();
+      renderInmatningSektion('skiss');
+    };
+    setAvbrytHandler();
+  }
+
+  const avbrytBtn = document.getElementById('gp-skiss-avbryt');
+  function setAvbrytHandler() {
+    if (!avbrytBtn) return;
+    avbrytBtn.onclick = markeraEl.hidden ? () => { modal.hidden = true; } : () => visaSteg1();
+  }
+  visaSteg1();
+  setAvbrytHandler();
+  modal.hidden = false;
+}
+
 /** Läsvy: rendera sektionens innehåll som text/layout utan formulärfält. Tomma fält visas inte. */
 function renderInmatningSektionLäs(sektion) {
   const d = inmatningData || {};
@@ -1761,6 +2205,7 @@ function renderInmatningSektionLäs(sektion) {
       const namn = [fn, en].filter(Boolean).join(' ') || '';
       const postOrt = [n.postnummer, n.postort].filter(Boolean).join(' ').trim();
       const rader = radOmFyllt('Namn', namn) +
+        radOmFyllt('Yrke', n.yrke) +
         radOmFyllt('Gatuadress', n.adress) +
         radOmFyllt('Postnummer / ort', postOrt || null) +
         radOmFyllt('Telefon', n.telefon) +
@@ -1787,8 +2232,37 @@ function renderInmatningSektionLäs(sektion) {
   }
 
   if (sektion === 'skiss') {
+    const d = inmatningData || {};
+    const skisser = d.skisser || [];
     const rader = radOmFyllt('Storlek', d.storlek);
-    innehall.innerHTML = rader ? '<div class="gp-inmatning-las">' + rader + '</div>' : '';
+    if (skisser.length > 0) {
+      innehall.innerHTML = '<div class="gp-inmatning-las">' + (rader || '') + '<p class="gp-skiss-antall">' + skisser.length + ' skiss' + (skisser.length !== 1 ? 'er' : '') + '.</p><div class="gp-skiss-las-galleri" id="gp-skiss-las-galleri"></div></div>';
+      const galleri = innehall.querySelector('#gp-skiss-las-galleri');
+      if (galleri) {
+        skisser.forEach((s) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'gp-skiss-las-item gp-skiss-las-item-klickbar';
+          wrap.setAttribute('role', 'button');
+          wrap.setAttribute('tabindex', '0');
+          wrap.setAttribute('aria-label', 'Visa skiss i förstoring');
+          wrap.innerHTML = '<div class="gp-skiss-las-miniatyr"></div>';
+          galleri.appendChild(wrap);
+          renderSkissCropMiniatyr(wrap.querySelector('.gp-skiss-las-miniatyr'), s);
+          wrap.addEventListener('click', () => {
+            const idx = Array.from(galleri.querySelectorAll('.gp-skiss-las-item')).indexOf(wrap);
+            openLightboxSkisser(skisser, idx >= 0 ? idx : 0);
+          });
+          wrap.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              wrap.click();
+            }
+          });
+        });
+      }
+    } else {
+      innehall.innerHTML = rader ? '<div class="gp-inmatning-las">' + rader + '</div>' : '';
+    }
     return;
   }
 
@@ -1855,6 +2329,7 @@ function renderInmatningSektion(sektion) {
       rad.className = 'gp-inmatning-rad gp-innehavare-rad';
       rad.innerHTML = '<span class="gp-innehavare-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-innehavare'));
+      rad.scrollIntoView({ block: 'start', behavior: 'smooth' });
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       bindInnehavareDragDrop(innehall);
       rad.querySelector('.gp-rad-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
@@ -1882,6 +2357,7 @@ function renderInmatningSektion(sektion) {
         <span class="gp-na-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span>
         <label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1">${esc(n.fornamn)}</textarea></label>
         <label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1">${esc(n.efternamn)}</textarea></label>
+        <label>Yrke <textarea name="na_yrke" class="gp-falt-expanderbar" rows="1">${esc(n.yrke || '')}</textarea></label>
         <label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1">${esc(n.adress)}</textarea></label>
         <label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1">${esc(n.postnummer)}</textarea></label>
         <label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1">${esc(n.postort)}</textarea></label>
@@ -1901,8 +2377,9 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-na')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-na-rad';
-      rad.innerHTML = '<span class="gp-na-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<span class="gp-na-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="na_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="na_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="na_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="na_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="na_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="na_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Telefon <textarea name="na_telefon" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-na-kommentar" rows="2"></textarea></label><button type="button" class="gp-na-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-na'));
+      rad.scrollIntoView({ block: 'start', behavior: 'smooth' });
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
       bindNaDragDrop(innehall);
       rad.querySelector('.gp-na-ta-bort').addEventListener('click', () => { rad.remove(); markInmatningDirty(); uppdateraInmatningRubrikCounts(); });
@@ -1926,19 +2403,65 @@ function renderInmatningSektion(sektion) {
       <label>Monument <textarea name="monument" class="gp-falt-expanderbar" rows="1">${esc(d.monument)}</textarea></label>
       <label>Gravens utformning <textarea name="gravens_utformning" class="gp-falt-expanderbar" rows="1">${esc(d.gravens_utformning)}</textarea></label>
       <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-      <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+      <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+      <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
       <label>Kommentar <textarea name="kommentar" rows="2">${esc(d.kommentar)}</textarea></label>
       <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
       <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+    const utfordatInp = innehall.querySelector('[name="utfordat_den"]');
+    const utfordatFel = document.getElementById('utfordat_den_fel');
+    if (utfordatInp && utfordatFel) {
+      utfordatInp.addEventListener('blur', () => {
+        const fore = utfordatInp.value;
+        normaliseraDatumFalt(utfordatInp);
+        if (utfordatInp.value !== fore) markInmatningDirty();
+        visaDatumValidering(utfordatInp, utfordatFel);
+      });
+      utfordatInp.addEventListener('input', () => visaDatumValidering(utfordatInp, utfordatFel));
+      visaDatumValidering(utfordatInp, utfordatFel);
+    }
     return;
   }
 
   if (sektion === 'skiss') {
     innehall.innerHTML = `
       <label>Storlek <textarea name="storlek" class="gp-falt-expanderbar" rows="1">${esc(d.storlek)}</textarea></label>
-      <p class="gp-skiss-info">Här kommer du senare kunna ange/croppa skiss från bilden.</p>`;
+      <div class="gp-skisser-lista" id="gp-skisser-lista"></div>
+      <button type="button" class="gp-lagg-till-skiss" id="gp-lagg-till-skiss">+ Lägg till skiss</button>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
+    const skisser = d.skisser || [];
+    const listEl = innehall.querySelector('#gp-skisser-lista');
+    const cacheQ = `_v=${cacheBust}`;
+    skisser.forEach((s, i) => {
+      const rad = document.createElement('div');
+      rad.className = 'gp-skiss-rad';
+      rad.dataset.skissId = String(s.id);
+      rad.innerHTML = `
+        <span class="gp-skiss-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span>
+        <div class="gp-skiss-miniatyr" data-skiss-id="${s.id}"></div>
+        <button type="button" class="gp-skiss-ta-bort" title="Ta bort skiss">Ta bort</button>`;
+      listEl.appendChild(rad);
+      renderSkissCropMiniatyr(rad.querySelector('.gp-skiss-miniatyr'), s);
+    });
+    bindSkissDragDrop(listEl);
+    innehall.querySelectorAll('.gp-skiss-ta-bort').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const rad = btn.closest('.gp-skiss-rad');
+        const id = rad?.dataset.skissId;
+        if (id && currentGravplatsId != null) {
+          fetch(`${API}/gravplats/${currentGravplatsId}/skisser/${id}`, { method: 'DELETE' })
+            .then((res) => {
+              if (res.ok) {
+                lastInmatningGravplatsId = null;
+                return ensureInmatningData();
+              }
+            })
+            .then((ok) => { if (ok) renderInmatningSektion('skiss'); });
+        }
+      });
+    });
+    innehall.querySelector('#gp-lagg-till-skiss')?.addEventListener('click', () => oppnaSkissModal());
     return;
   }
 
@@ -1965,6 +2488,7 @@ function renderInmatningSektion(sektion) {
       if (!rad) return;
       rad.dataset.gsIndex = String(newIndex);
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-gravsatt'));
+      rad.scrollIntoView({ block: 'start', behavior: 'smooth' });
       bindDatumValidering(rad);
       bindGravsattDragDrop(innehall);
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
@@ -2405,12 +2929,13 @@ function samlaInmatningData() {
     naRader.forEach((rad) => {
       const fornamn = (rad.querySelector('[name="na_fornamn"]')?.value ?? '').trim();
       const efternamn = (rad.querySelector('[name="na_efternamn"]')?.value ?? '').trim();
+      const yrke = (rad.querySelector('[name="na_yrke"]')?.value ?? '').trim();
       const adress = (rad.querySelector('[name="na_gatuadress"]')?.value ?? '').trim();
       const postnummer = (rad.querySelector('[name="na_postnummer"]')?.value ?? '').trim();
       const postort = (rad.querySelector('[name="na_postort"]')?.value ?? '').trim();
       const telefon = (rad.querySelector('[name="na_telefon"]')?.value ?? '').trim();
       const kommentar = (rad.querySelector('.gp-na-kommentar')?.value ?? '').trim();
-      if (fornamn || efternamn) narmast_anhoriga.push({ fornamn, efternamn, adress, postnummer, postort, telefon, kommentar, sort_order: narmast_anhoriga.length });
+      if (fornamn || efternamn) narmast_anhoriga.push({ fornamn, efternamn, yrke, adress, postnummer, postort, telefon, kommentar, sort_order: narmast_anhoriga.length });
     });
   }
 
