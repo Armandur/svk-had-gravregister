@@ -129,13 +129,6 @@
     }
   });
 
-  var sokGravsattaBtn = document.getElementById('startsida-sok-gravsatta');
-  if (sokGravsattaBtn) {
-    sokGravsattaBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-    });
-  }
-
   // Statistik
   const statListEl = document.getElementById('startsida-statistik-lista');
   if (statListEl) {

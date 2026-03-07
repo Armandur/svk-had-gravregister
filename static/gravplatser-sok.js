@@ -35,6 +35,49 @@ const SOK_KOLUMNER = [
   { id: 'antal_extramaterial', label: 'Antal extramaterial', defaultVisible: true },
 ];
 
+const INNEHAVARE_KOLUMNER = [
+  { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
+  { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
+  { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'yrke', label: 'Yrke', defaultVisible: true },
+  { id: 'adress', label: 'Adress', defaultVisible: true },
+  { id: 'kommentar', label: 'Kommentar', defaultVisible: true },
+];
+
+const ANHORIG_KOLUMNER = [
+  { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
+  { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
+  { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'yrke', label: 'Yrke', defaultVisible: true },
+  { id: 'adress', label: 'Adress', defaultVisible: true },
+  { id: 'postnummer', label: 'Postnummer', defaultVisible: true },
+  { id: 'postort', label: 'Ort', defaultVisible: true },
+  { id: 'telefon', label: 'Telefon', defaultVisible: true },
+  { id: 'kommentar', label: 'Kommentar', defaultVisible: true },
+];
+
+const GRAVSATTA_KOLUMNER = [
+  { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
+  { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
+  { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'position', label: 'Nr', defaultVisible: true },
+  { id: 'yrke', label: 'Yrke', defaultVisible: true },
+  { id: 'fodelse', label: 'Födelse', defaultVisible: true },
+  { id: 'dods', label: 'Död', defaultVisible: true },
+  { id: 'gravsatt_den', label: 'Gravsatt den', defaultVisible: true },
+  { id: 'urna', label: 'Urna/Kista', defaultVisible: true },
+  { id: 'kommentar', label: 'Kommentar', defaultVisible: true },
+];
+
+function getKolumnerForTyp(typ) {
+  switch (typ) {
+    case 'innehavare': return INNEHAVARE_KOLUMNER;
+    case 'narmast_anhoriga': return ANHORIG_KOLUMNER;
+    case 'gravsatta': return GRAVSATTA_KOLUMNER;
+    default: return SOK_KOLUMNER;
+  }
+}
+
 const SOK_KOLUMNER_STORAGE = 'gp-sok-kolumner';
 function getKolumnerVisibility() {
   try {
@@ -59,6 +102,7 @@ function setKolumnerVisibility(vis) {
 }
 
 let sokResultat = [];
+let sokResultatTyp = 'gravplatser';
 let sokCurrentPage = 1;
 let sokKolumnerVisible = getKolumnerVisibility();
 let sokSortCol = null;
@@ -248,6 +292,8 @@ async function koraAvanceradSok(e) {
   };
   set('kyrkogard', fd.get('kyrkogard'));
   set('kvarter', fd.get('kvarter'));
+  const resultatTyp = (fd.get('resultat_typ') || 'gravplatser').toString().trim();
+  params.set('resultat_typ', resultatTyp);
   set('innehavare_fornamn', fd.get('innehavare_fornamn'));
   set('innehavare_efternamn', fd.get('innehavare_efternamn'));
   set('innehavare_yrke', fd.get('innehavare_yrke'));
@@ -283,11 +329,16 @@ async function koraAvanceradSok(e) {
   try {
     const res = await fetch(API + '/gravplatser/avancerad-sok?' + params.toString());
     const data = await res.json();
-    sokResultat = data.gravplatser || [];
+    const typ = data.resultat_typ || 'gravplatser';
+    sokResultatTyp = typ;
+    sokResultat = data.gravplatser || data.innehavare || data.narmast_anhoriga || data.gravsatta || [];
     const antal = sokResultat.length;
     if (resultatRubrikEl) resultatRubrikEl.textContent = 'Träffar: ' + antal;
     if (sokResultat.length === 0) {
       resultatTomEl.hidden = false;
+      resultatTomEl.textContent = sokResultatTyp === 'gravplatser'
+        ? 'Inga gravplatser matchade filtren.'
+        : 'Inga träffar.';
       uppdateraPaginering();
     } else {
       resultatTomEl.hidden = true;
@@ -296,6 +347,7 @@ async function koraAvanceradSok(e) {
       renderResultatTabell();
       uppdateraPaginering();
     }
+    if (kolumnerBtn) kolumnerBtn.style.display = sokResultatTyp === 'gravplatser' ? '' : 'none';
   } catch (err) {
     if (resultatRubrikEl) resultatRubrikEl.textContent = 'Träffar';
     resultatTomEl.textContent = 'Kunde inte söka: ' + (err.message || 'nätverksfel');
@@ -304,7 +356,17 @@ async function koraAvanceradSok(e) {
   if (submitBtn) submitBtn.disabled = false;
 }
 
-function getSortValue(gp, colId) {
+function getSortValue(row, colId, typ) {
+  if (typ !== 'gravplatser') {
+    if (colId === 'fullstandigt') return (row.fullstandigt || '').trim() || '';
+    if (colId === 'fodelse') return formatDatumArManadDag(row.fodelse_ar, row.fodelse_manad, row.fodelse_dag);
+    if (colId === 'dods') return formatDatumArManadDag(row.dods_ar, row.dods_manad, row.dods_dag);
+    if (colId === 'position') return row.position != null ? Number(row.position) : 0;
+    const v = row[colId];
+    if (typeof v === 'number') return v;
+    return (v != null ? String(v) : '').trim();
+  }
+  const gp = row;
   switch (colId) {
     case 'fullstandigt':
       return (gp.fullstandigt || '').trim() || '';
@@ -325,7 +387,31 @@ function getSortValue(gp, colId) {
   }
 }
 
-function cellValue(gp, colId) {
+function formatDatumArManadDag(ar, manad, dag) {
+  if (ar == null && manad == null && dag == null) return '';
+  const a = ar != null ? String(ar) : '';
+  const m = manad != null ? String(manad).padStart(2, '0') : '';
+  const d = dag != null ? String(dag).padStart(2, '0') : '';
+  if (a && m && d) return `${a}-${m}-${d}`;
+  if (a) return a;
+  return '';
+}
+
+function cellValue(row, colId, typ) {
+  if (typ !== 'gravplatser') {
+    if (colId === 'fullstandigt') return (row.fullstandigt || '').trim() || '–';
+    if (colId === 'fodelse') {
+      const s = formatDatumArManadDag(row.fodelse_ar, row.fodelse_manad, row.fodelse_dag);
+      return s || '–';
+    }
+    if (colId === 'dods') {
+      const s = formatDatumArManadDag(row.dods_ar, row.dods_manad, row.dods_dag);
+      return s || '–';
+    }
+    const v = row[colId];
+    return v != null && v !== '' ? String(v) : '–';
+  }
+  const gp = row;
   switch (colId) {
     case 'fullstandigt':
       return (gp.fullstandigt || '').trim() || '–';
@@ -348,7 +434,11 @@ function cellValue(gp, colId) {
 
 function renderResultatTabell() {
   if (!resultatTabellHead || !resultatTabellBody) return;
-  const cols = SOK_KOLUMNER.filter((c) => sokKolumnerVisible[c.id]);
+  const allCols = getKolumnerForTyp(sokResultatTyp);
+  const cols = sokResultatTyp === 'gravplatser'
+    ? allCols.filter((c) => sokKolumnerVisible[c.id])
+    : allCols;
+  if (sokSortCol && !cols.some((c) => c.id === sokSortCol)) sokSortCol = null;
   resultatTabellHead.innerHTML = '';
   resultatTabellBody.innerHTML = '';
 
@@ -376,8 +466,8 @@ function renderResultatTabell() {
 
   const sorted = sokSortCol
     ? [...sokResultat].sort((a, b) => {
-        const va = getSortValue(a, sokSortCol);
-        const vb = getSortValue(b, sokSortCol);
+        const va = getSortValue(a, sokSortCol, sokResultatTyp);
+        const vb = getSortValue(b, sokSortCol, sokResultatTyp);
         const isNum = typeof va === 'number' && typeof vb === 'number';
         if (isNum) return sokSortDir === 'asc' ? va - vb : vb - va;
         const sa = String(va);
@@ -395,17 +485,17 @@ function renderResultatTabell() {
   const start = (page - 1) * perPage;
   const slice = sorted.slice(start, start + perPage);
 
-  slice.forEach((gp) => {
+  slice.forEach((row) => {
     const tr = document.createElement('tr');
     cols.forEach((c) => {
       const td = document.createElement('td');
       if (c.id === 'fullstandigt') {
         const a = document.createElement('a');
-        a.href = '/gravplatser/' + slugFromFullstandigt(gp.fullstandigt);
-        a.textContent = cellValue(gp, c.id);
+        a.href = '/gravplatser/' + slugFromFullstandigt(row.fullstandigt);
+        a.textContent = cellValue(row, c.id, sokResultatTyp);
         td.appendChild(a);
       } else {
-        td.textContent = cellValue(gp, c.id);
+        td.textContent = cellValue(row, c.id, sokResultatTyp);
       }
       tr.appendChild(td);
     });

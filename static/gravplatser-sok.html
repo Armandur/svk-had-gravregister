@@ -96,6 +96,10 @@
     .gp-sok-resultat-tom { color: #64748b; font-style: italic; margin-top: 0.5rem; }
     .gp-sok-lank-bladdra { display: inline-block; margin-top: 1.5rem; color: var(--accent); }
     .gp-sok-lank-bladdra + .gp-sok-lank-bladdra { margin-top: 0.5rem; }
+    .gp-sok-typ-wrap { margin-bottom: 1rem; }
+    .gp-sok-typ-wrap h2 { font-size: 1rem; margin: 0 0 0.5rem 0; color: #475569; }
+    .gp-sok-typ-rad { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+    .gp-sok-typ-rad label { display: flex; align-items: center; gap: 0.35rem; font-size: 1rem; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -107,6 +111,15 @@
     <h1>Avancerad sökning</h1>
 
     <form id="gp-sok-form" class="gp-sok-form">
+      <div class="gp-sok-typ-wrap">
+        <h2>Sök i</h2>
+        <div class="gp-sok-typ-rad" role="group" aria-label="Resultattyp">
+          <label><input type="radio" name="resultat_typ" value="gravplatser" checked /> Gravplatser</label>
+          <label><input type="radio" name="resultat_typ" value="innehavare" /> Gravrättsinnehavare</label>
+          <label><input type="radio" name="resultat_typ" value="narmast_anhoriga" /> Närmast anhöriga</label>
+          <label><input type="radio" name="resultat_typ" value="gravsatta" /> Gravsatta</label>
+        </div>
+      </div>
       <div class="gp-sok-form-grid">
         <section class="gp-sok-sektion">
           <h2>Kyrkogård och kvarter</h2>

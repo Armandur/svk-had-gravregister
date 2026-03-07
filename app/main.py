@@ -815,6 +815,7 @@ def _ar_ur_datumstr(s: str | None) -> int | None:
 @app.get("/api/gravplatser/avancerad-sok")
 async def avancerad_sok_gravplatser(
     db: Session = Depends(get_db),
+    resultat_typ: str = "gravplatser",
     kyrkogard: str | None = None,
     kvarter: str | None = None,
     innehavare_fornamn: str | None = None,
@@ -973,6 +974,100 @@ async def avancerad_sok_gravplatser(
     q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 5000)))
     rows = q.all()
     ids = [g.id for g in rows]
+    fullstandigt_map = {g.id: _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer) for g in rows}
+
+    if resultat_typ == "innehavare":
+        inv_rows = (
+            db.query(GravplatsInnehavare)
+            .filter(GravplatsInnehavare.gravplats_id.in_(ids))
+            .order_by(GravplatsInnehavare.gravplats_id, GravplatsInnehavare.sort_order, GravplatsInnehavare.id)
+            .all()
+        )
+        out_inv = []
+        for inv in inv_rows:
+            out_inv.append({
+                "gravplats_id": inv.gravplats_id,
+                "fullstandigt": fullstandigt_map.get(inv.gravplats_id, ""),
+                "fornamn": inv.fornamn or "",
+                "efternamn": inv.efternamn or "",
+                "yrke": inv.yrke or "",
+                "adress": inv.adress or "",
+                "kommentar": inv.kommentar or "",
+            })
+        return {"resultat_typ": "innehavare", "innehavare": out_inv, "antal": len(out_inv)}
+
+    if resultat_typ == "narmast_anhoriga":
+        na_rows = (
+            db.query(GravplatsNarmastAnhorig)
+            .filter(GravplatsNarmastAnhorig.gravplats_id.in_(ids))
+            .order_by(GravplatsNarmastAnhorig.gravplats_id, GravplatsNarmastAnhorig.sort_order, GravplatsNarmastAnhorig.id)
+            .all()
+        )
+        out_na = []
+        for na in na_rows:
+            out_na.append({
+                "gravplats_id": na.gravplats_id,
+                "fullstandigt": fullstandigt_map.get(na.gravplats_id, ""),
+                "fornamn": na.fornamn or "",
+                "efternamn": na.efternamn or "",
+                "yrke": getattr(na, "yrke", None) or "",
+                "adress": na.adress or "",
+                "postnummer": na.postnummer or "",
+                "postort": na.postort or "",
+                "telefon": na.telefon or "",
+                "kommentar": getattr(na, "kommentar", None) or "",
+            })
+        return {"resultat_typ": "narmast_anhoriga", "narmast_anhoriga": out_na, "antal": len(out_na)}
+
+    if resultat_typ == "gravsatta":
+        gs_q = db.query(Gravsatt).filter(Gravsatt.gravplats_id.in_(ids))
+        if gravsatt_fornamn and gravsatt_fornamn.strip():
+            gs_q = gs_q.filter(Gravsatt.fornamn.ilike("%" + gravsatt_fornamn.strip() + "%"))
+        if gravsatt_efternamn and gravsatt_efternamn.strip():
+            gs_q = gs_q.filter(Gravsatt.efternamn.ilike("%" + gravsatt_efternamn.strip() + "%"))
+        if gravsatt_fodda_fran is not None:
+            gs_q = gs_q.filter(Gravsatt.fodelse_ar >= gravsatt_fodda_fran)
+        if gravsatt_fodda_till is not None:
+            gs_q = gs_q.filter(Gravsatt.fodelse_ar <= gravsatt_fodda_till)
+        if gravsatt_doda_fran is not None:
+            gs_q = gs_q.filter(Gravsatt.dods_ar >= gravsatt_doda_fran)
+        if gravsatt_doda_till is not None:
+            gs_q = gs_q.filter(Gravsatt.dods_ar <= gravsatt_doda_till)
+        gs_rows = (
+            gs_q.order_by(Gravsatt.gravplats_id, Gravsatt.position, Gravsatt.id)
+            .all()
+        )
+        out_gs = []
+        for gs in gs_rows:
+            if gravsatt_gravsatta_fran is not None or gravsatt_gravsatta_till is not None:
+                ar = _ar_ur_datumstr(gs.gravsatt_den) if gs.gravsatt_den else None
+                if ar is None:
+                    continue
+                if gravsatt_gravsatta_fran is not None and ar < gravsatt_gravsatta_fran:
+                    continue
+                if gravsatt_gravsatta_till is not None and ar > gravsatt_gravsatta_till:
+                    continue
+            out_gs.append({
+                "gravplats_id": gs.gravplats_id,
+                "fullstandigt": fullstandigt_map.get(gs.gravplats_id, ""),
+                "position": gs.position,
+                "ar_beteckning": getattr(gs, "ar_beteckning", False),
+                "fornamn": gs.fornamn or "",
+                "efternamn": gs.efternamn or "",
+                "yrke": getattr(gs, "yrke", None) or "",
+                "adress": gs.adress or "",
+                "fodelse_ar": gs.fodelse_ar,
+                "fodelse_manad": gs.fodelse_manad,
+                "fodelse_dag": gs.fodelse_dag,
+                "dods_ar": gs.dods_ar,
+                "dods_manad": gs.dods_manad,
+                "dods_dag": gs.dods_dag,
+                "gravsatt_den": gs.gravsatt_den or "",
+                "urna": gs.urna or "",
+                "kommentar": gs.kommentar or "",
+            })
+        return {"resultat_typ": "gravsatta", "gravsatta": out_gs, "antal": len(out_gs)}
+
     inv_map = {}
     na_map = {}
     gs_map = {}
@@ -1034,7 +1129,7 @@ async def avancerad_sok_gravplatser(
         return n if n > 0 else -1
 
     out.sort(key=lambda x: (x["kyrkogard"] or "", x["kvarter"] or "", ledande_tal(x.get("gravplatsnummer") or ""), (x.get("gravplatsnummer") or "")))
-    return {"gravplatser": out, "antal": len(out)}
+    return {"resultat_typ": "gravplatser", "gravplatser": out, "antal": len(out)}
 
 
 def _format_fullstandigt(kyrkogard: str | None, kvarter: str, gravplatsnummer: str) -> str:
