@@ -38,8 +38,10 @@ let ocrVantarPaBild = false;
 let ocrJustAvslutad = false;
 /** Ikonknapp för "Markera område" som visas bredvid fokuserat fält (skapas vid behov). */
 let ocrFaltIkonBtn = null;
-/** 'ef' | 'fe' när användaren valt EF/FE och väntar på bildmarkering; null annars. */
+/** 'ef' | 'fe' när användaren valt EF/FE och väntar på bildmarkering; null annars. 'f' = föddenamn (f. ), samma flöde. */
 let ocrNamnLage = null;
+/** När ocrNamnLage === 'f': efternamnsfältet där " f. " + extraherad text ska läggas till. */
+let ocrFoddenamnFalt = null;
 /** I namn-split-modal: valt delningsindex (0..n) eller null om användaren inte klickat. */
 let ocrNamnSplitIndex = null;
 /** 'ef' | 'fe' när modalen visar namn-split; null annars. */
@@ -137,6 +139,7 @@ function visaOcrIkonForFalt(input) {
       if (ocrVantarPaBild) {
         ocrVantarPaBild = false;
         ocrNamnLage = null;
+        ocrFoddenamnFalt = null;
         uppdateraOcrKnapp();
         return;
       }
@@ -199,6 +202,26 @@ function visaOcrIkonForFalt(input) {
         uppdateraOcrKnapp();
       });
     }
+    if (!window.gpOcrBtnF) {
+      window.gpOcrBtnF = document.createElement('button');
+      window.gpOcrBtnF.type = 'button';
+      window.gpOcrBtnF.className = 'gp-ocr-falt-ikon gp-ocr-falt-ikon-f';
+      window.gpOcrBtnF.setAttribute('aria-label', 'Lägg till f. föddenamn – markera område på bild');
+      window.gpOcrBtnF.title = 'Lägg till f. (föddenamn) – markera område på bild med flicknamnet; texten läggs till i slutet av efternamnsfältet';
+      window.gpOcrBtnF.textContent = 'f.';
+      window.gpOcrBtnF.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const wrap = ev.target.closest('.gp-ocr-falt-wrap');
+        const efternamnFalt = wrap && wrap.querySelector('[name="inv_efternamn"], [name="na_efternamn"], [name^="gs_efternamn_"]');
+        if (!efternamnFalt || isBeteckningFalt(efternamnFalt)) return;
+        ocrFoddenamnFalt = efternamnFalt;
+        ocrNamnLage = 'f';
+        ocrVantarPaBild = true;
+        const g = ev.target.closest('.gp-ocr-falt-ikon-grupp');
+        if (g) g.remove();
+        uppdateraOcrKnapp();
+      });
+    }
   }
   if (isNamnFalt && par) {
     if (arFornamn) {
@@ -230,6 +253,7 @@ function visaOcrIkonForFalt(input) {
       groupEfFe.innerHTML = '';
       groupEfFe.appendChild(window.gpOcrBtnEf);
       groupEfFe.appendChild(window.gpOcrBtnFe);
+      groupEfFe.appendChild(window.gpOcrBtnF);
       if (!wrapEfter.contains(groupEfFe)) wrapEfter.appendChild(groupEfFe);
     } else if (arEfternamn) {
       wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
@@ -251,6 +275,7 @@ function visaOcrIkonForFalt(input) {
       group.appendChild(ocrFaltIkonBtn);
       group.appendChild(window.gpOcrBtnEf);
       group.appendChild(window.gpOcrBtnFe);
+      group.appendChild(window.gpOcrBtnF);
       if (!wrap.contains(group)) wrap.appendChild(group);
     } else {
       wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
@@ -1343,8 +1368,27 @@ function startOcrOverlay(fig, initialEvent) {
       if (!ocrTargetElement) return;
       if (trimmed === '') {
         if (arDatumFaltForOcr(ocrTargetElement)) return;
+        if (ocrNamnLage === 'f') {
+          ocrNamnLage = null;
+          ocrFoddenamnFalt = null;
+        }
         ocrNamnLage = null;
         visaIkonSomTomExtrahering();
+        return;
+      }
+      if (ocrNamnLage === 'f') {
+        const falt = ocrFoddenamnFalt || getNamnParFalt(ocrTargetElement)?.efternamn;
+        ocrNamnLage = null;
+        ocrFoddenamnFalt = null;
+        if (falt) {
+          const val = (falt.value || '').trim();
+          falt.value = val ? val + ' f. ' + trimmed : ' f. ' + trimmed;
+          markInmatningDirty();
+          if (falt.tagName === 'TEXTAREA') autoExpandTextarea(falt);
+          falt.focus();
+          const len = falt.value.length;
+          try { falt.setSelectionRange(len, len); } catch (_) {}
+        }
         return;
       }
       if (ocrNamnLage) {
@@ -1528,6 +1572,7 @@ function visaIkonSomTomExtrahering() {
     group.appendChild(ocrFaltIkonBtn);
     if (window.gpOcrBtnEf) group.appendChild(window.gpOcrBtnEf);
     if (window.gpOcrBtnFe) group.appendChild(window.gpOcrBtnFe);
+    if (window.gpOcrBtnF) group.appendChild(window.gpOcrBtnF);
     wrap.appendChild(group);
   } else {
     wrap.appendChild(ocrFaltIkonBtn);
@@ -1968,7 +2013,7 @@ document.getElementById('gp-inmatning')?.addEventListener('focusout', (e) => {
   if (!e.target.matches('input, textarea')) return;
   const inmatning = document.getElementById('gp-inmatning');
   const next = e.relatedTarget;
-  if (next && inmatning && (inmatning.contains(next) || next === ocrFaltIkonBtn || next === window.gpOcrBtnEf || next === window.gpOcrBtnFe)) return;
+  if (next && inmatning && (inmatning.contains(next) || next === ocrFaltIkonBtn || next === window.gpOcrBtnEf || next === window.gpOcrBtnFe || next === window.gpOcrBtnF)) return;
   if (!ocrFaltIkonBtn?.parentElement) return;
   let wrapToUnwrap = ocrFaltIkonBtn.parentElement;
   if (wrapToUnwrap.classList?.contains('gp-ocr-falt-ikon-grupp')) wrapToUnwrap = wrapToUnwrap.parentElement;
@@ -1981,6 +2026,8 @@ document.getElementById('gp-inmatning')?.addEventListener('focusout', (e) => {
 document.getElementById('gp-btn-ocr-omrade')?.addEventListener('click', () => {
   if (ocrVantarPaBild) {
     ocrVantarPaBild = false;
+    ocrNamnLage = null;
+    ocrFoddenamnFalt = null;
     uppdateraOcrKnapp();
     return;
   }
