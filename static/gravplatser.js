@@ -918,14 +918,16 @@ function openLightboxHalvor(index) {
   if (lightboxHalvorUrls.length === 0) return;
   lightboxMode = 'halvor';
   lightboxIndex = Math.max(0, Math.min(index, lightboxHalvorUrls.length - 1));
+  lightboxZoom = 1;
   const lightbox = document.getElementById('gp-lightbox');
   const imgEl = document.getElementById('gp-lightbox-img');
   if (lightbox && imgEl) {
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
     imgEl.alt = '';
     imgEl.style.transform = '';
+    imgEl.onload = () => lightboxZoomApplicera();
     const z = document.getElementById('gp-lightbox-zoom');
-    if (z) z.hidden = true;
+    if (z) z.hidden = false;
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -1006,7 +1008,8 @@ function lightboxZoomApplicera() {
   const imgEl = document.getElementById('gp-lightbox-img');
   const innerEl = document.getElementById('gp-lightbox-img-inner');
   const nivaEl = document.getElementById('gp-lightbox-zoom-niva');
-  if (lightboxMode === 'skisser' && innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
+  const kanZooma = (lightboxMode === 'skisser' || lightboxMode === 'halvor') && innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0;
+  if (kanZooma) {
     const w = Math.round(imgEl.naturalWidth * lightboxZoom);
     const h = Math.round(imgEl.naturalHeight * lightboxZoom);
     innerEl.style.width = w + 'px';
@@ -1025,13 +1028,13 @@ function lightboxZoomApplicera() {
 }
 
 function lightboxZoomIn() {
-  if (lightboxMode !== 'skisser') return;
+  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor') return;
   lightboxZoom = Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom * LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
 
 function lightboxZoomOut() {
-  if (lightboxMode !== 'skisser') return;
+  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor') return;
   lightboxZoom = Math.max(LIGHTBOX_ZOOM_MIN, lightboxZoom / LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
@@ -1055,6 +1058,7 @@ function lightboxPrev() {
   if (!imgEl) return;
   if (lightboxMode === 'halvor') {
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
+    imgEl.onload = () => lightboxZoomApplicera();
   } else if (lightboxMode === 'skisser') {
     const s = lightboxSkisserList[lightboxIndex];
     lightboxZoom = 1;
@@ -1078,6 +1082,7 @@ function lightboxNext() {
   if (!imgEl) return;
   if (lightboxMode === 'halvor') {
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
+    imgEl.onload = () => lightboxZoomApplicera();
   } else if (lightboxMode === 'skisser') {
     const s = lightboxSkisserList[lightboxIndex];
     lightboxZoom = 1;
@@ -2397,17 +2402,24 @@ function renderInmatningSektion(sektion) {
 
   if (sektion === 'gravplatsen') {
     innehall.innerHTML = `
-      <label>Underhåll inbetalt för all framtid den <textarea name="underhall_text" class="gp-falt-expanderbar" rows="1">${esc(d.underhall_text)}</textarea></label>
-      <label><input type="checkbox" name="underhall_overstruket" ${d.underhall_overstruket ? 'checked' : ''} /> "För all framtid" överstruket</label>
-      <label>Gravrättstid <textarea name="gravrattstid" class="gp-falt-expanderbar" rows="1">${esc(d.gravrattstid)}</textarea></label>
-      <label>Monument <textarea name="monument" class="gp-falt-expanderbar" rows="1">${esc(d.monument)}</textarea></label>
-      <label>Gravens utformning <textarea name="gravens_utformning" class="gp-falt-expanderbar" rows="1">${esc(d.gravens_utformning)}</textarea></label>
-      <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-      <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
-      <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
-      <label>Kommentar <textarea name="kommentar" rows="2">${esc(d.kommentar)}</textarea></label>
-      <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
-      <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>`;
+      <div class="gp-gravplatsen-tvakolumn">
+        <div class="gp-gravplatsen-kolumn gp-gravplatsen-anteckningar">
+          <h4 class="gp-inmatning-delrubrik">Anteckningar</h4>
+          <label>Underhåll inbetalt för all framtid den <textarea name="underhall_text" class="gp-falt-expanderbar" rows="1">${esc(d.underhall_text)}</textarea></label>
+          <label><input type="checkbox" name="underhall_overstruket" ${d.underhall_overstruket ? 'checked' : ''} /> "För all framtid" överstruket</label>
+          <label>Gravrättstid <textarea name="gravrattstid" class="gp-falt-expanderbar" rows="1">${esc(d.gravrattstid)}</textarea></label>
+          <label>Monument <textarea name="monument" class="gp-falt-expanderbar" rows="1">${esc(d.monument)}</textarea></label>
+          <label>Gravens utformning <textarea name="gravens_utformning" class="gp-falt-expanderbar" rows="1">${esc(d.gravens_utformning)}</textarea></label>
+        </div>
+        <div class="gp-gravplatsen-kolumn gp-gravplatsen-ovrigt">
+          <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
+          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+          <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
+          <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
+          <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
+          <label>Kommentar <textarea name="kommentar" rows="2">${esc(d.kommentar)}</textarea></label>
+        </div>
+      </div>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
     const utfordatInp = innehall.querySelector('[name="utfordat_den"]');
     const utfordatFel = document.getElementById('utfordat_den_fel');
@@ -2870,13 +2882,13 @@ function blockGravsatt(idx, g) {
     <div class="gp-gravsatt-block" data-gs-index="${idx}">
       <h4><span class="gp-gravsatt-drag-handle" draggable="true" title="Dra för att ändra ordning">⋮⋮</span> Gravsatt ${pos}</h4>
       ${beteckning}
-      <div class="gp-gravsatt-rad">
+      <div class="gp-gravsatt-rad gp-gravsatt-rad-namn-yrke">
         <label>Förnamn <textarea name="gs_fornamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.fornamn)}</textarea></label>
         <label>Efternamn <textarea name="gs_efternamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.efternamn)}</textarea></label>
-      </div>
-      <div class="gp-gravsatt-rad">
-        <label>Yrke <textarea name="gs_yrke_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.yrke || '')}</textarea></label>
-        <label>Adress <textarea name="gs_adress_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.adress)}</textarea></label>
+        <span class="gp-gravsatt-rad-hoger">
+          <label>Yrke <textarea name="gs_yrke_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.yrke || '')}</textarea></label>
+          <label>Adress <textarea name="gs_adress_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.adress)}</textarea></label>
+        </span>
       </div>
       <div class="gp-gravsatt-rad">
         <label>Födelsedatum <textarea name="gs_fodelse_datum_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_fodelse_datum_fel_${idx}">${esc(fodelseDatum)}</textarea></label>
@@ -2888,12 +2900,12 @@ function blockGravsatt(idx, g) {
         <span class="gp-datum-fel" id="gs_dods_datum_fel_${idx}" hidden aria-live="polite"></span>
         <label>Db. nummer <textarea name="gs_dodsbok_nr_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.dodsbok_nr)}</textarea></label>
       </div>
-      <div class="gp-gravsatt-rad">
-        <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
-        <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
-      </div>
-      <div class="gp-gravsatt-rad">
-        <label>Urna/Kista <select name="gs_urna_${idx}">${urnaOptions}</select></label>
+      <div class="gp-gravsatt-rad gp-gravsatt-rad-gravsatt-urna">
+        <span class="gp-gravsatt-gravsatt-den-wrap">
+          <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
+          <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
+        </span>
+        <label class="gp-gravsatt-urna-hoger">Urna/Kista <select name="gs_urna_${idx}">${urnaOptions}</select></label>
       </div>
       <div class="gp-gravsatt-rad">
         <label>Kommentar <textarea name="gs_kommentar_${idx}" class="gp-falt-expanderbar" rows="2">${esc(g.kommentar || '')}</textarea></label>
@@ -3077,7 +3089,7 @@ uppdateraInmatningSparaKnapp();
 function toggleRedigeraVy() {
   if (inmatningRedigerar) {
     if (inmatningDirty) {
-      if (!confirm('Du har osparade ändringar. Visa vy utan att spara?')) return;
+      if (!confirm('Du har osparade ändringar. Sluta redigera utan att spara?')) return;
       inmatningDirty = false;
     }
     inmatningRedigerar = false;
@@ -3097,7 +3109,7 @@ function toggleRedigeraVy() {
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = false;
     const btn = document.getElementById('gp-btn-redigera');
-    if (btn) btn.textContent = 'Visa vy';
+    if (btn) btn.textContent = 'Sluta redigera gravplats';
     const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
     sektioner.forEach((s) => {
       const innehall = document.getElementById(`gp-innehall-${s}`);

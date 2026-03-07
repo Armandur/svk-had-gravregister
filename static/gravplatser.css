@@ -745,7 +745,7 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   filter: brightness(1.1);
 }
 
-/* Färdigtranskriberad-knapp: grön när klar, röd när ej klar; i Visa vy är den inte klickbar */
+/* Färdigtranskriberad-knapp: grön när klar, röd när ej klar; i läsvy (slutat redigera) är den inte klickbar */
 .gp-inmatning-btn-fardigtranskriberad {
   padding: 0.35rem 0.75rem;
   font-size: 0.9rem;
@@ -1125,6 +1125,24 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   color: var(--text-muted, #555);
 }
 
+/* Gravplatsen: två kolumner – Anteckningar vänster, Övrigt höger */
+.gp-gravplatsen-tvakolumn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem 2rem;
+  align-items: start;
+}
+
+.gp-gravplatsen-kolumn .gp-inmatning-delrubrik:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .gp-gravplatsen-tvakolumn {
+    grid-template-columns: 1fr;
+  }
+}
+
 .gp-inmatning label {
   display: flex;
   flex-direction: column;
@@ -1337,6 +1355,30 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   gap: 0.5rem;
   align-items: flex-start;
   margin-bottom: 0.35rem;
+}
+
+/* Yrke och Adress på samma rad som Förnamn och Efternamn, normalt mellanrum */
+.gp-gravsatt-rad-namn-yrke .gp-gravsatt-rad-hoger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+/* Urna/Kista-dropdown på samma rad som Gravsatt den, normalt mellanrum */
+.gp-gravsatt-rad-gravsatt-urna {
+  align-items: flex-start;
+}
+
+.gp-gravsatt-rad-gravsatt-urna .gp-gravsatt-gravsatt-den-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.gp-gravsatt-rad-gravsatt-urna .gp-gravsatt-gravsatt-den-wrap .gp-datum-fel {
+  flex-basis: 100%;
 }
 
 .gp-gravsatt-rad label {
