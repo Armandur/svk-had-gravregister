@@ -14,6 +14,16 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    """Användarkonto för inloggning. Admin kan skapa/återställa lösenord."""
+    __tablename__ = "user"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column()
+    is_admin: Mapped[bool] = mapped_column(default=False)
+
+
 class MappConfig(Base):
     """Konfiguration per källdata-mapp (kyrkogård, gravkvarter, försättssidor)."""
     __tablename__ = "mapp_config"
@@ -137,6 +147,7 @@ class GravplatsInmatning(Base):
     kommentar: Mapped[str] = mapped_column(default="")
     skiss_bild: Mapped[bytes | None] = mapped_column(nullable=True)  # PNG/JPEG blob
     fardigtranskriberad: Mapped[bool] = mapped_column(default=False)  # All info från bilderna har förts över
+    version: Mapped[int] = mapped_column(default=0)  # Optimistic locking: ökas vid varje uppdatering
 
 
 class GravplatsSkiss(Base):
@@ -261,6 +272,9 @@ def init_db():
             cols_inm = [row[1] for row in r]
             if "fardigtranskriberad" not in cols_inm:
                 conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN fardigtranskriberad INTEGER DEFAULT 0"))
+                conn.commit()
+            if "version" not in cols_inm:
+                conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN version INTEGER DEFAULT 0"))
                 conn.commit()
         except Exception:
             pass

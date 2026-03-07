@@ -354,7 +354,7 @@ function sorteradLista(lista) {
 
 async function fetchTradData() {
   try {
-    const res = await fetch(`${API}/gravplatser/trad`);
+    const res = await fetch(`${API}/gravplatser/trad`, { credentials: 'include' });
     const data = await res.json();
     tradData = {
       kyrkogardar: data.kyrkogardar || [],
@@ -445,7 +445,7 @@ async function fyllGravplatsLista(kyrkogard, kvarter, listEl) {
   if (!gravplatserTradCache[cacheKey]) {
     try {
       const params = new URLSearchParams({ kyrkogard: kyrkogard, kvarter: kvarter });
-      const res = await fetch(`${API}/gravplatser?${params}`);
+      const res = await fetch(`${API}/gravplatser?${params}`, { credentials: 'include' });
       const data = await res.json();
       gravplatserTradCache[cacheKey] = sorteradLista(data.gravplatser || []);
     } catch (e) {
@@ -505,7 +505,7 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
   const innehall = document.getElementById('gp-innehall');
   try {
     const params = new URLSearchParams({ kyrkogard: valdKyrkogard, kvarter: valdKvarter });
-    const res = await fetch(`${API}/gravplatser?${params}`);
+    const res = await fetch(`${API}/gravplatser?${params}`, { credentials: 'include' });
     const data = await res.json();
     gravplatserLista = sorteradLista(data.gravplatser || []);
     if (targetGravplatsnummer != null && targetGravplatsnummer !== '') {
@@ -521,7 +521,11 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
     await uppdateraVy();
   } catch (e) {
     gravplatserLista = [];
-    if (innehall) innehall.querySelector('#gp-rubrik').textContent = 'Kunde inte ladda gravplatser.';
+    if (innehall) {
+      const rubrik = innehall.querySelector('#gp-rubrik');
+      if (rubrik) rubrik.textContent = 'Kunde inte ladda gravplatser.';
+    }
+    document.title = 'Gravplatser';
   }
 }
 
@@ -535,6 +539,7 @@ async function uppdateraVy() {
   const n = gravplatserLista.length;
   if (n === 0) {
     rubrikEl.textContent = `Inga gravplatser i ${valdKyrkogard} ${valdKvarter}.`;
+    document.title = 'Gravplatser';
     halvorEl.innerHTML = '';
     if (btnTillbaka) btnTillbaka.disabled = true;
     if (btnNasta) btnNasta.disabled = true;
@@ -563,6 +568,7 @@ async function uppdateraVy() {
   const mappNamn = gp.mapp_namn;
 
   rubrikEl.textContent = gp.fullstandigt || [gp.kyrkogard, gp.kvarter, gp.gravplatsnummer].filter(Boolean).join(' ') || '–';
+  document.title = rubrikEl.textContent || 'Gravplats';
 
   await ensureTradData(gp.kyrkogard);
   const nastaKv = getNastaKvarter(gp.kyrkogard, gp.kvarter);
@@ -597,7 +603,7 @@ async function uppdateraVy() {
     if (gp.kyrkogard) params.set('kyrkogard', gp.kyrkogard);
     if (gp.kvarter) params.set('kvarter', gp.kvarter);
     if (gp.gravplatsnummer) params.set('gravplatsnummer', gp.gravplatsnummer);
-    const halvorRes = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats/halvor?${params}`);
+    const halvorRes = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats/halvor?${params}`, { credentials: 'include' });
     if (!halvorRes.ok) throw new Error('Kunde inte hämta halvor');
     const halvorData = await halvorRes.json();
     const halvor = halvorData.halvor || [];
@@ -663,6 +669,7 @@ async function uppdateraVy() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content_sida: contentSida, halva: halva }),
+            credentials: 'include',
           });
           if (!res.ok) throw new Error('Kunde inte uppdatera');
           await uppdateraVy();
@@ -792,6 +799,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ redan_halva: !redanHalva }),
+          credentials: 'include',
         });
         if (!res.ok) throw new Error('Kunde inte uppdatera');
         await uppdateraVy();
@@ -882,6 +890,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dold: false }),
+            credentials: 'include',
           });
           if (!res.ok) throw new Error('Kunde inte uppdatera');
           await uppdateraVy();
@@ -1886,7 +1895,7 @@ async function skapaRapportUtskrift() {
   if (gp.gravplatsnummer) params.set('gravplatsnummer', gp.gravplatsnummer);
   let halvorData;
   try {
-    const halvorRes = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats/halvor?${params}`);
+    const halvorRes = await fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats/halvor?${params}`, { credentials: 'include' });
     if (!halvorRes.ok) throw new Error('Kunde inte hämta bilder');
     halvorData = await halvorRes.json();
   } catch (e) {
@@ -2116,7 +2125,7 @@ async function ensureInmatningData() {
   if (lastInmatningGravplatsId === currentGravplatsId && inmatningData) return true;
   const idForFetch = currentGravplatsId;
   try {
-    const res = await fetch(`${API}/gravplats/${idForFetch}/inmatning`);
+    const res = await fetch(`${API}/gravplats/${idForFetch}/inmatning`, { credentials: 'include' });
     if (!res.ok) throw new Error('Kunde inte hämta inmatning');
     const data = await res.json();
     // Acceptera endast data för aktuell gravplats (undvik att visa 1+2:s data på 3 vid snabb navigering)
@@ -2309,6 +2318,7 @@ function bindSkissDragDrop(container) {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skiss_ids: newIds }),
+        credentials: 'include',
       });
       if (res.ok) {
         await ensureInmatningData();
@@ -2454,6 +2464,7 @@ function oppnaSkissModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        credentials: 'include',
       });
       if (!res.ok) {
         alert('Kunde inte spara skiss.');
@@ -2776,7 +2787,7 @@ function renderInmatningSektion(sektion) {
         const rad = btn.closest('.gp-skiss-rad');
         const id = rad?.dataset.skissId;
         if (id && currentGravplatsId != null) {
-          fetch(`${API}/gravplats/${currentGravplatsId}/skisser/${id}`, { method: 'DELETE' })
+          fetch(`${API}/gravplats/${currentGravplatsId}/skisser/${id}`, { method: 'DELETE', credentials: 'include' })
             .then((res) => {
               if (res.ok) {
                 lastInmatningGravplatsId = null;
@@ -3359,6 +3370,7 @@ function samlaInmatningData() {
     gravsatta,
     skiss_bild_b64: null,
     extramaterial_kommentarer,
+    version: inmatningData != null && typeof inmatningData.version === 'number' ? inmatningData.version : null,
   };
 }
 
@@ -3393,7 +3405,18 @@ async function sparaInmatning() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
+    if (res.status === 409) {
+      const data = await res.json().catch(() => ({}));
+      visaSparStatus(data.detail || 'Gravplatsen har ändrats av någon annan. Ladda om sidan.', false);
+      lastInmatningGravplatsId = null;
+      inmatningData = null;
+      await ensureInmatningData();
+      const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+      sektioner.forEach((s) => renderInmatningSektion(s));
+      return;
+    }
     if (!res.ok) throw new Error('Kunde inte spara');
     const data = await res.json();
     if (data.gravplats_id != null && data.gravplats_id === currentGravplatsId) {
@@ -3492,7 +3515,16 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      credentials: 'include',
     });
+    if (res.status === 409) {
+      lastInmatningGravplatsId = null;
+      inmatningData = null;
+      await ensureInmatningData();
+      uppdateraFardigtranskriberadKnapp();
+      visaSparStatus('Gravplatsen har ändrats av någon annan. Ladda om sidan.', false);
+      return;
+    }
     if (!res.ok) throw new Error('Kunde inte spara');
     const data = await res.json();
     if (data.gravplats_id != null && data.gravplats_id === currentGravplatsId) {

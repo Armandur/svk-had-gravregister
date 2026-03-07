@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logga in – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .login-sida { max-width: 22rem; margin: 4rem auto; padding: 2rem; }
+    .login-sida h1 { margin-bottom: 1.5rem; font-size: 1.5rem; color: var(--accent, #2563eb); }
+    .login-sida label { display: block; margin-bottom: 0.25rem; font-weight: 500; }
+    .login-sida input { width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 1rem; font-size: 1rem; box-sizing: border-box; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+    .login-sida input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .login-sida button { width: 100%; padding: 0.75rem; font-size: 1rem; font-weight: 600; color: #fff; background: var(--accent, #2563eb); border: none; border-radius: 6px; cursor: pointer; }
+    .login-sida button:hover { opacity: 0.9; }
+    .login-sida button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .login-fel { margin-top: 1rem; padding: 0.75rem; background: #fef2f2; color: #b91c1c; border-radius: 6px; font-size: 0.9rem; }
+    .login-fel[hidden] { display: none !important; }
+    .login-sida a { display: block; margin-top: 1.5rem; text-align: center; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main class="login-sida">
+    <h1>Gravregister</h1>
+    <form id="login-form" method="post" action="/api/login">
+      <label for="username">Användarnamn</label>
+      <input type="text" id="username" name="username" autocomplete="username" required autofocus />
+      <label for="password">Lösenord</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+      <button type="submit" id="login-btn">Logga in</button>
+    </form>
+    <p id="login-fel" class="login-fel" hidden aria-live="polite"></p>
+    <a href="/">Tillbaka till startsidan</a>
+  </main>
+  <script>
+    (function() {
+      const form = document.getElementById('login-form');
+      const btn = document.getElementById('login-btn');
+      const fel = document.getElementById('login-fel');
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        fel.hidden = true;
+        fel.textContent = '';
+        btn.disabled = true;
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        try {
+          const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+            credentials: 'include'
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            const url = new URLSearchParams(window.location.search).get('redirect') || '/';
+            window.location.href = url;
+            return;
+          }
+          fel.textContent = data.detail || 'Inloggning misslyckades.';
+          fel.hidden = false;
+        } catch (err) {
+          fel.textContent = 'Nätverksfel. Försök igen.';
+          fel.hidden = false;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

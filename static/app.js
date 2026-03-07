@@ -28,7 +28,7 @@ async function laddaMappar() {
   document.getElementById('mapp-status').textContent = '';
 
   try {
-    const res = await fetch(`${API}/mappar`);
+    const res = await fetch(`${API}/mappar`, { credentials: 'include' });
     const data = await res.json();
     mappar = data.mappar || [];
     select.innerHTML = '<option value="">– välj mapp –</option>';
@@ -62,9 +62,9 @@ async function valjMapp(mappNamn) {
 
   try {
     const [filerRes, configRes, gravplatsRes] = await Promise.all([
-      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/filer?${Date.now()}`),
-      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/config`),
-      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats`),
+      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/filer?${Date.now()}`, { credentials: 'include' }),
+      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/config`, { credentials: 'include' }),
+      fetch(`${API}/mappar/${encodeURIComponent(mappNamn)}/gravplats`, { credentials: 'include' }),
     ]);
     const data = await filerRes.json();
     const raw = data.effective_filer || data.filer || [];
@@ -414,9 +414,10 @@ async function verkställSerie() {
           sida1_ovre_tillhor_denna: false,
           sida3_ovre_tillhor_nasta: g ? !!g.sida3_ovre_tillhor_nasta : false,
         }),
+        credentials: 'include',
       });
     }
-    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`);
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, { credentials: 'include' });
     const data = await res.json();
     window.gravplatser = data.gravplatser || [];
     visaSerieTooltip('Serie sparad: ' + antal + ' gravplatser från ' + startNr + ' till ' + (startNr + antal - 1) + '.');
@@ -527,6 +528,7 @@ async function infogaTomSidaEfter(filnamn) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ efter_filnamn: filnamn }),
+      credentials: 'include',
     });
     if (!res.ok) throw new Error(await res.text());
     ogiltigförklaraBildcache();
@@ -541,6 +543,7 @@ async function taBortInfogadSida(blankId) {
   try {
     const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/infogad-tom-sida/${blankId}`, {
       method: 'DELETE',
+      credentials: 'include',
     });
     if (!res.ok) throw new Error(await res.text());
     ogiltigförklaraBildcache();
@@ -557,6 +560,7 @@ async function flyttaSida(filnamn, riktning) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filnamn, riktning }),
+      credentials: 'include',
     });
     if (!res.ok) throw new Error(await res.text());
     ogiltigförklaraBildcache();
@@ -574,6 +578,7 @@ async function setRedanHalvaFlode(filnamn, redanHalva) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ filnamn, redan_halva: redanHalva }),
+      credentials: 'include',
     });
     if (!res.ok) throw new Error(await res.text());
     ogiltigförklaraBildcache();
@@ -593,6 +598,7 @@ async function infogaUrklippPåGravplats() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filnamn, typ, grav_start_sida: startSida, redan_halva: redanHalva }),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(await res.text());
     }
@@ -616,6 +622,7 @@ async function infogaUrklippPåMapp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filnamn, typ, grav_start_sida: null, redan_halva: redanHalva }),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(await res.text());
     }
@@ -646,7 +653,7 @@ async function taBortExtramaterial(emIdOrRef) {
       if (Number.isNaN(id) || id < 1) return;
       url = `${API}/mappar/${encodeURIComponent(valdMapp)}/extramaterial/${id}`;
     }
-    const res = await fetch(url, { method: 'DELETE' });
+    const res = await fetch(url, { method: 'DELETE', credentials: 'include' });
     if (!res.ok) throw new Error(await res.text());
     ogiltigförklaraBildcache(); // nödvändigt när extramaterial plockas bort – ordningen ändras
     await refreshFiler();
@@ -663,7 +670,7 @@ function stangAllaMenyDropdowns() {
 async function refreshFiler() {
   if (!valdMapp) return;
   const cacheBuster = `_v=${Date.now()}`;
-  const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/filer?${cacheBuster}`, { cache: 'no-store' });
+  const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/filer?${cacheBuster}`, { cache: 'no-store', credentials: 'include' });
   const data = await res.json();
   const raw = data.effective_filer || data.filer || [];
   filer = raw.map((item) => (typeof item === 'string' ? { t: 'f', v: item } : item));
@@ -751,6 +758,7 @@ async function sparaMappConfig() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kyrkogard, gravkvarter, forsett_antal: window.mappForsettAntal ?? 0 }),
+      credentials: 'include',
     });
   } catch (e) {
     console.warn('Kunde inte spara mappconfig:', e);
@@ -794,8 +802,9 @@ async function sparaHalvaKoppling() {
         sida1_ovre_tillhor_denna: false,
         sida3_ovre_tillhor_nasta: sida3OvreNasta,
       }),
+      credentials: 'include',
     });
-    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`);
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, { credentials: 'include' });
     const data = await res.json();
     window.gravplatser = data.gravplatser || [];
   } catch (e) {
@@ -838,8 +847,9 @@ async function sparaGravplats() {
         sida1_ovre_tillhor_denna: false,
         sida3_ovre_tillhor_nasta: sida3OvreNasta,
       }),
+      credentials: 'include',
     });
-    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`);
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, { credentials: 'include' });
     const data = await res.json();
     window.gravplatser = data.gravplatser || [];
     uppdateraPdfBilder();
@@ -1011,7 +1021,7 @@ async function uppdateraExtramaterialMappLista() {
   const listaEl = document.getElementById('extramaterial-mapp-lista');
   if (!listaEl || !valdMapp) return;
   try {
-    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/extramaterial-mapp`);
+    const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/extramaterial-mapp`, { credentials: 'include' });
     const data = await res.json();
     const items = data.extramaterial || [];
     const pdfBase = `${API}/mappar/${encodeURIComponent(valdMapp)}/fil`;
@@ -1058,7 +1068,7 @@ document.getElementById('dev-nolla-cache')?.addEventListener('click', () => {
   }
 });
 document.getElementById('dev-stang-av')?.addEventListener('click', () => {
-  fetch(`${API}/dev/shutdown`, { method: 'POST' }).catch(() => {});
+  fetch(`${API}/dev/shutdown`, { method: 'POST', credentials: 'include' }).catch(() => {});
 });
 
 laddaMappar();

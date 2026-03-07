@@ -93,11 +93,13 @@
     .startsida-statistik-stapel-fardiga { background: #16a34a; transition: width 0.2s ease; }
     .startsida-statistik-stapel-rest { background: #dc2626; transition: width 0.2s ease; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .startsida-inloggad { font-size: 0.9rem; color: #64748b; margin: -0.5rem 0 1rem 0; }
   </style>
 </head>
 <body>
   <main class="startsida">
     <h1>Gravregister</h1>
+    <p id="inloggad-anvandare" class="startsida-inloggad" aria-live="polite"></p>
     <div class="startsida-sok-falt">
       <label for="startsida-sok-input" class="visually-hidden">Sök på fullständigt gravplatsnummer</label>
       <input type="text" id="startsida-sok-input" class="startsida-sok-input" placeholder="Sök gravplats (t.ex. HKG, HKG 01 1+2)" autocomplete="off" aria-autocomplete="list" aria-controls="startsida-sok-list" aria-expanded="false" />
@@ -117,8 +119,12 @@
     </section>
     <nav class="startsida-meny" aria-label="Grunddatahantering">
       <a href="/listvy">Grunddatahantering</a>
+      <a href="/admin" id="startsida-admin-lank" hidden>Användarhantering</a>
+      <a href="#" id="startsida-logga-ut">Logga ut</a>
     </nav>
   </main>
+  <script src="/static/auth.js"></script>
+  <script>window.gpEnsureAuthPromise = gpEnsureAuth();</script>
   <script src="/static/index.js"></script>
 </body>
 </html>

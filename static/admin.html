@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Användarhantering – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .admin-sida { max-width: 36rem; margin: 2rem auto; padding: 2rem; }
+    .admin-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    .admin-sida a { color: var(--accent, #2563eb); }
+    .admin-lista { list-style: none; padding: 0; margin: 1rem 0; }
+    .admin-lista li { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; }
+    .admin-lista li span { flex: 1; }
+    .admin-lista .admin-namn { min-width: 8rem; }
+    .admin-lista .admin-badge { font-size: 0.75rem; background: #2563eb; color: #fff; padding: 0.15rem 0.4rem; border-radius: 4px; }
+    .admin-lista .admin-knappar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .admin-lista button { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
+    .admin-lista button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .admin-sida label { display: block; margin-top: 0.75rem; font-weight: 500; }
+    .admin-sida input { padding: 0.4rem 0.5rem; margin-top: 0.25rem; width: 100%; max-width: 16rem; box-sizing: border-box; }
+    .admin-sida #admin-skapa-form button { margin-top: 0.5rem; padding: 0.4rem 0.75rem; cursor: pointer; }
+    .admin-fel { color: #b91c1c; font-size: 0.9rem; margin-top: 0.5rem; }
+    .admin-ok { color: #16a34a; font-size: 0.9rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="admin-sida">
+    <h1>Användarhantering</h1>
+    <p><a href="/">← Tillbaka till menyn</a></p>
+    <p id="admin-ingen">Endast administratörer kan hantera användare.</p>
+    <section id="admin-innehall" hidden>
+      <h2>Skapa konto</h2>
+      <form id="admin-skapa-form">
+        <label>Användarnamn <input type="text" id="admin-new-username" required /></label>
+        <label>Lösenord <input type="password" id="admin-new-password" required /></label>
+        <button type="submit">Skapa konto</button>
+        <p id="admin-skapa-fel" class="admin-fel" hidden></p>
+        <p id="admin-skapa-ok" class="admin-ok" hidden></p>
+      </form>
+      <h2>Användare</h2>
+      <ul id="admin-anvandarlista" class="admin-lista"></ul>
+    </section>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+    (function() {
+      const innehall = document.getElementById('admin-innehall');
+      const ingen = document.getElementById('admin-ingen');
+      const listEl = document.getElementById('admin-anvandarlista');
+      const skapaForm = document.getElementById('admin-skapa-form');
+      const skapaFel = document.getElementById('admin-skapa-fel');
+      const skapaOk = document.getElementById('admin-skapa-ok');
+      let currentUserId = null;
+
+      function visaAnvandare() {
+        Promise.all([
+          fetch('/api/me', { credentials: 'include' }).then(function(r) { return r.ok ? r.json() : null; }),
+          fetch('/api/admin/users', { credentials: 'include' })
+        ]).then(function([me, usersRes]) {
+          if (me) currentUserId = me.id;
+          if (usersRes.status === 401) {
+            window.location.href = '/login?redirect=' + encodeURIComponent('/admin');
+            return;
+          }
+          if (usersRes.status === 403) {
+            ingen.hidden = false;
+            innehall.hidden = true;
+            return;
+          }
+          if (!usersRes.ok) return usersRes.json().then(function(d) { throw new Error(d.detail || 'Kunde inte hämta användare'); });
+          return usersRes.json();
+        })
+          .then(function(data) {
+            if (!data) return;
+            ingen.hidden = true;
+            innehall.hidden = false;
+            listEl.innerHTML = '';
+            (data.users || []).forEach(function(u) {
+              const li = document.createElement('li');
+              const isSelf = u.id === currentUserId;
+              li.innerHTML = '<span class="admin-namn">' + (u.username || '') + (u.is_admin ? ' <span class="admin-badge">admin</span>' : '') + '</span>' +
+                '<span class="admin-knappar">' +
+                '<button type="button" class="admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
+                '<button type="button" class="admin-byta-namn" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '">Byt namn</button>' +
+                '<button type="button" class="admin-ta-bort" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
+                '</span>';
+              listEl.appendChild(li);
+            });
+            listEl.querySelectorAll('.admin-set-pwd').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const pwd = prompt('Nytt lösenord för användaren:');
+                if (pwd == null || !pwd.trim()) return;
+                fetch('/api/admin/users/' + id + '/password', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ password: pwd }),
+                  credentials: 'include'
+                }).then(function(r) {
+                  if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte spara'); });
+                  alert('Lösenord uppdaterat.');
+                  visaAnvandare();
+                }).catch(function(e) {
+                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                });
+              });
+            });
+            listEl.querySelectorAll('.admin-byta-namn').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const gammalt = (btn.dataset.username || '').trim();
+                const nytt = prompt('Nytt användarnamn:', gammalt);
+                if (nytt == null) return;
+                const trimmed = (nytt || '').trim();
+                if (!trimmed) {
+                  alert('Användarnamn kan inte vara tomt.');
+                  return;
+                }
+                if (trimmed === gammalt) return;
+                fetch('/api/admin/users/' + id, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ username: trimmed }),
+                  credentials: 'include'
+                }).then(function(r) {
+                  return r.json().then(function(d) {
+                    if (!r.ok) throw new Error(d.detail || 'Kunde inte byta namn');
+                    alert('Användarnamn uppdaterat till: ' + (d.username || trimmed));
+                    visaAnvandare();
+                  });
+                }).catch(function(e) {
+                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                });
+              });
+            });
+            listEl.querySelectorAll('.admin-ta-bort:not([disabled])').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const username = (btn.dataset.username || '').trim();
+                if (!confirm('Vill du verkligen ta bort användaren "' + username + '"? Detta kan inte ångras.')) return;
+                fetch('/api/admin/users/' + id, {
+                  method: 'DELETE',
+                  credentials: 'include'
+                }).then(function(r) {
+                  if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte ta bort'); });
+                  alert('Användaren borttagen.');
+                  visaAnvandare();
+                }).catch(function(e) {
+                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                });
+              });
+            });
+          })
+          .catch(function(e) {
+            ingen.textContent = e.message || 'Ett fel uppstod';
+            ingen.hidden = false;
+          });
+      }
+
+      gpEnsureAuth().then(function(ok) {
+        if (!ok) return;
+        visaAnvandare();
+      });
+
+      skapaForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        skapaFel.hidden = true;
+        skapaOk.hidden = true;
+        const username = document.getElementById('admin-new-username').value.trim();
+        const password = document.getElementById('admin-new-password').value;
+        if (!username || !password) {
+          skapaFel.textContent = 'Ange användarnamn och lösenord.';
+          skapaFel.hidden = false;
+          return;
+        }
+        fetch('/api/admin/users/new', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+          credentials: 'include'
+        }).then(function(r) {
+          return r.json().then(function(d) {
+            if (!r.ok) throw new Error(d.detail || 'Kunde inte skapa konto');
+            skapaOk.textContent = 'Konto skapat: ' + (d.username || username);
+            skapaOk.hidden = false;
+            document.getElementById('admin-new-username').value = '';
+            document.getElementById('admin-new-password').value = '';
+            visaAnvandare();
+          });
+        }).catch(function(e) {
+          skapaFel.textContent = e.message || 'Nätverksfel';
+          skapaFel.hidden = false;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

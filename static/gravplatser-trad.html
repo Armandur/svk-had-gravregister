@@ -10,6 +10,7 @@
 <body>
   <header class="gravplatser-topbar">
     <a href="/">← Tillbaka till menyn</a>
+    <span id="inloggad-anvandare" class="gravplatser-inloggad" aria-live="polite"></span>
   </header>
 
   <main class="gravplatser-main">
@@ -22,6 +23,8 @@
     </div>
   </main>
 
+  <script src="/static/auth.js"></script>
+  <script>gpEnsureAuth();</script>
   <script src="/static/gravplatser.js"></script>
 </body>
 </html>

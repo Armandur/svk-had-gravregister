@@ -8,16 +8,18 @@ import threading
 from pathlib import Path
 
 import fitz  # PyMuPDF
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, tuple_, update
 from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import KÄLLDATA_DIR
+from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY
 from app.database import (
     SessionLocal,
+    User,
     MappConfig,
     Extramaterial,
     InfogadTomSida,
@@ -33,6 +35,14 @@ from app.database import (
     init_db,
     get_db,
 )
+from app.auth import (
+    hash_password,
+    verify_password,
+    get_current_user,
+    get_current_user_id,
+    require_admin,
+    ensure_first_admin,
+)
 
 # Cache-huvud för genererade bilder (1 timme; webbläsaren kan cacha)
 CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
@@ -41,11 +51,17 @@ app = FastAPI(
     title="Gravregister – digitalisering",
     description="PoC för att digitalisera skannade gravregister (HKG/HKN).",
 )
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 
 @app.on_event("startup")
 def startup():
     init_db()
+    db = SessionLocal()
+    try:
+        ensure_first_admin(db)
+    finally:
+        db.close()
 
 
 def _mapp_path(mapp_namn: str) -> Path:
@@ -93,10 +109,171 @@ async def root():
     return FileResponse(Path(__file__).parent.parent / "static" / "index.html")
 
 
+@app.get("/login")
+async def login_sida():
+    """Inloggningssida."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "login.html")
+
+
+# ---------- Auth: login, logout, me ----------
+
+class LoginBody(BaseModel):
+    username: str = ""
+    password: str = ""
+
+
+@app.post("/api/login")
+async def login(body: LoginBody, request: Request, db: Session = Depends(get_db)):
+    """Logga in och sätt session."""
+    user = db.query(User).filter(User.username == (body.username or "").strip()).first()
+    if not user or not verify_password((body.password or ""), user.password_hash):
+        raise HTTPException(status_code=401, detail="Fel användarnamn eller lösenord")
+    request.session["user_id"] = user.id
+    return {"ok": True, "username": user.username, "is_admin": user.is_admin}
+
+
+@app.post("/api/logout")
+async def logout(request: Request):
+    """Logga ut – rensa session."""
+    request.session.clear()
+    return {"ok": True}
+
+
+@app.get("/api/me")
+async def me(current_user: User = Depends(get_current_user)):
+    """Aktuell inloggad användare."""
+    return {"id": current_user.id, "username": current_user.username, "is_admin": current_user.is_admin}
+
+
+# ---------- Admin: användarhantering (endast admin) ----------
+
+class CreateUserBody(BaseModel):
+    username: str = ""
+
+
+class SetPasswordBody(BaseModel):
+    password: str = ""
+
+
+class SetUsernameBody(BaseModel):
+    username: str = ""
+
+
+class CreateUserWithPasswordBody(BaseModel):
+    username: str = ""
+    password: str = ""
+
+
+@app.get("/api/admin/users")
+async def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista alla användare (endast admin)."""
+    users = db.query(User).order_by(User.username).all()
+    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]}
+
+
+@app.post("/api/admin/users")
+async def create_user(body: CreateUserBody, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Skapa nytt konto med tillfälligt lösenord (endast admin)."""
+    username = (body.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Användarnamn krävs")
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="Användarnamnet finns redan")
+    temp_password = os.urandom(8).hex()
+    user = User(username=username, password_hash=hash_password(temp_password), is_admin=False)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"id": user.id, "username": user.username, "temp_password": temp_password}
+
+
+@app.post("/api/admin/users/new")
+async def create_user_with_password(
+    body: CreateUserWithPasswordBody, admin: User = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """Skapa nytt konto med användarnamn och lösenord (endast admin)."""
+    username = (body.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Användarnamn krävs")
+    if not (body.password or "").strip():
+        raise HTTPException(status_code=400, detail="Lösenord krävs")
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="Användarnamnet finns redan")
+    user = User(username=username, password_hash=hash_password((body.password or "").strip()), is_admin=False)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"id": user.id, "username": user.username}
+
+
+@app.put("/api/admin/users/{user_id:int}/password")
+async def set_user_password(
+    user_id: int,
+    body: SetPasswordBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Sätt eller återställ lösenord (endast admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    pwd = (body.password or "").strip()
+    if not pwd:
+        raise HTTPException(status_code=400, detail="Lösenord krävs")
+    user.password_hash = hash_password(pwd)
+    db.commit()
+    return {"ok": True}
+
+
+@app.patch("/api/admin/users/{user_id:int}")
+async def set_user_username(
+    user_id: int,
+    body: SetUsernameBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Byt användarnamn (endast admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    username = (body.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Användarnamn krävs")
+    if db.query(User).filter(User.username == username, User.id != user_id).first():
+        raise HTTPException(status_code=400, detail="Användarnamnet finns redan")
+    user.username = username
+    db.commit()
+    return {"ok": True, "username": user.username}
+
+
+@app.delete("/api/admin/users/{user_id:int}")
+async def delete_user(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort användarkonto (endast admin). Du kan inte ta bort ditt eget konto."""
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Du kan inte ta bort ditt eget konto")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    db.delete(user)
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/listvy")
 async def listvy_sida():
     """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser."""
     return FileResponse(Path(__file__).parent.parent / "static" / "listvy.html")
+
+
+@app.get("/admin")
+async def admin_sida():
+    """Användarhantering (endast för admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "admin.html")
 
 
 @app.get("/gravplatser")
@@ -111,7 +288,7 @@ async def gravplatser_sida(gravplats_slug: str | None = None):
 
 
 @app.get("/api/mappar")
-async def list_mappar():
+async def list_mappar(current_user: User = Depends(get_current_user)):
     """
     Lista undermappar under källdata.
     Varje mapp = ett PDF-arkiv (en kyrkogård/gravkvarter).
@@ -127,7 +304,7 @@ async def list_mappar():
 
 
 @app.get("/api/statistik")
-async def get_statistik(db: Session = Depends(get_db)):
+async def get_statistik(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Aggregerad statistik för startsidan: mappar, PDF:er, gravplatser (saknar/fullständigt),
     extramaterial, gravrättsinnehavare, närmast anhöriga, gravsatta.
@@ -194,7 +371,7 @@ async def get_statistik(db: Session = Depends(get_db)):
 
 
 @app.get("/api/mappar/{mapp_namn}/filer")
-async def list_pdf_filer(mapp_namn: str, db: Session = Depends(get_db)):
+async def list_pdf_filer(mapp_namn: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lista PDF-filer och extramaterial. effective_filer = expanderad lista (filer + infogade tomma sidor)."""
     mapp = _mapp_path(mapp_namn)
     if not mapp.exists():
@@ -415,6 +592,7 @@ async def pdf_sida_bild(
     offset: int = 0,
     exclude: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Returnera en PDF-sida som PNG. sida_nummer = 1-baserat innehållssida.
@@ -449,6 +627,7 @@ async def pdf_sida_halva(
     split: float = 0.5,
     exclude: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Returnera övre eller nedre del av en PDF-sida som PNG. Vid tom sida returneras motsvarande halva."""
     if offset < 0 or offset > 2:
@@ -492,6 +671,7 @@ async def pdf_fil(
     offset: int = 0,
     exclude: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Returnera själva PDF-filen (innehållssida). Vid tom sida returneras 404 (ingen PDF)."""
     if offset < 0 or offset > 2:
@@ -533,7 +713,7 @@ class ExtramaterialPatchSchema(BaseModel):
 
 
 @app.get("/api/mappar/{mapp_namn}/config")
-async def get_mapp_config(mapp_namn: str, db: Session = Depends(get_db)):
+async def get_mapp_config(mapp_namn: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Hämta sparad konfiguration för mappen (kyrkogård, gravkvarter, försättssidor)."""
     _mapp_path(mapp_namn)  # validera
     row = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
@@ -552,6 +732,7 @@ async def save_mapp_config(
     mapp_namn: str,
     body: MappConfigSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Spara konfiguration för mappen (kyrkogård, kvarter, försättssidor)."""
     _mapp_path(mapp_namn)
@@ -578,7 +759,7 @@ class GravplatsSchema(BaseModel):
 
 
 @app.get("/api/mappar/{mapp_namn}/gravplats")
-async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Session = Depends(get_db)):
+async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lista registrerade gravplatser för mappen. Om start_sida anges returneras endast posten för det blocket."""
     _mapp_path(mapp_namn)
     mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
@@ -606,7 +787,7 @@ async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Sess
 
 
 @app.get("/api/gravplatser/trad")
-async def gravplatser_trad(db: Session = Depends(get_db)):
+async def gravplatser_trad(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Trädstruktur: kyrkogårdar med underliggande kvarter (distinct från registrerade gravplatser) och antal gravplatser."""
     rows = (
         db.query(Gravplats.kyrkogard, Gravplats.kvarter)
@@ -658,7 +839,7 @@ async def gravplatser_trad(db: Session = Depends(get_db)):
 
 
 @app.get("/api/gravplatser/forslag/kyrkogardar")
-async def forslag_kyrkogardar(q: str = "", limit: int = 30, db: Session = Depends(get_db)):
+async def forslag_kyrkogardar(q: str = "", limit: int = 30, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lazy-förslag på kyrkogårdar (prefix-match)."""
     q = (q or "").strip()
     if not q:
@@ -682,6 +863,7 @@ async def forslag_kvarter(
     kyrkogard: str | None = None,
     limit: int = 30,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Lazy-förslag på kvarter (prefix-match). Valfritt filtrera på kyrkogård."""
     q = (q or "").strip()
@@ -709,6 +891,7 @@ async def list_gravplats_global(
     kyrkogard: str,
     kvarter: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Lista gravplatser för en kyrkogård och kvarter (över alla mappar). Returnerar mapp_namn per gravplats för halvor-API."""
     if not kyrkogard.strip() or not kvarter.strip():
@@ -750,7 +933,7 @@ async def list_gravplats_global(
 
 
 @app.get("/api/gravplatser/nasta-ej-transkriberad")
-async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db)):
+async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Returnerar nästa gravplats (i ordningen Kyrkogård → Kvarter → Gravplats) som inte är
     markerad som färdigtranskriberad. 404 om alla är transkriberade.
@@ -794,7 +977,7 @@ async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db)):
 
 
 @app.get("/api/gravplatser/sok")
-async def sok_gravplatser(q: str = "", limit: int = 25, db: Session = Depends(get_db)):
+async def sok_gravplatser(q: str = "", limit: int = 25, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Sök/förslag på gravplatser efter fullständigt gravplatsnummer (kyrkogård + kvarter + gravplatsnummer).
     q tolkas som prefix: "HKG" → kyrkogård som börjar på HKG, "HKG 01" → + kvarter som börjar på 01, etc.
@@ -1211,6 +1394,7 @@ async def get_gravplats_halvor(
     kvarter: str | None = None,
     gravplatsnummer: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Hämta vilka halvor som tillhör en gravplats (fullständigt id = kyrkogård + kvarter + gravplatsnummer).
@@ -1326,7 +1510,7 @@ class DoldHalvaBody(BaseModel):
 
 
 @app.post("/api/gravplats/{gravplats_id:int}/dold-halva")
-async def post_dold_halva(gravplats_id: int, body: DoldHalvaBody, db: Session = Depends(get_db)):
+async def post_dold_halva(gravplats_id: int, body: DoldHalvaBody, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Dölj en vanlig gravplatsbild (halva) från bildraden – den visas i sektion Dolda."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
@@ -1353,6 +1537,7 @@ async def delete_dold_halva(
     content_sida: int,
     halva: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Visa igen en dold vanlig gravplatsbild (ta bort från Dolda)."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
@@ -1372,6 +1557,7 @@ async def save_gravplats(
     mapp_namn: str,
     body: GravplatsSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Spara eller uppdatera gravplats för ett tre-sidors block. Kyrkogård hämtas från mappens config."""
     _mapp_path(mapp_namn)
@@ -1485,6 +1671,7 @@ class InmatningSchema(BaseModel):
     gravsatta: list[GravsattItem] = []
     skiss_bild_b64: str | None = None
     extramaterial_kommentarer: list[dict] = []  # [{"id": int, "kommentar": str}, ...]
+    version: int | None = None  # Optimistic locking: skicka den version som laddades; 409 om någon annan sparade först
 
 
 def _inmatning_response(gravplats_id: int, db: Session) -> dict:
@@ -1593,6 +1780,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "has_skiss": False,
             "gravsatta": gravsatta_list,
             "skisser": skisser_list,
+            "version": 0,
         }
     return {
         "gravplats_id": gravplats_id,
@@ -1612,11 +1800,12 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         "has_skiss": row.skiss_bild is not None and len(row.skiss_bild) > 0,
         "gravsatta": gravsatta_list,
         "skisser": skisser_list,
+        "version": getattr(row, "version", 0),
     }
 
 
 @app.get("/api/gravplats/{gravplats_id:int}/inmatning")
-async def get_inmatning(gravplats_id: int, db: Session = Depends(get_db)):
+async def get_inmatning(gravplats_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Hämta inmatad data för gravplatsen (gravrätt, närmast anhöriga, gravsatta 1–10)."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
@@ -1625,8 +1814,8 @@ async def get_inmatning(gravplats_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/api/gravplats/{gravplats_id:int}/inmatning")
-async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = Depends(get_db)):
-    """Spara inmatad data för gravplatsen."""
+async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Spara inmatad data för gravplatsen. Optimistic locking: skicka version från GET; 409 om någon annan sparade först."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
@@ -1635,6 +1824,13 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
         row = GravplatsInmatning(gravplats_id=gravplats_id)
         db.add(row)
         db.flush()
+    if body.version is not None:
+        current_version = getattr(row, "version", 0)
+        if current_version != body.version:
+            raise HTTPException(
+                status_code=409,
+                detail="Gravplatsen har ändrats av någon annan. Ladda om sidan och gör om dina ändringar.",
+            )
     row.storlek = body.storlek or ""
     row.underhall_text = body.underhall_text or ""
     row.underhall_overstruket = body.underhall_overstruket
@@ -1719,12 +1915,13 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             ).first()
             if em:
                 em.kommentar = (kommentar or "").strip() if isinstance(kommentar, str) else ""
+    row.version = getattr(row, "version", 0) + 1
     db.commit()
     return _inmatning_response(gravplats_id, db)
 
 
 @app.get("/api/gravplats/{gravplats_id:int}/inmatning/skiss")
-async def get_inmatning_skiss(gravplats_id: int, db: Session = Depends(get_db)):
+async def get_inmatning_skiss(gravplats_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Hämta skissbild för gravplatsen (PNG/JPEG). Äldre enkelskiss – använd skisser (koordinater) istället."""
     row = db.query(GravplatsInmatning).filter(GravplatsInmatning.gravplats_id == gravplats_id).first()
     if not row or not row.skiss_bild:
@@ -1748,7 +1945,7 @@ class SkissOrdningBody(BaseModel):
 
 
 @app.post("/api/gravplats/{gravplats_id:int}/skisser")
-async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Depends(get_db)):
+async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lägg till en skiss (rektangelmarkering på en bild)."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
@@ -1797,7 +1994,7 @@ async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Dep
 
 
 @app.put("/api/gravplats/{gravplats_id:int}/skisser/ordning")
-async def put_skisser_ordning(gravplats_id: int, body: SkissOrdningBody, db: Session = Depends(get_db)):
+async def put_skisser_ordning(gravplats_id: int, body: SkissOrdningBody, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Uppdatera ordning på skisser (drag and drop)."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
@@ -1814,7 +2011,7 @@ async def put_skisser_ordning(gravplats_id: int, body: SkissOrdningBody, db: Ses
 
 
 @app.delete("/api/gravplats/{gravplats_id:int}/skisser/{skiss_id:int}")
-async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(get_db)):
+async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Ta bort en skiss (ändra inte – ta bort och gör om vid behov)."""
     row = db.query(GravplatsSkiss).filter(
         GravplatsSkiss.id == skiss_id,
@@ -1828,7 +2025,7 @@ async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(g
 
 
 @app.get("/api/mappar/{mapp_namn}/extramaterial")
-async def list_extramaterial(mapp_namn: str, db: Session = Depends(get_db)):
+async def list_extramaterial(mapp_namn: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lista alla extramaterial för mappen."""
     _mapp_path(mapp_namn)
     mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
@@ -1851,7 +2048,7 @@ async def list_extramaterial(mapp_namn: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/mappar/{mapp_namn}/extramaterial-mapp")
-async def list_extramaterial_mapp(mapp_namn: str, db: Session = Depends(get_db)):
+async def list_extramaterial_mapp(mapp_namn: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lista extramaterial som endast är knutet till mappen (inte till en specifik grav)."""
     _mapp_path(mapp_namn)
     mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
@@ -1924,6 +2121,7 @@ async def add_extramaterial(
     mapp_namn: str,
     body: ExtramaterialSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Registrera en PDF som extramaterial. grav_start_sida=null = endast knutet till mappen.
     Justerar grav_start_sida för övriga extramaterial så att de fortfarande pekar på rätt grav."""
@@ -1966,6 +2164,7 @@ async def patch_extramaterial(
     em_id: int,
     body: ExtramaterialPatchSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Uppdatera extramaterial (t.ex. redan_halva, dold)."""
     _mapp_path(mapp_namn)
@@ -1996,6 +2195,7 @@ async def delete_extramaterial(
     mapp_namn: str,
     em_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ta bort ett extramaterial (via id). Justerar grav_start_sida för övriga så att de pekar kvar på rätt grav."""
     _mapp_path(mapp_namn)
@@ -2022,6 +2222,7 @@ async def delete_extramaterial_by_ref(
     filnamn: str,
     grav_start_sida: int | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ta bort ett extramaterial via filnamn och (valfritt) grav_start_sida. grav_start_sida=null = mapp-nivå.
     Justerar grav_start_sida för övriga extramaterial."""
@@ -2063,6 +2264,7 @@ async def set_sida_redan_halva(
     mapp_namn: str,
     body: SidaRedanHalvaSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Markera eller avmarkera en sida (fil) i flödet som 'redan halva'. Sidan stannar kvar i flödet och visas som en bild."""
     _mapp_path(mapp_namn)
@@ -2101,6 +2303,7 @@ async def infoga_tom_sida(
     mapp_namn: str,
     body: InfogaTomSidaSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Infoga en tom sida efter angiven PDF. Justerar grav_start_sida för extramaterial efter infogningen."""
     _mapp_path(mapp_namn)
@@ -2129,6 +2332,7 @@ async def ta_bort_infogad_tom_sida(
     mapp_namn: str,
     blank_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Ta bort en infogad tom sida. Justerar grav_start_sida för extramaterial."""
     _mapp_path(mapp_namn)
@@ -2163,6 +2367,7 @@ async def flytta_sida(
     mapp_namn: str,
     body: FlyttaSidaSchema,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Flytta en sida vänster eller höger i ordningen. Klienten laddar om fillistan efter anrop."""
     _mapp_path(mapp_namn)
@@ -2234,7 +2439,7 @@ def _do_shutdown():
 
 
 @app.post("/api/dev/shutdown")
-async def dev_shutdown():
+async def dev_shutdown(current_user: User = Depends(get_current_user)):
     """Stänger av appen (uvicorn). Används från dev-menyn. Vid --reload dödas parent så att hela servern avslutas."""
     threading.Thread(target=_do_shutdown, daemon=True).start()
     return {"ok": True, "message": "Servern stängs av..."}

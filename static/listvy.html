@@ -9,6 +9,7 @@
 <body>
   <header class="topbar">
     <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Meny</a> Gravregister</h1>
+    <span id="inloggad-anvandare" class="topbar-inloggad" aria-live="polite"></span>
     <div class="topbar-falt">
       <label for="mapp">Mapp:</label>
       <select id="mapp" disabled>
@@ -259,6 +260,8 @@
     </div>
   </div>
 
+  <script src="/static/auth.js"></script>
+  <script>gpEnsureAuth();</script>
   <script src="/static/app.js"></script>
 </body>
 </html>

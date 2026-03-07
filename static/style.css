@@ -60,6 +60,12 @@ body {
   gap: 0.4rem;
 }
 
+.topbar-inloggad {
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
 .topbar-falt label {
   font-size: 0.85rem;
   color: #555;

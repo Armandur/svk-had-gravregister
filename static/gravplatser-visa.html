@@ -10,12 +10,12 @@
 <body>
   <header class="gravplatser-topbar">
     <a href="/">← Tillbaka till menyn</a>
+    <span id="inloggad-anvandare" class="gravplatser-inloggad" aria-live="polite"></span>
   </header>
 
   <main class="gravplatser-main">
     <div id="gp-innehall" class="gravplatser-innehall gp-vertikal-vy">
       <div class="gravplatser-innehall-topp">
-        <button type="button" id="gp-btn-tillbaka-kvarter" class="gravplatser-btn-byt-kvarter">Välj gravplats</button>
         <h1 class="gravplatser-rubrik" id="gp-rubrik"></h1>
       </div>
       <div class="gravplatser-menyrad">
@@ -158,6 +158,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <script src="/static/auth.js"></script>
+  <script>gpEnsureAuth();</script>
   <script src="/static/gravplatser.js"></script>
 </body>
 </html>

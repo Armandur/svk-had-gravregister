@@ -20,6 +20,12 @@
   text-decoration: underline;
 }
 
+.gravplatser-inloggad {
+  margin-left: auto;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
 .gravplatser-main {
   flex: 1;
   min-height: 0;

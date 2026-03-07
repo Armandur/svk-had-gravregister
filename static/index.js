@@ -12,6 +12,24 @@
   const listEl = document.getElementById('startsida-sok-list');
   if (!inputEl || !listEl) return;
 
+  (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function(me) {
+    if (!me) return;
+    var el = document.getElementById('inloggad-anvandare');
+    if (el) el.textContent = 'Inloggad som: ' + (me.username || '');
+    var adminLink = document.getElementById('startsida-admin-lank');
+    if (adminLink) {
+      if (me.is_admin) adminLink.removeAttribute('hidden');
+      else adminLink.remove();
+    }
+  });
+
+  document.getElementById('startsida-logga-ut')?.addEventListener('click', function(e) {
+    e.preventDefault();
+    fetch(API + '/logout', { method: 'POST', credentials: 'include' }).then(function() {
+      window.location.href = '/login';
+    });
+  });
+
   function slugFromFullstandigt(fullstandigt) {
     const s = (fullstandigt || '').trim();
     return s ? encodeURIComponent(s) : '';
@@ -72,7 +90,7 @@
       visaForslag([]);
       return;
     }
-    fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25')
+    fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' })
       .then(function (res) { return res.json(); })
       .then(function (data) { visaForslag(data.gravplatser || []); })
       .catch(function () { visaForslag([]); });
@@ -134,7 +152,7 @@
   if (nastaBtn) {
     nastaBtn.addEventListener('click', function () {
       nastaBtn.disabled = true;
-      fetch(API + '/gravplatser/nasta-ej-transkriberad')
+      fetch(API + '/gravplatser/nasta-ej-transkriberad', { credentials: 'include' })
         .then(function (res) {
           if (res.status === 404) {
             alert('Ingen icke-transkriberad gravplats hittades. Alla gravplatser är redan transkriberade.');
@@ -161,7 +179,7 @@
   // Statistik
   const statListEl = document.getElementById('startsida-statistik-lista');
   if (statListEl) {
-    fetch(API + '/statistik')
+    fetch(API + '/statistik', { credentials: 'include' })
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (data) {
         if (!data) {

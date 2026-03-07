@@ -171,7 +171,7 @@ async function hamtaForslag(q) {
     return;
   }
   try {
-    const res = await fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25');
+    const res = await fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' });
     const data = await res.json();
     visaForslag(data.gravplatser || []);
   } catch (e) {
@@ -327,7 +327,7 @@ async function koraAvanceradSok(e) {
   if (resultatRubrikEl) resultatRubrikEl.textContent = 'Laddar…';
 
   try {
-    const res = await fetch(API + '/gravplatser/avancerad-sok?' + params.toString());
+    const res = await fetch(API + '/gravplatser/avancerad-sok?' + params.toString(), { credentials: 'include' });
     const data = await res.json();
     const typ = data.resultat_typ || 'gravplatser';
     sokResultatTyp = typ;
@@ -712,7 +712,7 @@ function sokForslagStangVidKlickUtanfor(e) {
 
 if (kyrkogardInputEl && kyrkogardListEl) {
   setupForslagFalt(kyrkogardInputEl, kyrkogardListEl, async (q) => {
-    const res = await fetch(API + '/gravplatser/forslag/kyrkogardar?q=' + encodeURIComponent(q) + '&limit=30');
+    const res = await fetch(API + '/gravplatser/forslag/kyrkogardar?q=' + encodeURIComponent(q) + '&limit=30', { credentials: 'include' });
     const data = await res.json();
     return data.forslag || [];
   });
@@ -722,7 +722,7 @@ if (kvarterInputEl && kvarterListEl) {
   setupForslagFalt(kvarterInputEl, kvarterListEl, async (q, extra) => {
     const params = new URLSearchParams({ q, limit: '30' });
     if (extra && extra.kyrkogard) params.set('kyrkogard', extra.kyrkogard);
-    const res = await fetch(API + '/gravplatser/forslag/kvarter?' + params.toString());
+    const res = await fetch(API + '/gravplatser/forslag/kvarter?' + params.toString(), { credentials: 'include' });
     const data = await res.json();
     return data.forslag || [];
   }, () => ({ kyrkogard: kyrkogardInputEl ? kyrkogardInputEl.value.trim() : '' }));
