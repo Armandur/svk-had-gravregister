@@ -404,6 +404,19 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   border-top: 1px solid var(--border);
 }
 
+/* Vertikal vy: Extramaterial ovanför gravplatsbilderna så att man ser att det finns (fälls ut vid klick) */
+.gravplatser-innehall.gp-vertikal-vy .gp-innehall-vanster .gp-extramaterial {
+  order: -1;
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.gravplatser-innehall.gp-vertikal-vy .gp-innehall-vanster .gravplatser-halvor-wrap {
+  order: 1;
+}
+
 .gp-em-rubrik {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -889,7 +902,8 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   transform: none;
 }
 .gp-ocr-falt-ikon.gp-ocr-falt-ikon-ef,
-.gp-ocr-falt-ikon.gp-ocr-falt-ikon-fe {
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-fe,
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-f {
   width: 1.5rem;
   height: 1.5rem;
   font-size: 0.7rem;

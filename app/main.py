@@ -749,6 +749,50 @@ async def list_gravplats_global(
     return {"gravplatser": out}
 
 
+@app.get("/api/gravplatser/nasta-ej-transkriberad")
+async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db)):
+    """
+    Returnerar nästa gravplats (i ordningen Kyrkogård → Kvarter → Gravplats) som inte är
+    markerad som färdigtranskriberad. 404 om alla är transkriberade.
+    """
+    subq = db.query(GravplatsInmatning.gravplats_id).filter(
+        GravplatsInmatning.fardigtranskriberad == True
+    ).distinct()
+    q = (
+        db.query(Gravplats)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .filter(~Gravplats.id.in_(subq))
+        .order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida)
+        .limit(10000)
+    )
+    rows = q.all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Ingen icke-transkriberad gravplats hittades")
+
+    def ledande_tal(nr: str) -> int:
+        s = (nr or "").strip()
+        n = 0
+        for c in s:
+            if c.isdigit():
+                n = n * 10 + int(c)
+            elif n > 0:
+                break
+        return n if n > 0 else -1
+
+    rows_sorted = sorted(
+        rows,
+        key=lambda g: (
+            g.kyrkogard or "",
+            g.kvarter or "",
+            ledande_tal(g.gravplatsnummer or ""),
+            g.gravplatsnummer or "",
+        ),
+    )
+    first = rows_sorted[0]
+    fullstandigt = _format_fullstandigt(first.kyrkogard, first.kvarter, first.gravplatsnummer)
+    return {"fullstandigt": fullstandigt}
+
+
 @app.get("/api/gravplatser/sok")
 async def sok_gravplatser(q: str = "", limit: int = 25, db: Session = Depends(get_db)):
     """

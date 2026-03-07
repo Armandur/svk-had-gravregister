@@ -129,6 +129,35 @@
     }
   });
 
+  // Gå till nästa icke-transkriberade gravplats
+  const nastaBtn = document.getElementById('startsida-nasta-ej-transkriberad');
+  if (nastaBtn) {
+    nastaBtn.addEventListener('click', function () {
+      nastaBtn.disabled = true;
+      fetch(API + '/gravplatser/nasta-ej-transkriberad')
+        .then(function (res) {
+          if (res.status === 404) {
+            alert('Ingen icke-transkriberad gravplats hittades. Alla gravplatser är redan transkriberade.');
+            return null;
+          }
+          if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
+          return res.json();
+        })
+        .then(function (data) {
+          if (data && data.fullstandigt) {
+            var slug = slugFromFullstandigt(data.fullstandigt);
+            if (slug) window.location.href = '/gravplatser/' + slug;
+          }
+        })
+        .catch(function (err) {
+          alert('Kunde inte hämta nästa gravplats: ' + (err.message || 'nätverksfel'));
+        })
+        .finally(function () {
+          nastaBtn.disabled = false;
+        });
+    });
+  }
+
   // Statistik
   const statListEl = document.getElementById('startsida-statistik-lista');
   if (statListEl) {

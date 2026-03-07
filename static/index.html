@@ -50,6 +50,24 @@
     .startsida-meny a { display: block; padding: 1rem 1.25rem; font-size: 1.05rem; text-align: center; text-decoration: none; color: #1e293b; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background 0.15s, border-color 0.15s; }
     .startsida-meny a:hover { background: #f8fafc; border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
     .startsida-meny a:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .startsida-meny-btn {
+      display: block;
+      width: 100%;
+      padding: 1rem 1.25rem;
+      font-size: 1.05rem;
+      text-align: center;
+      cursor: pointer;
+      color: #1e293b;
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+    }
+    .startsida-meny-btn:hover { background: #f8fafc; border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+    .startsida-meny-btn:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .startsida-meny-btn:disabled { opacity: 0.7; cursor: wait; }
     .startsida-statistik {
       margin-top: 1.5rem;
       padding: 1rem 1.25rem;
@@ -88,6 +106,7 @@
     <nav class="startsida-meny" aria-label="Huvudmeny">
       <a href="/gravplatser/sok">Avancerad sökning</a>
       <a href="/gravplatser">Bläddra via kyrkogård, kvarter och gravplats</a>
+      <button type="button" id="startsida-nasta-ej-transkriberad" class="startsida-meny-btn">Gå till nästa icke-transkriberade gravplats</button>
     </nav>
     <section class="startsida-statistik" id="startsida-statistik" aria-label="Statistik">
       <h2>Statistik</h2>
