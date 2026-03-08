@@ -587,7 +587,7 @@ async function uppdateraVy() {
 
   const slug = slugForGravplats(gp);
   const path = slug ? `/gravplatser/${slug}` : '/gravplatser';
-  const fullUrl = path + (vertikalVy ? '?vy=vertikal' : '');
+  const fullUrl = path + (vertikalVy ? '' : '?vy=horisontell');
   if (window.location.pathname + (window.location.search || '') !== fullUrl) {
     history.replaceState(null, '', fullUrl);
   }
@@ -1189,7 +1189,7 @@ function toggleVertikalVy() {
   if (innehall) innehall.classList.toggle('gp-vertikal-vy', vertikalVy);
   if (btn) btn.textContent = vertikalVy ? 'Horisontell vy' : 'Vertikal vy';
   const path = window.location.pathname;
-  const fullUrl = path + (vertikalVy ? '?vy=vertikal' : '');
+  const fullUrl = path + (vertikalVy ? '' : '?vy=horisontell');
   history.replaceState(null, '', fullUrl);
 }
 
