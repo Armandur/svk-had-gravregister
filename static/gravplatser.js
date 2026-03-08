@@ -1512,6 +1512,24 @@ function normaliseraUtfordatDen(str) {
     }
   }
 
+  // Kortformat 1900-tal: ÅÅ MM DD eller ÅÅMMDD (t.ex. 77 12 09 → 1977-12-09)
+  const kortDatum = /^(\d{2})\s*[\/\.\-]?\s*(\d{1,2})\s*[\/\.\-]?\s*(\d{1,2})$/.exec(s);
+  if (kortDatum) {
+    const yy = parseInt(kortDatum[1], 10);
+    const m = parseInt(kortDatum[2], 10);
+    const d = parseInt(kortDatum[3], 10);
+    const y = 1900 + yy;
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${pad(m)}-${pad(d)}`;
+  }
+  const sexSiffror = /^(\d{2})(\d{2})(\d{2})$/.exec(s.replace(/\s/g, ''));
+  if (sexSiffror) {
+    const yy = parseInt(sexSiffror[1], 10);
+    const m = parseInt(sexSiffror[2], 10);
+    const d = parseInt(sexSiffror[3], 10);
+    const y = 1900 + yy;
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${pad(m)}-${pad(d)}`;
+  }
+
   // DD/MM/YYYY eller DD.MM.YYYY eller DD-MM-YYYY eller DD/MM YYYY
   const dmy = /^(\d{1,2})[\/\.\-](\d{1,2})(?:[\/\.\-]?\s*(\d{4}))?$/.exec(s);
   if (dmy) {
@@ -2738,7 +2756,7 @@ function renderInmatningSektion(sektion) {
         </div>
         <div class="gp-gravplatsen-kolumn gp-gravplatsen-ovrigt">
           <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Kortformat 1900-tal: 77 12 09 → 1977-12-09. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
           <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
           <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
           <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
@@ -3116,9 +3134,16 @@ function valideraDatumRimlighetGravsattBlock(blk) {
   return err;
 }
 
-/** Om värdet är exakt 8 siffror (YYYYMMDD), formatera till YYYY-MM-DD. Endast 8 siffror konverteras; YYYY-MM skrivs manuellt. */
+/** Om värdet är exakt 8 siffror (YYYYMMDD), formatera till YYYY-MM-DD. Endast 8 siffror konverteras; YYYY-MM skrivs manuellt.
+ * För fältet utfordat_den används normaliseraUtfordatDen så att t.ex. 77 12 09 → 1977-12-09. */
 function normaliseraDatumFalt(inp) {
   if (!inp || typeof inp.value !== 'string') return;
+  const name = inp.getAttribute && inp.getAttribute('name');
+  if (name === 'utfordat_den') {
+    const normaliserat = normaliseraUtfordatDen(inp.value);
+    if (normaliserat) inp.value = normaliserat;
+    return;
+  }
   const t = inp.value.trim().replace(/\s/g, '');
   if (/^\d{8}$/.test(t)) {
     const y = t.slice(0, 4);
