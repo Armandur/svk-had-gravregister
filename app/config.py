@@ -2,8 +2,12 @@
 import os
 from pathlib import Path
 
-# Projektrot (en nivå ovanför app/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Projektrot (en nivå ovanför app/). I Docker: sätt DATA_DIR till mountad volym (innehåller gravregister.db och källdata/)
+_data_dir = os.environ.get("DATA_DIR")
+if _data_dir and os.path.isabs(_data_dir):
+    PROJECT_ROOT = Path(_data_dir)
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Mapp med källdata – undermappar = PDF-arkiv per kyrkogård/gravkvarter
 KÄLLDATA_DIR = PROJECT_ROOT / "källdata"
