@@ -1,0 +1,15 @@
+# Data – ska mountas som volym, inte kopieras in i imagen
+källdata/
+gravregister.db
+
+# Utveckling och versioner
+.git
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.env
+*.md
+!DOCKER.md

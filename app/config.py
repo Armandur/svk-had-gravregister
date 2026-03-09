@@ -2,11 +2,24 @@
 import os
 from pathlib import Path
 
-# Projektrot (en nivå ovanför app/)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Projektrot (en nivå ovanför app/). I Docker: sätt DATA_DIR till mountad volym (innehåller gravregister.db och källdata/)
+_data_dir = os.environ.get("DATA_DIR")
+if _data_dir and os.path.isabs(_data_dir):
+    PROJECT_ROOT = Path(_data_dir)
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Mapp med källdata – undermappar = PDF-arkiv per kyrkogård/gravkvarter
 KÄLLDATA_DIR = PROJECT_ROOT / "källdata"
+
+# Databasfil – om DATABASE_PATH sätts används den (absolut sökväg eller relativt PROJECT_ROOT)
+# Ger möjlighet att ha t.ex. gravregister-dev.db i dev-container och gravregister.db i main:latest
+_db_path = os.environ.get("DATABASE_PATH")
+if _db_path:
+    _p = Path(_db_path)
+    DATABASE_PATH = _p if _p.is_absolute() else PROJECT_ROOT / _p
+else:
+    DATABASE_PATH = PROJECT_ROOT / "gravregister.db"
 
 # Session (cookies) – använd stark hemlighet i produktion
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", "dev-secret-byta-i-produktion")
