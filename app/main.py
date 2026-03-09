@@ -5,6 +5,7 @@ import re
 import signal
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import fitz  # PyMuPDF
@@ -30,6 +31,7 @@ from app.database import (
     GravplatsInmatning,
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
+    GravplatsRedigeringslogg,
     GravplatsSkiss,
     Gravsatt,
     init_db,
@@ -171,6 +173,47 @@ async def list_users(admin: User = Depends(require_admin), db: Session = Depends
     return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]}
 
 
+@app.get("/api/loggar/gravplatser")
+async def list_loggar_gravplatser(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    limit: int = 500,
+    offset: int = 0,
+    anvandare: str | None = None,
+):
+    """
+    Lista redigeringslogg för gravplatser – kronologisk ordning (senaste först). Endast admin.
+    anvandare: filtrera på användarnamn (delsträng).
+    """
+    q = (
+        db.query(GravplatsRedigeringslogg, Gravplats, MappConfig.namn, User.username)
+        .join(Gravplats, GravplatsRedigeringslogg.gravplats_id == Gravplats.id)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .join(User, GravplatsRedigeringslogg.user_id == User.id)
+    )
+    if anvandare and anvandare.strip():
+        q = q.filter(User.username.ilike("%" + anvandare.strip() + "%"))
+    total = q.count()
+    rows = (
+        q.order_by(GravplatsRedigeringslogg.edited_at.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 2000)))
+        .all()
+    )
+    loggar = []
+    for logg, g, mapp_namn, username in rows:
+        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        loggar.append({
+            "id": logg.id,
+            "gravplats_id": logg.gravplats_id,
+            "fullstandigt": fullstandigt,
+            "mapp_namn": mapp_namn or "",
+            "username": username or "",
+            "edited_at": logg.edited_at,
+        })
+    return {"loggar": loggar, "antal": len(loggar), "total": total}
+
+
 @app.post("/api/admin/users")
 async def create_user(body: CreateUserBody, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Skapa nytt konto med tillfälligt lösenord (endast admin)."""
@@ -274,6 +317,12 @@ async def listvy_sida():
 async def admin_sida():
     """Användarhantering (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "admin.html")
+
+
+@app.get("/loggar")
+async def loggar_sida():
+    """Redigeringslogg för gravplatser (endast för admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "loggar.html")
 
 
 @app.get("/gravplatser")
@@ -932,11 +981,11 @@ async def list_gravplats_global(
     return {"gravplatser": out}
 
 
-@app.get("/api/gravplatser/nasta-ej-transkriberad")
-async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@app.get("/api/gravplatser/nasta-ej-fardig")
+async def nasta_ej_fardig_gravplats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Returnerar nästa gravplats (i ordningen Kyrkogård → Kvarter → Gravplats) som inte är
-    markerad som färdigtranskriberad. 404 om alla är transkriberade.
+    markerad som färdigtranskriberad (dvs. ej transkriberad eller påbörjad men inte slutförd). 404 om alla är färdiga.
     """
     subq = db.query(GravplatsInmatning.gravplats_id).filter(
         GravplatsInmatning.fardigtranskriberad == True
@@ -950,7 +999,7 @@ async def nasta_ej_transkriberad_gravplats(db: Session = Depends(get_db), curren
     )
     rows = q.all()
     if not rows:
-        raise HTTPException(status_code=404, detail="Ingen icke-transkriberad gravplats hittades")
+        raise HTTPException(status_code=404, detail="Ingen ej färdig gravplats hittades")
 
     def ledande_tal(nr: str) -> int:
         s = (nr or "").strip()
@@ -1062,6 +1111,7 @@ async def avancerad_sok_gravplatser(
     utfardad_fran: int | None = None,
     utfardad_till: int | None = None,
     ej_fardigtranskriberad: bool | None = None,
+    transkriberingsstatus: str | None = None,
     limit: int = 500,
 ):
     """
@@ -1191,8 +1241,47 @@ async def avancerad_sok_gravplatser(
             gp_ids.add(gid)
         q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
 
-    if ej_fardigtranskriberad:
-        # Visa endast gravplatser som inte är markerade som färdigtranskriberade (saknar rad eller fardigtranskriberad = False)
+    # Transkriberingsstatus: ej = ingen data, paborjad = har data men inte färdig, fardig = färdigtranskriberad
+    ids_fardiga = set()
+    ids_med_data = set()
+    if transkriberingsstatus in ("ej", "paborjad", "fardig") or ej_fardigtranskriberad:
+        ids_fardiga = set(
+            r.gravplats_id for r in db.query(GravplatsInmatning.gravplats_id).filter(
+                GravplatsInmatning.fardigtranskriberad == True
+            ).all()
+        )
+        for gid, in db.query(GravplatsInnehavare.gravplats_id).distinct().all():
+            ids_med_data.add(gid)
+        for gid, in db.query(GravplatsNarmastAnhorig.gravplats_id).distinct().all():
+            ids_med_data.add(gid)
+        for gid, in db.query(Gravsatt.gravplats_id).distinct().all():
+            ids_med_data.add(gid)
+        for gid, in db.query(GravplatsSkiss.gravplats_id).distinct().all():
+            ids_med_data.add(gid)
+        for r in db.query(GravplatsInmatning).filter(
+            or_(
+                GravplatsInmatning.storlek != "",
+                GravplatsInmatning.underhall_text != "",
+                GravplatsInmatning.gravrattstid != "",
+                GravplatsInmatning.monument != "",
+                GravplatsInmatning.gravens_utformning != "",
+                GravplatsInmatning.gravplats_nr != "",
+                GravplatsInmatning.karta_nr != "",
+                GravplatsInmatning.gravbrev_nr != "",
+                GravplatsInmatning.utfordat_den != "",
+                GravplatsInmatning.kommentar != "",
+                GravplatsInmatning.skiss_bild.isnot(None),
+            )
+        ).all():
+            ids_med_data.add(r.gravplats_id)
+    if transkriberingsstatus == "ej":
+        q = q.filter(~Gravplats.id.in_(ids_med_data))
+    elif transkriberingsstatus == "paborjad":
+        q = q.filter(Gravplats.id.in_(ids_med_data), ~Gravplats.id.in_(ids_fardiga))
+    elif transkriberingsstatus == "fardig":
+        q = q.filter(Gravplats.id.in_(ids_fardiga))
+    elif ej_fardigtranskriberad:
+        # Bakåtkompatibilitet: visa endast ej färdigtranskriberade (ej + påbörjad)
         subq = db.query(GravplatsInmatning.gravplats_id).filter(
             GravplatsInmatning.fardigtranskriberad == True
         ).distinct()
@@ -1781,7 +1870,10 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "gravsatta": gravsatta_list,
             "skisser": skisser_list,
             "version": 0,
-        }
+            "last_edited_at": None,
+            "last_edited_by_username": None,
+    }
+    last_editor = db.query(User).filter(User.id == row.last_edited_by_user_id).first() if getattr(row, "last_edited_by_user_id", None) else None
     return {
         "gravplats_id": gravplats_id,
         "innehavare": innehavare_list,
@@ -1801,6 +1893,8 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         "gravsatta": gravsatta_list,
         "skisser": skisser_list,
         "version": getattr(row, "version", 0),
+        "last_edited_at": getattr(row, "last_edited_at", None),
+        "last_edited_by_username": last_editor.username if last_editor else None,
     }
 
 
@@ -1915,7 +2009,14 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             ).first()
             if em:
                 em.kommentar = (kommentar or "").strip() if isinstance(kommentar, str) else ""
+    row.last_edited_by_user_id = current_user.id
+    row.last_edited_at = datetime.now(timezone.utc).isoformat()
     row.version = getattr(row, "version", 0) + 1
+    db.add(GravplatsRedigeringslogg(
+        gravplats_id=gravplats_id,
+        user_id=current_user.id,
+        edited_at=row.last_edited_at,
+    ))
     db.commit()
     return _inmatning_response(gravplats_id, db)
 

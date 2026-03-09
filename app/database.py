@@ -148,6 +148,19 @@ class GravplatsInmatning(Base):
     skiss_bild: Mapped[bytes | None] = mapped_column(nullable=True)  # PNG/JPEG blob
     fardigtranskriberad: Mapped[bool] = mapped_column(default=False)  # All info från bilderna har förts över
     version: Mapped[int] = mapped_column(default=0)  # Optimistic locking: ökas vid varje uppdatering
+    last_edited_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
+    last_edited_at: Mapped[str | None] = mapped_column(nullable=True)  # ISO 8601 datetime (UTC)
+    # För full historik se GravplatsRedigeringslogg.
+
+
+class GravplatsRedigeringslogg(Base):
+    """Logg över varje sparande av gravplatsinmatning – kronologisk historik för admin."""
+    __tablename__ = "gravplats_redigeringslogg"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    edited_at: Mapped[str] = mapped_column()  # ISO 8601 datetime (UTC)
 
 
 class GravplatsSkiss(Base):
@@ -275,6 +288,12 @@ def init_db():
                 conn.commit()
             if "version" not in cols_inm:
                 conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN version INTEGER DEFAULT 0"))
+                conn.commit()
+            if "last_edited_by_user_id" not in cols_inm:
+                conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN last_edited_by_user_id INTEGER REFERENCES user(id)"))
+                conn.commit()
+            if "last_edited_at" not in cols_inm:
+                conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN last_edited_at TEXT"))
                 conn.commit()
         except Exception:
             pass

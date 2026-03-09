@@ -189,9 +189,14 @@
             <input type="checkbox" name="har_extramaterial" id="gp-sok-extramaterial" value="1" />
             <label for="gp-sok-extramaterial">Gravplatser som har extramaterial</label>
           </div>
-          <div class="gp-sok-checkbox">
-            <input type="checkbox" name="ej_fardigtranskriberad" id="gp-sok-ej-fardigtranskriberad" value="1" />
-            <label for="gp-sok-ej-fardigtranskriberad">Visa endast ej färdigtranskriberade</label>
+          <div class="gp-sok-falt">
+            <label for="gp-sok-transkriberingsstatus"><span>Transkriberingsstatus</span></label>
+            <select id="gp-sok-transkriberingsstatus" name="transkriberingsstatus" class="gp-sok-select" aria-label="Filtrera på transkriberingsstatus">
+              <option value="">Alla</option>
+              <option value="ej">Ej transkriberad</option>
+              <option value="paborjad">Transkribering påbörjad</option>
+              <option value="fardig">Färdigtranskriberad</option>
+            </select>
           </div>
         </section>
       </div>
