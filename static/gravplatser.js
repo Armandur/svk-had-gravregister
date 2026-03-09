@@ -2211,7 +2211,7 @@ function uppdateraFardigtranskriberadKnapp() {
     btn.classList.add('gp-fardigtranskriberad-nej');
     btn.textContent = 'Ej transkriberad';
   }
-  btn.disabled = currentGravplatsId == null || !inmatningRedigerar || !harData;
+  btn.disabled = currentGravplatsId == null || !inmatningRedigerar;
   uppdateraOcrKnapp();
   uppdateraSenastRedigerad();
 }

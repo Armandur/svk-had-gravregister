@@ -194,6 +194,15 @@
 .gravplatser-innehall-topp {
   flex-shrink: 0;
   margin-bottom: 0.35rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.gravplatser-innehall-topp .gravplatser-rubrik {
+  margin: 0;
+  min-width: 0;
 }
 
 .gravplatser-menyrad {
@@ -792,11 +801,13 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   filter: brightness(1.1);
 }
 
-/* Senast redigerad – ovanför knapparna */
+/* Senast redigerad – samma rad som gravplatsnummer, längst till höger */
 .gp-senast-redigerad {
-  margin: 0 0 0.5rem 0;
+  margin: 0;
   font-size: 0.85rem;
   color: #64748b;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Färdigtranskriberad-knapp: grön när klar, gul när påbörjad, röd när ej klar; i läsvy (slutat redigera) är den inte klickbar */
