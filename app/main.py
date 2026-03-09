@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_, tuple_, update
+from sqlalchemy import and_, case, func, or_, tuple_, update
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -405,6 +405,61 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
 
     total_gravplatser = db.query(Gravplats).count()
 
+    # Transkriberingsstatus per kyrkogård och gravkvarter (kyrkogård + kvarter)
+    transkriberings_rows = (
+        db.query(
+            Gravplats.kyrkogard,
+            Gravplats.kvarter,
+            func.count(Gravplats.id).label("total"),
+            func.sum(
+                case((GravplatsInmatning.fardigtranskriberad == True, 1), else_=0)
+            ).label("fardiga"),
+        )
+        .outerjoin(GravplatsInmatning, Gravplats.id == GravplatsInmatning.gravplats_id)
+        .filter(
+            Gravplats.kyrkogard.isnot(None),
+            Gravplats.kyrkogard != "",
+            Gravplats.kvarter.isnot(None),
+            Gravplats.kvarter != "",
+        )
+        .group_by(Gravplats.kyrkogard, Gravplats.kvarter)
+        .all()
+    )
+    # Bygg hierarki: total, per kyrkogård, per kvarter
+    transk_total = 0
+    transk_fardiga = 0
+    kyrkogardar_data: list[dict] = []
+    per_kyrkogard: dict[str, dict] = {}  # kyrkogard -> { total, fardiga, kvarter: [ { kvarter, total, fardiga } ] }
+    for row in transkriberings_rows:
+        kg = (row.kyrkogard or "").strip()
+        kv = (row.kvarter or "").strip()
+        total_val = row.total or 0
+        fardiga_val = int(row.fardiga or 0)
+        transk_total += total_val
+        transk_fardiga += fardiga_val
+        if kg not in per_kyrkogard:
+            per_kyrkogard[kg] = {"total": 0, "fardiga": 0, "kvarter": []}
+        per_kyrkogard[kg]["total"] += total_val
+        per_kyrkogard[kg]["fardiga"] += fardiga_val
+        per_kyrkogard[kg]["kvarter"].append({
+            "kvarter": kv,
+            "total": total_val,
+            "fardiga": fardiga_val,
+        })
+    for kg in sorted(per_kyrkogard.keys(), key=lambda x: (x.upper(), x)):
+        kvarter_list = per_kyrkogard[kg]["kvarter"]
+        kvarter_list.sort(key=lambda x: (x["kvarter"].lower(), x["kvarter"]))
+        kyrkogardar_data.append({
+            "kyrkogard": kg,
+            "total": per_kyrkogard[kg]["total"],
+            "fardiga": per_kyrkogard[kg]["fardiga"],
+            "kvarter": kvarter_list,
+        })
+    transkriberingsstatus = {
+        "total": {"total": transk_total, "fardiga": transk_fardiga},
+        "kyrkogardar": kyrkogardar_data,
+    }
+
     return {
         "antal_mappar": antal_mappar,
         "antal_pdf": antal_pdf,
@@ -412,6 +467,7 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         "gravplatser_fullstandiga": gravplatser_fullstandiga,
         "gravplatser_fardigtranskriberade": antal_fardigtranskriberade,
         "total_gravplatser": total_gravplatser,
+        "transkriberingsstatus": transkriberingsstatus,
         "antal_extramaterial": antal_extramaterial,
         "antal_innehavare": antal_innehavare,
         "antal_narmast_anhoriga": antal_narmast_anhoriga,
