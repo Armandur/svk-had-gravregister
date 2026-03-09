@@ -183,6 +183,27 @@
 
   // Statistik
   const statListEl = document.getElementById('startsida-statistik-lista');
+  const statistikSection = document.getElementById('startsida-statistik');
+  if (statistikSection) {
+    statistikSection.addEventListener('click', function (e) {
+      var klickbar = e.target && e.target.closest('.startsida-transkriberingsstatus-kyrkogard-klickbar');
+      if (!klickbar) return;
+      var id = klickbar.getAttribute('aria-controls');
+      var list = id ? document.getElementById(id) : null;
+      if (!list) return;
+      var expanded = klickbar.getAttribute('aria-expanded') === 'true';
+      list.hidden = expanded;
+      klickbar.setAttribute('aria-expanded', !expanded);
+      var chevron = klickbar.querySelector('.startsida-transkriberingsstatus-chevron');
+      if (chevron) chevron.textContent = expanded ? '\u25B6' : '\u25BC';
+    });
+    statistikSection.addEventListener('keydown', function (e) {
+      var klickbar = e.target && e.target.closest('.startsida-transkriberingsstatus-kyrkogard-klickbar');
+      if (!klickbar || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      klickbar.click();
+    });
+  }
   if (statListEl) {
     fetch(API + '/statistik', { credentials: 'include' })
       .then(function (res) { return res.ok ? res.json() : null; })
@@ -209,10 +230,74 @@
         }).join('');
 
         var stapelWrap = document.getElementById('startsida-statistik-stapel-wrap');
+        if (stapelWrap) stapelWrap.setAttribute('hidden', '');
+
+        var transkWrap = document.getElementById('startsida-transkriberingsstatus-wrap');
+        if (transkWrap && data.transkriberingsstatus) {
+          var ts = data.transkriberingsstatus;
+          var total = ts.total;
+          var kyrkogardar = ts.kyrkogardar || [];
+          function procentStr(t, f) {
+            if (typeof t !== 'number' || t <= 0) return '0';
+            var fardiga = typeof f === 'number' ? f : 0;
+            return String(Math.min(100, Math.round((fardiga / t) * 100)));
+          }
+          function barHtml(label, totalVal, fardigaVal) {
+            var p = procentStr(totalVal, fardigaVal);
+            var text = label + ' – ' + fardigaVal + ' av ' + totalVal + ', ' + p + '%';
+            return '<div class="startsida-statistik-stapel-label">' + escapeHtml(text) + '</div>' +
+              '<div class="startsida-statistik-stapel" role="img" aria-label="' + escapeHtml(p) + ' procent">' +
+              '<div class="startsida-statistik-stapel-fardiga" style="width:' + p + '%"></div>' +
+              '<div class="startsida-statistik-stapel-rest" style="width:' + (100 - parseInt(p, 10)) + '%"></div></div>';
+          }
+          var html = '<h3>Transkriberingsstatus</h3>';
+          if (total && typeof total.total === 'number' && total.total > 0) {
+            html += '<div class="startsida-transkriberingsstatus-rad">' +
+              barHtml('Totalt', total.total, total.fardiga) + '</div>';
+          }
+          kyrkogardar.forEach(function (kg, kgIndex) {
+            var kvarterList = kg.kvarter || [];
+            var nKvarter = kvarterList.length;
+            var kvarterListId = 'transk-kvarter-' + kgIndex;
+            html += '<div class="startsida-transkriberingsstatus-kyrkogard-block">';
+            if (nKvarter > 0) {
+              html += '<div class="startsida-transkriberingsstatus-kyrkogard-klickbar startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kyrkogard" role="button" tabindex="0" aria-expanded="false" aria-controls="' + kvarterListId + '" aria-label="' + escapeHtml(kg.kyrkogard + ', klicka för att visa kvarter') + '">';
+            } else {
+              html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kyrkogard">';
+            }
+            html += '<div class="startsida-statistik-stapel-label">' + escapeHtml(kg.kyrkogard + ' – ' + kg.fardiga + ' av ' + kg.total + ', ' + procentStr(kg.total, kg.fardiga) + '%');
+            if (nKvarter > 0) {
+              html += ' <span class="startsida-transkriberingsstatus-chevron" aria-hidden="true">&#9654;</span>';
+            }
+            html += '</div>';
+            html += '<div class="startsida-statistik-stapel" role="img" aria-label="' + escapeHtml(procentStr(kg.total, kg.fardiga)) + ' procent">' +
+              '<div class="startsida-statistik-stapel-fardiga" style="width:' + procentStr(kg.total, kg.fardiga) + '%"></div>' +
+              '<div class="startsida-statistik-stapel-rest" style="width:' + (100 - parseInt(procentStr(kg.total, kg.fardiga), 10)) + '%"></div></div>';
+            html += '</div>';
+            if (nKvarter > 0) {
+              html += '<div class="startsida-transkriberingsstatus-kvarter-list" id="' + kvarterListId + '" hidden>';
+              kvarterList.forEach(function (kv) {
+                var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter;
+                html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter">' +
+                  barHtml(kvarterLabel, kv.total, kv.fardiga) + '</div>';
+              });
+              html += '</div>';
+            }
+            html += '</div>';
+          });
+          transkWrap.innerHTML = html;
+          transkWrap.removeAttribute('hidden');
+          transkWrap.setAttribute('aria-hidden', 'false');
+        } else if (transkWrap) {
+          transkWrap.setAttribute('hidden', '');
+          transkWrap.setAttribute('aria-hidden', 'true');
+          transkWrap.innerHTML = '';
+        }
+
         if (stapelWrap) {
           var total = data.total_gravplatser;
           var fardiga = data.gravplatser_fardigtranskriberade;
-          if (typeof total === 'number' && total > 0 && typeof fardiga === 'number') {
+          if (!data.transkriberingsstatus && typeof total === 'number' && total > 0 && typeof fardiga === 'number') {
             var procent = Math.min(100, Math.round((fardiga / total) * 100));
             stapelWrap.innerHTML = '<p class="startsida-statistik-stapel-label">Färdigtranskriberade gravplatser (' + fardiga + ' av ' + total + ', ' + procent + '%)</p><div class="startsida-statistik-stapel" role="img" aria-label="' + procent + ' procent färdigtranskriberade"><div class="startsida-statistik-stapel-fardiga" style="width:' + procent + '%"></div><div class="startsida-statistik-stapel-rest" style="width:' + (100 - procent) + '%"></div></div>';
             stapelWrap.removeAttribute('hidden');
