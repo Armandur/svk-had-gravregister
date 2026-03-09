@@ -21,6 +21,11 @@
       if (me.is_admin) adminLink.removeAttribute('hidden');
       else adminLink.remove();
     }
+    var loggarLink = document.getElementById('startsida-loggar-lank');
+    if (loggarLink) {
+      if (me.is_admin) loggarLink.removeAttribute('hidden');
+      else loggarLink.remove();
+    }
   });
 
   document.getElementById('startsida-logga-ut')?.addEventListener('click', function(e) {
@@ -147,15 +152,15 @@
     }
   });
 
-  // Gå till nästa icke-transkriberade gravplats
+  // Gå till nästa ej färdiga gravplats (ej transkriberad eller påbörjad men inte slutförd)
   const nastaBtn = document.getElementById('startsida-nasta-ej-transkriberad');
   if (nastaBtn) {
     nastaBtn.addEventListener('click', function () {
       nastaBtn.disabled = true;
-      fetch(API + '/gravplatser/nasta-ej-transkriberad', { credentials: 'include' })
+      fetch(API + '/gravplatser/nasta-ej-fardig', { credentials: 'include' })
         .then(function (res) {
           if (res.status === 404) {
-            alert('Ingen icke-transkriberad gravplats hittades. Alla gravplatser är redan transkriberade.');
+            alert('Ingen ej färdig gravplats hittades. Alla gravplatser är markerade som färdigtranskriberade.');
             return null;
           }
           if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');

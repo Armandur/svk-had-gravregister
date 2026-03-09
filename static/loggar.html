@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loggar – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .loggar-sida { max-width: 56rem; margin: 2rem auto; padding: 2rem; }
+    .loggar-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    .loggar-sida a { color: var(--accent, #2563eb); text-decoration: none; }
+    .loggar-sida a:hover { text-decoration: underline; }
+    .loggar-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+    .loggar-filter input { padding: 0.4rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; width: 12rem; box-sizing: border-box; }
+    .loggar-filter input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .loggar-filter button { padding: 0.4rem 0.75rem; font-size: 0.95rem; cursor: pointer; background: var(--accent, #2563eb); color: #fff; border: none; border-radius: 6px; }
+    .loggar-filter button:hover { filter: brightness(1.05); }
+    .loggar-info { font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem; }
+    .loggar-tabell-wrap { overflow-x: auto; margin-bottom: 1rem; }
+    .loggar-tabell { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .loggar-tabell th, .loggar-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+    .loggar-tabell th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+    .loggar-tabell tbody tr:hover { background: #f8fafc; }
+    .loggar-tabell .loggar-datum { white-space: nowrap; }
+    .loggar-tabell .loggar-grav a { font-weight: 500; }
+    .loggar-paginering { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+    .loggar-paginering button { padding: 0.35rem 0.6rem; font-size: 0.9rem; cursor: pointer; background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px; }
+    .loggar-paginering button:hover:not(:disabled) { background: #e2e8f0; }
+    .loggar-paginering button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .loggar-ingen { color: #64748b; font-style: italic; margin-top: 1rem; }
+    .loggar-fel { color: #b91c1c; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="loggar-sida">
+    <h1>Loggar – gravplatsredigeringar</h1>
+    <p><a href="/">← Tillbaka till menyn</a></p>
+    <p id="loggar-ingen">Endast administratörer kan se loggar.</p>
+    <section id="loggar-innehall" hidden>
+      <p class="loggar-info" id="loggar-info">Här visas sparade ändringar av gravplatser, senaste först. Klicka på en gravplats för att öppna den.</p>
+      <div class="loggar-filter">
+        <label>Filtrera på användare <input type="text" id="loggar-filter-anvandare" placeholder="t.ex. användarnamn" /></label>
+        <button type="button" id="loggar-filter-btn">Filtrera</button>
+        <button type="button" id="loggar-rensa-btn">Rensa filter</button>
+      </div>
+      <div class="loggar-tabell-wrap">
+        <table class="loggar-tabell" id="loggar-tabell" role="grid">
+          <thead>
+            <tr>
+              <th scope="col">Datum och tid</th>
+              <th scope="col">Gravplats</th>
+              <th scope="col">Mapp</th>
+              <th scope="col">Användare</th>
+            </tr>
+          </thead>
+          <tbody id="loggar-tbody"></tbody>
+        </table>
+      </div>
+      <p class="loggar-ingen" id="loggar-tom" hidden>Inga loggposter hittades.</p>
+      <div class="loggar-paginering" id="loggar-paginering">
+        <span id="loggar-paginering-text"></span>
+        <button type="button" id="loggar-prev" disabled>Föregående</button>
+        <button type="button" id="loggar-next" disabled>Nästa</button>
+      </div>
+    </section>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+    (function() {
+      const API = '/api';
+      const PAGE_SIZE = 100;
+      let currentOffset = 0;
+      let totalCount = 0;
+      let filterAnvandare = '';
+
+      const innehall = document.getElementById('loggar-innehall');
+      const ingen = document.getElementById('loggar-ingen');
+      const tbody = document.getElementById('loggar-tbody');
+      const tomEl = document.getElementById('loggar-tom');
+      const pagineringEl = document.getElementById('loggar-paginering');
+      const pagineringText = document.getElementById('loggar-paginering-text');
+      const prevBtn = document.getElementById('loggar-prev');
+      const nextBtn = document.getElementById('loggar-next');
+      const filterInput = document.getElementById('loggar-filter-anvandare');
+      const filterBtn = document.getElementById('loggar-filter-btn');
+      const rensaBtn = document.getElementById('loggar-rensa-btn');
+
+      function formatDatum(s) {
+        if (!s) return '–';
+        try {
+          var d = new Date(s);
+          if (isNaN(d.getTime())) return s;
+          return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+        } catch (_) { return s; }
+      }
+
+      function slugFromFullstandigt(fullstandigt) {
+        var t = (fullstandigt || '').trim();
+        return t ? encodeURIComponent(t) : '';
+      }
+
+      function laddaLoggar() {
+        tbody.innerHTML = '';
+        tomEl.hidden = true;
+        var params = new URLSearchParams();
+        params.set('limit', String(PAGE_SIZE));
+        params.set('offset', String(currentOffset));
+        if (filterAnvandare) params.set('anvandare', filterAnvandare);
+
+        fetch(API + '/loggar/gravplatser?' + params.toString(), { credentials: 'include' })
+          .then(function(res) {
+            if (res.status === 403) {
+              innehall.hidden = true;
+              ingen.hidden = false;
+              return null;
+            }
+            if (res.status === 401) {
+              window.location.href = '/login?redirect=' + encodeURIComponent('/loggar');
+              return null;
+            }
+            if (!res.ok) throw new Error('Kunde inte hämta loggar');
+            return res.json();
+          })
+          .then(function(data) {
+            if (!data) return;
+            ingen.hidden = true;
+            innehall.hidden = false;
+            totalCount = data.total != null ? data.total : (data.loggar || []).length;
+            var loggar = data.loggar || [];
+            if (loggar.length === 0 && currentOffset === 0) {
+              tomEl.hidden = false;
+            }
+            loggar.forEach(function(r) {
+              var tr = document.createElement('tr');
+              var slug = slugFromFullstandigt(r.fullstandigt);
+              var gravLink = slug ? '<a href="/gravplatser/' + slug + '">' + (r.fullstandigt || '–') + '</a>' : (r.fullstandigt || '–');
+              tr.innerHTML = '<td class="loggar-datum">' + formatDatum(r.edited_at) + '</td>' +
+                '<td class="loggar-grav">' + gravLink + '</td>' +
+                '<td>' + (r.mapp_namn || '–') + '</td>' +
+                '<td>' + (r.username || '–') + '</td>';
+              tbody.appendChild(tr);
+            });
+            pagineringText.textContent = 'Visar ' + (currentOffset + 1) + '–' + (currentOffset + loggar.length) + ' av ' + totalCount;
+            prevBtn.disabled = currentOffset === 0;
+            nextBtn.disabled = currentOffset + loggar.length >= totalCount;
+          })
+          .catch(function(err) {
+            innehall.hidden = false;
+            ingen.hidden = true;
+            ingen.textContent = 'Fel: ' + (err.message || 'nätverksfel');
+          });
+      }
+
+      if (filterBtn) filterBtn.addEventListener('click', function() {
+        filterAnvandare = (filterInput && filterInput.value) ? filterInput.value.trim() : '';
+        currentOffset = 0;
+        laddaLoggar();
+      });
+      if (rensaBtn) rensaBtn.addEventListener('click', function() {
+        filterAnvandare = '';
+        if (filterInput) filterInput.value = '';
+        currentOffset = 0;
+        laddaLoggar();
+      });
+      if (prevBtn) prevBtn.addEventListener('click', function() {
+        if (currentOffset > 0) {
+          currentOffset = Math.max(0, currentOffset - PAGE_SIZE);
+          laddaLoggar();
+        }
+      });
+      if (nextBtn) nextBtn.addEventListener('click', function() {
+        currentOffset += PAGE_SIZE;
+        laddaLoggar();
+      });
+
+      (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() {
+        laddaLoggar();
+      });
+    })();
+  </script>
+</body>
+</html>

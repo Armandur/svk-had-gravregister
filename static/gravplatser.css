@@ -792,7 +792,14 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   filter: brightness(1.1);
 }
 
-/* Färdigtranskriberad-knapp: grön när klar, röd när ej klar; i läsvy (slutat redigera) är den inte klickbar */
+/* Senast redigerad – ovanför knapparna */
+.gp-senast-redigerad {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+/* Färdigtranskriberad-knapp: grön när klar, gul när påbörjad, röd när ej klar; i läsvy (slutat redigera) är den inte klickbar */
 .gp-inmatning-btn-fardigtranskriberad {
   padding: 0.35rem 0.75rem;
   font-size: 0.9rem;
@@ -807,12 +814,18 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   color: white;
 }
 
+.gp-inmatning-btn-fardigtranskriberad.gp-fardigtranskriberad-paborjad {
+  background: #b45309;
+  color: white;
+}
+
 .gp-inmatning-btn-fardigtranskriberad.gp-fardigtranskriberad-nej {
   background: #b91c1c;
   color: white;
 }
 
 .gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-ja:hover,
+.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-paborjad:hover,
 .gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-nej:hover {
   filter: brightness(1.15);
 }

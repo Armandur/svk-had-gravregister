@@ -2179,15 +2179,71 @@ function uppdateraInmatningSparaKnapp() {
   if (btn) btn.disabled = !inmatningDirty;
 }
 
+function inmatningHarNagonData() {
+  if (!inmatningData) return false;
+  const s = (v) => (v != null && String(v).trim() !== '');
+  if (s(inmatningData.storlek) || s(inmatningData.underhall_text) || s(inmatningData.gravrattstid) || s(inmatningData.monument) ||
+      s(inmatningData.gravens_utformning) || s(inmatningData.karta_nr) || s(inmatningData.gravbrev_nr) || s(inmatningData.utfordat_den) || s(inmatningData.kommentar))
+    return true;
+  const inv = inmatningData.innehavare || [];
+  if (inv.some((i) => s(i.fornamn) || s(i.efternamn) || s(i.yrke) || s(i.adress) || s(i.kommentar))) return true;
+  const na = inmatningData.narmast_anhoriga || [];
+  if (na.some((n) => s(n.fornamn) || s(n.efternamn) || s(n.yrke) || s(n.adress) || s(n.kommentar))) return true;
+  const gs = inmatningData.gravsatta || [];
+  if (gs.some((g) => g.ar_beteckning || s(g.fornamn) || s(g.efternamn) || s(g.gravsatt_den) || s(g.kommentar))) return true;
+  if (inmatningData.has_skiss || ((inmatningData.skisser || []).length > 0)) return true;
+  return false;
+}
+
 function uppdateraFardigtranskriberadKnapp() {
   const btn = document.getElementById('gp-btn-fardigtranskriberad');
   if (!btn) return;
   const arFardig = inmatningData && inmatningData.fardigtranskriberad === true;
-  btn.classList.remove('gp-fardigtranskriberad-ja', 'gp-fardigtranskriberad-nej');
-  btn.classList.add(arFardig ? 'gp-fardigtranskriberad-ja' : 'gp-fardigtranskriberad-nej');
-  btn.textContent = arFardig ? 'Färdigtranskriberad' : 'Ej färdigtranskriberad';
-  btn.disabled = currentGravplatsId == null || !inmatningRedigerar;
+  const harData = inmatningHarNagonData();
+  btn.classList.remove('gp-fardigtranskriberad-ja', 'gp-fardigtranskriberad-paborjad', 'gp-fardigtranskriberad-nej');
+  if (arFardig) {
+    btn.classList.add('gp-fardigtranskriberad-ja');
+    btn.textContent = 'Färdigtranskriberad';
+  } else if (harData) {
+    btn.classList.add('gp-fardigtranskriberad-paborjad');
+    btn.textContent = 'Transkribering påbörjad';
+  } else {
+    btn.classList.add('gp-fardigtranskriberad-nej');
+    btn.textContent = 'Ej transkriberad';
+  }
+  btn.disabled = currentGravplatsId == null || !inmatningRedigerar || !harData;
   uppdateraOcrKnapp();
+  uppdateraSenastRedigerad();
+}
+
+function uppdateraSenastRedigerad() {
+  const el = document.getElementById('gp-senast-redigerad');
+  if (!el) return;
+  const when = inmatningData && inmatningData.last_edited_at;
+  const who = inmatningData && inmatningData.last_edited_by_username;
+  if (!when && !who) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  let text = '';
+  if (who) text = 'Senast redigerad: ' + who;
+  if (when) {
+    try {
+      const d = new Date(when);
+      if (!Number.isNaN(d.getTime())) {
+        const datumStr = d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'long', year: 'numeric' });
+        const tidStr = d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+        const dt = datumStr + ' kl. ' + tidStr;
+        text = text ? text + ' ' + dt : 'Senast redigerad: ' + dt;
+      }
+    } catch (_) {
+      text = text ? text + ' ' + when : 'Senast redigerad: ' + when;
+    }
+  }
+  if (!text && who) text = 'Senast redigerad: ' + who;
+  el.textContent = text.trim();
+  el.hidden = false;
 }
 
 function uppdateraOcrKnapp() {
