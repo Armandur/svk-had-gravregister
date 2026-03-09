@@ -4,10 +4,10 @@ from pathlib import Path
 from sqlalchemy import ForeignKey, UniqueConstraint, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
-from app.config import PROJECT_ROOT
+from app.config import DATABASE_PATH
 
-# SQLite-fil i projektroten
-DB_PATH = PROJECT_ROOT / "gravregister.db"
+# SQLite-fil – sätts via config (default gravregister.db i PROJECT_ROOT, eller DATABASE_PATH)
+DB_PATH = DATABASE_PATH
 
 
 class Base(DeclarativeBase):

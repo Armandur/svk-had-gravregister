@@ -12,6 +12,15 @@ else:
 # Mapp med källdata – undermappar = PDF-arkiv per kyrkogård/gravkvarter
 KÄLLDATA_DIR = PROJECT_ROOT / "källdata"
 
+# Databasfil – om DATABASE_PATH sätts används den (absolut sökväg eller relativt PROJECT_ROOT)
+# Ger möjlighet att ha t.ex. gravregister-dev.db i dev-container och gravregister.db i main:latest
+_db_path = os.environ.get("DATABASE_PATH")
+if _db_path:
+    _p = Path(_db_path)
+    DATABASE_PATH = _p if _p.is_absolute() else PROJECT_ROOT / _p
+else:
+    DATABASE_PATH = PROJECT_ROOT / "gravregister.db"
+
 # Session (cookies) – använd stark hemlighet i produktion
 SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", "dev-secret-byta-i-produktion")
 

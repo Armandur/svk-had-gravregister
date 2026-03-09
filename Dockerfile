@@ -19,7 +19,9 @@ COPY app/ ./app/
 COPY static/ ./static/
 
 # Volym för data: sätt DATA_DIR=/data och mounta katalog med gravregister.db och källdata/
+# DATABASE_PATH kan överstyras (t.ex. /data/gravregister-dev.db) för att dela källdata men ha olika db-filer
 ENV DATA_DIR=/data
+ENV DATABASE_PATH=/data/gravregister.db
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8000

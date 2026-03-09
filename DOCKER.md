@@ -24,13 +24,14 @@ Containern förväntar sig en **data-katalog** (t.ex. `/data`) som innehåller:
 - **`gravregister.db`** – SQLite-databasen (skapas automatiskt om den saknas)
 - **`källdata/`** – mapp med undermappar per PDF-arkiv (kyrkogård/gravkvarter). Varje undermapp innehåller PDF-filer.
 
-Sätt miljövariabeln `DATA_DIR` till sökvägen till denna katalog i containern (standard i Dockerfile: `/data`).
+Sätt miljövariabeln `DATA_DIR` till sökvägen till denna katalog i containern (standard i Dockerfile: `/data`). Om du vill använda en annan databasfil (t.ex. för dev-container med samma källdata), sätt `DATABASE_PATH` (t.ex. `/data/gravregister-dev.db`).
 
 ## Miljövariabler
 
 | Variabel | Beskrivning |
 |---------|-------------|
-| `DATA_DIR` | Sökväg till data-katalogen i containern (default: `/data`). Här ska `gravregister.db` och `källdata/` ligga. |
+| `DATA_DIR` | Sökväg till data-katalogen i containern (default: `/data`). Här ska `källdata/` ligga (och eventuellt databasfilen om du inte använder `DATABASE_PATH`). |
+| `DATABASE_PATH` | Full sökväg till SQLite-databasfilen (default i image: `/data/gravregister.db`). Sätt t.ex. `/data/gravregister-dev.db` i en dev-container för att använda samma källdatamapp men en egen databas. |
 | `SESSION_SECRET_KEY` | Hemlig nyckel för session-cookies. **Sätt i produktion** (t.ex. lång slumpsträng). |
 | `ADMIN_INITIAL_PASSWORD` | Valfritt: om databasen är tom skapas användaren `admin` med detta lösenord vid första start. |
 
@@ -50,6 +51,8 @@ På hosten ska `/sökväg/på/host/gravregister-data` innehålla:
 
 - `gravregister.db` (kan skapas tom eller kopieras från utveckling)
 - `källdata/` med undermappar, t.ex. `källdata/01 HKG 01-09/` med PDF-filer
+
+**Samma källdata, olika databaser (t.ex. dev + main):** Mounta samma data-mapp för båda containrarna. Kör main med default `DATABASE_PATH=/data/gravregister.db`. Kör dev-containern med t.ex. `-e DATABASE_PATH=/data/gravregister-dev.db` – då delar ni källdata men har separata databaser.
 
 ## Unraid
 
