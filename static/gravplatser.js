@@ -1376,12 +1376,13 @@ function startOcrOverlay(fig, initialEvent) {
       const trimmed = (text || '').trim();
       if (!ocrTargetElement) return;
       if (trimmed === '') {
-        if (arDatumFaltForOcr(ocrTargetElement)) return;
-        if (ocrNamnLage === 'f') {
+        if (!arDatumFaltForOcr(ocrTargetElement)) {
+          if (ocrNamnLage === 'f') {
+            ocrNamnLage = null;
+            ocrFoddenamnFalt = null;
+          }
           ocrNamnLage = null;
-          ocrFoddenamnFalt = null;
         }
-        ocrNamnLage = null;
         visaIkonSomTomExtrahering();
         return;
       }
@@ -1437,6 +1438,8 @@ function startOcrOverlay(fig, initialEvent) {
           } catch (_) {}
           markInmatningDirty();
           if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+        } else {
+          visaIkonSomTomExtrahering();
         }
       } else {
         infogaOcrIFalt(trimmed);
@@ -1491,7 +1494,8 @@ function runOcr(imageUrl, rect) {
  * - Endast år -> YYYY-00-00
  * - År + månad -> YYYY-MM-00
  * - Fullständigt datum -> YYYY-MM-DD
- * Accepterar t.ex. DD/MM/YYYY, DD.MM.YYYY, DD/MM YYYY, YYYY-MM-DD, månadsnamn + år.
+ * Accepterar t.ex. YYYY MM DD, YY MM DD (mellanslag, inga bindestreck – OCR),
+ * DD/MM/YYYY, DD.MM.YYYY, DD/MM YYYY, YYYY-MM-DD, månadsnamn + år.
  */
 function normaliseraUtfordatDen(str) {
   const s = (str || '').trim().replace(/\s+/g, ' ');
@@ -1512,7 +1516,20 @@ function normaliseraUtfordatDen(str) {
     }
   }
 
-  // Kortformat 1900-tal: ÅÅ MM DD eller ÅÅMMDD (t.ex. 77 12 09 → 1977-12-09)
+  // YYYY MM DD eller YYYY MM (mellanslag, inga bindestreck – t.ex. OCR)
+  const ymdSpace = /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})$/.exec(s);
+  if (ymdSpace) {
+    const y = parseInt(ymdSpace[1], 10);
+    const m = parseInt(ymdSpace[2], 10);
+    const d = parseInt(ymdSpace[3], 10);
+    if (y >= 1000 && y <= 9999 && m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${pad(m)}-${pad(d)}`;
+  }
+  const ymSpace = /^(\d{4})\s+(\d{1,2})$/.exec(s);
+  if (ymSpace) {
+    const y = parseInt(ymSpace[1], 10);
+    const m = parseInt(ymSpace[2], 10);
+    if (y >= 1000 && y <= 9999 && m >= 1 && m <= 12) return `${y}-${pad(m)}-00`;
+  }
   const kortDatum = /^(\d{2})\s*[\/\.\-]?\s*(\d{1,2})\s*[\/\.\-]?\s*(\d{1,2})$/.exec(s);
   if (kortDatum) {
     const yy = parseInt(kortDatum[1], 10);
@@ -2812,7 +2829,7 @@ function renderInmatningSektion(sektion) {
         </div>
         <div class="gp-gravplatsen-kolumn gp-gravplatsen-ovrigt">
           <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Kortformat 1900-tal: 77 12 09 → 1977-12-09. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Med mellanslag (t.ex. OCR): YYYY MM DD eller YY MM DD. Kortformat 1900-tal: 77 12 09 → 1977-12-09. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
           <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
           <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
           <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
