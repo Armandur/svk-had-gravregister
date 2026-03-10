@@ -3191,21 +3191,22 @@ function valideraDatumRimlighetGravsattBlock(blk) {
 }
 
 /** Om värdet är exakt 8 siffror (YYYYMMDD), formatera till YYYY-MM-DD. Endast 8 siffror konverteras; YYYY-MM skrivs manuellt.
- * För fältet utfordat_den används normaliseraUtfordatDen så att t.ex. 77 12 09 → 1977-12-09. */
+ * För fältet utfordat_den: först YYYYMMDD→YYYY-MM-DD vid manuell inmatning, sedan övriga format via normaliseraUtfordatDen. */
 function normaliseraDatumFalt(inp) {
   if (!inp || typeof inp.value !== 'string') return;
   const name = inp.getAttribute && inp.getAttribute('name');
+  const raw = inp.value.trim().replace(/\s/g, '');
   if (name === 'utfordat_den') {
+    if (/^\d{8}$/.test(raw)) {
+      inp.value = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+      return;
+    }
     const normaliserat = normaliseraUtfordatDen(inp.value);
     if (normaliserat) inp.value = normaliserat;
     return;
   }
-  const t = inp.value.trim().replace(/\s/g, '');
-  if (/^\d{8}$/.test(t)) {
-    const y = t.slice(0, 4);
-    const m = t.slice(4, 6);
-    const d = t.slice(6, 8);
-    inp.value = `${y}-${m}-${d}`;
+  if (/^\d{8}$/.test(raw)) {
+    inp.value = `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
   }
 }
 
