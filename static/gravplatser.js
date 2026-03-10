@@ -1495,7 +1495,7 @@ function runOcr(imageUrl, rect) {
  * - År + månad -> YYYY-MM-00
  * - Fullständigt datum -> YYYY-MM-DD
  * Accepterar t.ex. YYYY MM DD, YY MM DD (mellanslag, inga bindestreck – OCR),
- * DD/MM/YYYY, DD.MM.YYYY, DD/MM YYYY, YYYY-MM-DD, månadsnamn + år.
+ * YYYY.MM.DD, DD/MM/YYYY, DD.MM.YYYY, DD/MM YYYY, YYYY-MM-DD, månadsnamn + år.
  */
 function normaliseraUtfordatDen(str) {
   const s = (str || '').trim().replace(/\s+/g, ' ');
@@ -1530,6 +1530,22 @@ function normaliseraUtfordatDen(str) {
     const m = parseInt(ymSpace[2], 10);
     if (y >= 1000 && y <= 9999 && m >= 1 && m <= 12) return `${y}-${pad(m)}-00`;
   }
+
+  // YYYY.MM.DD eller YYYY.MM (punkt som avgränsare)
+  const ymdDot = /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(s);
+  if (ymdDot) {
+    const y = parseInt(ymdDot[1], 10);
+    const m = parseInt(ymdDot[2], 10);
+    const d = parseInt(ymdDot[3], 10);
+    if (y >= 1000 && y <= 9999 && m >= 1 && m <= 12 && d >= 1 && d <= 31) return `${y}-${pad(m)}-${pad(d)}`;
+  }
+  const ymDot = /^(\d{4})\.(\d{1,2})$/.exec(s);
+  if (ymDot) {
+    const y = parseInt(ymDot[1], 10);
+    const m = parseInt(ymDot[2], 10);
+    if (y >= 1000 && y <= 9999 && m >= 1 && m <= 12) return `${y}-${pad(m)}-00`;
+  }
+
   const kortDatum = /^(\d{2})\s*[\/\.\-]?\s*(\d{1,2})\s*[\/\.\-]?\s*(\d{1,2})$/.exec(s);
   if (kortDatum) {
     const yy = parseInt(kortDatum[1], 10);
@@ -2829,7 +2845,7 @@ function renderInmatningSektion(sektion) {
         </div>
         <div class="gp-gravplatsen-kolumn gp-gravplatsen-ovrigt">
           <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Format: YYYY-MM-DD. Med mellanslag (t.ex. OCR): YYYY MM DD eller YY MM DD. Kortformat 1900-tal: 77 12 09 → 1977-12-09. Endast år: YYYY-00-00. År och månad: YYYY-MM-00">${esc(d.utfordat_den)}</textarea></label>
+          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Ange datum enligt YYYY-MM-DD (år-månad-dag). Endast år eller år och månad går också att ange.">${esc(d.utfordat_den)}</textarea></label>
           <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
           <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
           <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
