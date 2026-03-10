@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Databasunderhåll – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .dbuh-sida { max-width: 40rem; margin: 2rem auto; padding: 2rem; }
+    .dbuh-sida h1 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--accent, #2563eb); }
+    .dbuh-meny { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.25rem; }
+    .dbuh-meny a, .dbuh-meny button {
+      display: block;
+      width: 100%;
+      padding: 1rem 1.25rem;
+      font-size: 1.05rem;
+      text-align: center;
+      text-decoration: none;
+      color: #1e293b;
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: background 0.15s, border-color 0.15s;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .dbuh-meny a:hover, .dbuh-meny button:hover {
+      background: #f8fafc;
+      border-color: var(--accent, #2563eb);
+      color: var(--accent, #2563eb);
+    }
+    .dbuh-meny a:focus, .dbuh-meny button:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .dbuh-meny button:disabled { opacity: 0.7; cursor: wait; }
+    .dbuh-tillbaka { margin-bottom: 1rem; }
+    .dbuh-tillbaka a { color: var(--accent); text-decoration: none; }
+    .dbuh-tillbaka a:hover { text-decoration: underline; }
+    .dbuh-innehall { margin-top: 1.5rem; }
+    .dbuh-tabell-wrap { overflow-x: auto; margin-top: 1rem; }
+    .dbuh-tabell { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .dbuh-tabell th, .dbuh-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+    .dbuh-tabell th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+    .dbuh-tabell tbody tr:hover { background: #f8fafc; }
+    .dbuh-tabell a { color: var(--accent); text-decoration: none; }
+    .dbuh-tabell a:hover { text-decoration: underline; }
+    .dbuh-tom { color: #64748b; font-style: italic; margin-top: 1rem; }
+    .dbuh-fel { color: #b91c1c; margin-top: 0.5rem; }
+    .dbuh-info { font-size: 0.9rem; color: #64748b; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="dbuh-sida">
+    <h1>Databasunderhåll</h1>
+    <p class="dbuh-tillbaka"><a href="/">← Tillbaka till menyn</a></p>
+    <nav class="dbuh-meny" id="dbuh-meny" aria-label="Underhållsfunktioner">
+      <button type="button" id="dbuh-btn-saknar-postnummer-ort">
+        Gravplatser med gatuadress men utan postnummer/ort
+      </button>
+    </nav>
+    <div class="dbuh-innehall" id="dbuh-innehall" hidden>
+      <h2 id="dbuh-innehall-rubrik"></h2>
+      <p class="dbuh-info" id="dbuh-innehall-info"></p>
+      <div class="dbuh-tabell-wrap" id="dbuh-tabell-wrap" hidden>
+        <table class="dbuh-tabell" id="dbuh-tabell" role="grid">
+          <thead id="dbuh-thead"></thead>
+          <tbody id="dbuh-tbody"></tbody>
+        </table>
+      </div>
+      <p class="dbuh-tom" id="dbuh-tom" hidden>Inga gravplatser hittades.</p>
+      <p class="dbuh-fel" id="dbuh-fel" hidden></p>
+      <p class="dbuh-tillbaka" style="margin-top: 1rem;"><a href="#" id="dbuh-tillbaka-till-meny">← Tillbaka till menyn</a></p>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const innehall = document.getElementById('dbuh-innehall');
+  const meny = document.getElementById('dbuh-meny');
+  const rubrik = document.getElementById('dbuh-innehall-rubrik');
+  const info = document.getElementById('dbuh-innehall-info');
+  const tabellWrap = document.getElementById('dbuh-tabell-wrap');
+  const thead = document.getElementById('dbuh-thead');
+  const tbody = document.getElementById('dbuh-tbody');
+  const tomEl = document.getElementById('dbuh-tom');
+  const felEl = document.getElementById('dbuh-fel');
+  const tillbakaTillMeny = document.getElementById('dbuh-tillbaka-till-meny');
+
+  function visaMeny() {
+    innehall.hidden = true;
+    meny.hidden = false;
+  }
+
+  function visaInnehall() {
+    meny.hidden = true;
+    innehall.hidden = false;
+    felEl.hidden = true;
+    tomEl.hidden = true;
+  }
+
+  function slugFromFullstandigt(fullstandigt) {
+    const s = (fullstandigt || '').trim();
+    return s ? encodeURIComponent(s) : '';
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  document.getElementById('dbuh-btn-saknar-postnummer-ort').addEventListener('click', function () {
+    const btn = this;
+    btn.disabled = true;
+    visaInnehall();
+    rubrik.textContent = 'Gravplatser med gatuadress men utan postnummer/ort';
+    info.textContent = 'Gravplatser där någon gravrättsinnehavare eller gravsatt har gatuadress men saknar postnummer och postort. Klicka på gravplatsen för att gå till den och korrigera.';
+    tabellWrap.hidden = true;
+    tomEl.hidden = true;
+
+    fetch(API + '/admin/databasunderhall/gravplatser-saknar-postnummer-ort', { credentials: 'include' })
+      .then(function (res) {
+        if (res.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent('/databasunderhall');
+          return null;
+        }
+        if (res.status === 403) {
+          throw new Error('Endast administratörer kan använda denna funktion.');
+        }
+        if (!res.ok) throw new Error('Kunde inte hämta data');
+        return res.json();
+      })
+      .then(function (data) {
+        btn.disabled = false;
+        if (!data) return;
+        const lista = data.gravplatser || [];
+        if (lista.length === 0) {
+          tomEl.hidden = false;
+          tomEl.textContent = 'Inga gravplatser med gatuadress utan postnummer/ort.';
+          return;
+        }
+        thead.innerHTML = '<tr><th scope="col">Gravplats</th><th scope="col">Mapp</th><th scope="col">Innehavare saknar</th><th scope="col">Gravsatta saknar</th></tr>';
+        tbody.innerHTML = '';
+        lista.forEach(function (gp) {
+          const tr = document.createElement('tr');
+          const slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+          const gravLink = slug
+            ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+            : escapeHtml(gp.fullstandigt || '–');
+          tr.innerHTML =
+            '<td>' + gravLink + '</td>' +
+            '<td>' + escapeHtml(gp.mapp_namn || '–') + '</td>' +
+            '<td>' + (gp.antal_innehavare_saknar != null ? gp.antal_innehavare_saknar : 0) + '</td>' +
+            '<td>' + (gp.antal_gravsatta_saknar != null ? gp.antal_gravsatta_saknar : 0) + '</td>';
+          tbody.appendChild(tr);
+        });
+        tabellWrap.hidden = false;
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        felEl.textContent = err.message || 'Ett fel uppstod';
+        felEl.hidden = false;
+      });
+  });
+
+  if (tillbakaTillMeny) {
+    tillbakaTillMeny.addEventListener('click', function (e) {
+      e.preventDefault();
+      visaMeny();
+    });
+  }
+})();
+  </script>
+</body>
+</html>

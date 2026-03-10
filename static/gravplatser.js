@@ -1839,7 +1839,7 @@ function buildRapportInmatningHtml(d, rubrik, skissDataUrlsParam) {
     html += '<div class="gp-rapport-sektion"><h3>Gravrättsinnehavare</h3><ul class="gp-las-lista">';
     html += inv.map((i) => {
       const namn = [v(i.fornamn), v(i.efternamn)].filter(Boolean).join(' ') || '';
-      const rader = radOmFyllt('Namn', namn) + radOmFyllt('Yrke', i.yrke) + radOmFyllt('Adress', i.adress) + radOmFyllt('Kommentar', i.kommentar);
+      const rader = radOmFyllt('Namn', namn) + radOmFyllt('Yrke', i.yrke) + radOmFyllt('Gatuadress', i.gatuadress || i.adress || '') + radOmFyllt('Postnummer / ort', [i.postnummer, i.postort].filter(Boolean).join(' ').trim() || null) + radOmFyllt('Kommentar', i.kommentar);
       return `<li class="gp-las-kort">${rader || '<span class="gp-las-tom">—</span>'}</li>`;
     }).join('') + '</ul></div>';
   }
@@ -1886,7 +1886,7 @@ function buildRapportInmatningHtml(d, rubrik, skissDataUrlsParam) {
       let li = `<li class="gp-las-kort"><h4 class="gp-inmatning-delrubrik">Gravsatt ${idx + 1}</h4>`;
       if (g.ar_beteckning) li += radOmFyllt('Beteckning', g.efternamn);
       else li += radOmFyllt('Namn', namn);
-      li += radOmFyllt('Yrke', g.yrke) + radOmFyllt('Adress', g.adress) + radOmFyllt('Födelsedatum', fodelse) + radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) + radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar) + '</li>';
+      li += radOmFyllt('Yrke', g.yrke) + radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') + radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) + radOmFyllt('Födelsedatum', fodelse) + radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) + radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar) + '</li>';
       return li;
     }).join('') + '</ul></div>';
   }
@@ -2219,11 +2219,11 @@ function inmatningHarNagonData() {
       s(inmatningData.gravens_utformning) || s(inmatningData.karta_nr) || s(inmatningData.gravbrev_nr) || s(inmatningData.utfordat_den) || s(inmatningData.kommentar))
     return true;
   const inv = inmatningData.innehavare || [];
-  if (inv.some((i) => s(i.fornamn) || s(i.efternamn) || s(i.yrke) || s(i.adress) || s(i.kommentar))) return true;
+  if (inv.some((i) => s(i.fornamn) || s(i.efternamn) || s(i.yrke) || s(i.gatuadress) || s(i.postnummer) || s(i.postort) || s(i.kommentar))) return true;
   const na = inmatningData.narmast_anhoriga || [];
   if (na.some((n) => s(n.fornamn) || s(n.efternamn) || s(n.yrke) || s(n.adress) || s(n.kommentar))) return true;
   const gs = inmatningData.gravsatta || [];
-  if (gs.some((g) => g.ar_beteckning || s(g.fornamn) || s(g.efternamn) || s(g.gravsatt_den) || s(g.kommentar))) return true;
+  if (gs.some((g) => g.ar_beteckning || s(g.fornamn) || s(g.efternamn) || s(g.gatuadress) || s(g.postnummer) || s(g.postort) || s(g.gravsatt_den) || s(g.kommentar))) return true;
   if (inmatningData.has_skiss || ((inmatningData.skisser || []).length > 0)) return true;
   return false;
 }
@@ -2615,11 +2615,12 @@ function renderInmatningSektionLäs(sektion) {
       return;
     }
     innehall.innerHTML = '<div class="gp-inmatning-las"><ul class="gp-las-lista">' + inv.map((i) => {
-      const fn = v(i.fornamn); const en = v(i.efternamn); const yrke = v(i.yrke); const adr = v(i.adress);
+      const fn = v(i.fornamn); const en = v(i.efternamn); const yrke = v(i.yrke); const gata = v(i.gatuadress || i.adress); const postOrtInv = [i.postnummer, i.postort].filter(Boolean).join(' ').trim();
       const namn = [fn, en].filter(Boolean).join(' ') || '';
       const rader = radOmFyllt('Namn', namn) +
         radOmFyllt('Yrke', i.yrke) +
-        radOmFyllt('Adress', i.adress) +
+        radOmFyllt('Gatuadress', gata) +
+        radOmFyllt('Postnummer / ort', postOrtInv || null) +
         radOmFyllt('Kommentar', i.kommentar);
       if (!rader) return '<li class="gp-las-kort"><span class="gp-las-tom">—</span></li>';
       return `<li class="gp-las-kort">${rader}</li>`;
@@ -2715,7 +2716,7 @@ function renderInmatningSektionLäs(sektion) {
       } else {
         html += radOmFyllt('Namn', namn);
       }
-      const rader = radOmFyllt('Yrke', g.yrke) + radOmFyllt('Adress', g.adress) + radOmFyllt('Födelsedatum', fodelse) +
+      const rader = radOmFyllt('Yrke', g.yrke) + radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') + radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) + radOmFyllt('Födelsedatum', fodelse) +
         radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) +
         radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar);
       html += rader + '</li>';
@@ -2748,7 +2749,9 @@ function renderInmatningSektion(sektion) {
         <label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1">${esc(i.fornamn)}</textarea></label>
         <label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1">${esc(i.efternamn)}</textarea></label>
         <label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1">${esc(i.yrke)}</textarea></label>
-        <label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1">${esc(i.adress)}</textarea></label>
+        <label>Gatuadress <textarea name="inv_gatuadress" class="gp-falt-expanderbar" rows="1">${esc(i.gatuadress || i.adress || '')}</textarea></label>
+        <label>Postnummer <textarea name="inv_postnummer" class="gp-falt-expanderbar" rows="1">${esc(i.postnummer || '')}</textarea></label>
+        <label>Postort <textarea name="inv_postort" class="gp-falt-expanderbar" rows="1">${esc(i.postort || '')}</textarea></label>
         <label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2">${esc(i.kommentar || '')}</textarea></label>
         <button type="button" class="gp-rad-ta-bort">Ta bort</button>
       </div>`).join('');
@@ -2764,7 +2767,7 @@ function renderInmatningSektion(sektion) {
     innehall.querySelector('.gp-lagg-till-innehavare')?.addEventListener('click', () => {
       const rad = document.createElement('div');
       rad.className = 'gp-inmatning-rad gp-innehavare-rad';
-      rad.innerHTML = '<span class="gp-innehavare-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Adress <textarea name="inv_adress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
+      rad.innerHTML = '<span class="gp-innehavare-drag-handle" draggable="true" title="Dra för att ändra ordning" aria-label="Ändra ordning">⋮⋮</span><label>Förnamn <textarea name="inv_fornamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Efternamn <textarea name="inv_efternamn" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Yrke <textarea name="inv_yrke" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Gatuadress <textarea name="inv_gatuadress" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postnummer <textarea name="inv_postnummer" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Postort <textarea name="inv_postort" class="gp-falt-expanderbar" rows="1"></textarea></label><label>Kommentar <textarea class="gp-falt-expanderbar gp-inv-kommentar" rows="2"></textarea></label><button type="button" class="gp-rad-ta-bort">Ta bort</button>';
       innehall.insertBefore(rad, innehall.querySelector('.gp-lagg-till-innehavare'));
       rad.scrollIntoView({ block: 'start', behavior: 'smooth' });
       rad.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
@@ -3351,7 +3354,9 @@ function blockGravsatt(idx, g) {
         <label><span class="gp-gravsatt-efternamn-label">${esc(efternamnLabel)}</span> <textarea name="gs_efternamn_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.efternamn)}</textarea></label>
         <span class="gp-gravsatt-rad-hoger">
           <label>Yrke <textarea name="gs_yrke_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.yrke || '')}</textarea></label>
-          <label>Adress <textarea name="gs_adress_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.adress)}</textarea></label>
+          <label>Gatuadress <textarea name="gs_gatuadress_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.gatuadress || g.adress || '')}</textarea></label>
+          <label>Postnummer <textarea name="gs_postnummer_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.postnummer || '')}</textarea></label>
+          <label>Postort <textarea name="gs_postort_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.postort || '')}</textarea></label>
         </span>
       </div>
       <div class="gp-gravsatt-rad">
@@ -3392,9 +3397,11 @@ function samlaInmatningData() {
       const fornamn = (rad.querySelector('[name="inv_fornamn"]')?.value ?? '').trim();
       const efternamn = (rad.querySelector('[name="inv_efternamn"]')?.value ?? '').trim();
       const yrke = (rad.querySelector('[name="inv_yrke"]')?.value ?? '').trim();
-      const adress = (rad.querySelector('[name="inv_adress"]')?.value ?? '').trim();
+      const gatuadress = (rad.querySelector('[name="inv_gatuadress"]')?.value ?? '').trim();
+      const postnummer = (rad.querySelector('[name="inv_postnummer"]')?.value ?? '').trim();
+      const postort = (rad.querySelector('[name="inv_postort"]')?.value ?? '').trim();
       const kommentar = (rad.querySelector('.gp-inv-kommentar')?.value ?? '').trim();
-      innehavare.push({ fornamn, efternamn, yrke, adress, kommentar, sort_order: innehavare.length });
+      innehavare.push({ fornamn, efternamn, yrke, gatuadress, postnummer, postort, kommentar, sort_order: innehavare.length });
     });
   }
   // Vid 0 rader skickar vi tom lista (användaren har tagit bort alla), inte gamla inmatningData.
@@ -3429,7 +3436,9 @@ function samlaInmatningData() {
       fornamn: (block.querySelector(`[name="gs_ar_beteckning_${i}"]`)?.checked) ? '' : p('gs_fornamn'),
       efternamn: p('gs_efternamn'),
       yrke: p('gs_yrke'),
-      adress: p('gs_adress'),
+      gatuadress: p('gs_gatuadress'),
+      postnummer: p('gs_postnummer'),
+      postort: p('gs_postort'),
       fodelse_ar: fodelse.ar,
       fodelse_manad: fodelse.manad,
       fodelse_dag: fodelse.dag,
