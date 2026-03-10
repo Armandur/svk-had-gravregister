@@ -40,7 +40,9 @@ const INNEHAVARE_KOLUMNER = [
   { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
   { id: 'yrke', label: 'Yrke', defaultVisible: true },
-  { id: 'adress', label: 'Adress', defaultVisible: true },
+  { id: 'gatuadress', label: 'Gatuadress', defaultVisible: true },
+  { id: 'postnummer', label: 'Postnummer', defaultVisible: true },
+  { id: 'postort', label: 'Ort', defaultVisible: true },
   { id: 'kommentar', label: 'Kommentar', defaultVisible: true },
 ];
 
@@ -62,6 +64,9 @@ const GRAVSATTA_KOLUMNER = [
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
   { id: 'position', label: 'Nr', defaultVisible: true },
   { id: 'yrke', label: 'Yrke', defaultVisible: true },
+  { id: 'gatuadress', label: 'Gatuadress', defaultVisible: true },
+  { id: 'postnummer', label: 'Postnummer', defaultVisible: true },
+  { id: 'postort', label: 'Ort', defaultVisible: true },
   { id: 'fodelse', label: 'Födelse', defaultVisible: true },
   { id: 'dods', label: 'Död', defaultVisible: true },
   { id: 'gravsatt_den', label: 'Gravsatt den', defaultVisible: true },

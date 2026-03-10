@@ -120,7 +120,10 @@ class GravplatsInnehavare(Base):
     fornamn: Mapped[str] = mapped_column(default="")
     efternamn: Mapped[str] = mapped_column(default="")
     yrke: Mapped[str] = mapped_column(default="")
-    adress: Mapped[str] = mapped_column(default="")
+    adress: Mapped[str] = mapped_column(default="")  # deprecated, migreras till gatuadress
+    gatuadress: Mapped[str] = mapped_column(default="")
+    postnummer: Mapped[str] = mapped_column(default="")
+    postort: Mapped[str] = mapped_column(default="")
     kommentar: Mapped[str] = mapped_column(default="")
 
 
@@ -211,7 +214,10 @@ class Gravsatt(Base):
     fornamn: Mapped[str] = mapped_column(default="")
     efternamn: Mapped[str] = mapped_column(default="")
     yrke: Mapped[str] = mapped_column(default="")
-    adress: Mapped[str] = mapped_column(default="")
+    adress: Mapped[str] = mapped_column(default="")  # deprecated, migreras till gatuadress
+    gatuadress: Mapped[str] = mapped_column(default="")
+    postnummer: Mapped[str] = mapped_column(default="")
+    postort: Mapped[str] = mapped_column(default="")
     fodelse_ar: Mapped[int | None] = mapped_column(nullable=True)
     fodelse_manad: Mapped[int | None] = mapped_column(nullable=True)
     fodelse_dag: Mapped[int | None] = mapped_column(nullable=True)
@@ -328,6 +334,22 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+        # Migration: gatuadress, postnummer, postort på gravplats_innehavare och gravsatt (adress -> gatuadress)
+        for table in ("gravplats_innehavare", "gravsatt"):
+            try:
+                r = conn.execute(text(f"PRAGMA table_info({table})"))
+                cols_t = [row[1] for row in r]
+                for col in ("gatuadress", "postnummer", "postort"):
+                    if col not in cols_t:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} TEXT DEFAULT ''"))
+                        conn.commit()
+                # Migrera befintlig adress till gatuadress
+                conn.execute(text(
+                    f"UPDATE {table} SET gatuadress = adress WHERE (gatuadress IS NULL OR gatuadress = '') AND adress IS NOT NULL AND adress != ''"
+                ))
+                conn.commit()
+            except Exception:
+                pass
         # gravplats_skiss skapas av create_all (ny tabell)
     # MappSidaRedanHalva skapas av create_all
 

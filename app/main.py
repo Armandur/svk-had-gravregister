@@ -8,6 +8,7 @@ import threading
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 import fitz  # PyMuPDF
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -308,9 +309,107 @@ async def delete_user(
     return {"ok": True}
 
 
+@app.get("/api/admin/databasunderhall/gravplatser-saknar-postnummer-ort")
+async def get_gravplatser_saknar_postnummer_ort(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista gravplatser där minst en gravrättsinnehavare eller gravsatt har Gatuadress
+    men saknar Postnummer och Postort (för enkel korrigering efter adressmigration).
+    """
+    from sqlalchemy import and_, or_
+
+    def _post_tom(col):
+        return or_(col == "", col.is_(None))
+
+    # Gravplats-ID:n där någon innehavare har gatuadress men inte postnummer/ort
+    inv_ids = [
+        r[0]
+        for r in db.query(GravplatsInnehavare.gravplats_id)
+        .filter(
+            GravplatsInnehavare.gatuadress.isnot(None),
+            GravplatsInnehavare.gatuadress != "",
+            _post_tom(GravplatsInnehavare.postnummer),
+            _post_tom(GravplatsInnehavare.postort),
+        )
+        .distinct()
+        .all()
+    ]
+    # Gravplats-ID:n där någon gravsatt har gatuadress men inte postnummer/ort
+    gs_ids = [
+        r[0]
+        for r in db.query(Gravsatt.gravplats_id)
+        .filter(
+            Gravsatt.gatuadress.isnot(None),
+            Gravsatt.gatuadress != "",
+            _post_tom(Gravsatt.postnummer),
+            _post_tom(Gravsatt.postort),
+        )
+        .distinct()
+        .all()
+    ]
+    all_ids = list(set(inv_ids) | set(gs_ids))
+    if not all_ids:
+        return {"gravplatser": [], "antal": 0}
+
+    # Antal innehavare/gravsatta som saknar post per gravplats
+    inv_saknar = (
+        db.query(GravplatsInnehavare.gravplats_id, func.count(GravplatsInnehavare.id))
+        .filter(
+            GravplatsInnehavare.gravplats_id.in_(all_ids),
+            GravplatsInnehavare.gatuadress.isnot(None),
+            GravplatsInnehavare.gatuadress != "",
+            _post_tom(GravplatsInnehavare.postnummer),
+            _post_tom(GravplatsInnehavare.postort),
+        )
+        .group_by(GravplatsInnehavare.gravplats_id)
+        .all()
+    )
+    gs_saknar = (
+        db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id))
+        .filter(
+            Gravsatt.gravplats_id.in_(all_ids),
+            Gravsatt.gatuadress.isnot(None),
+            Gravsatt.gatuadress != "",
+            _post_tom(Gravsatt.postnummer),
+            _post_tom(Gravsatt.postort),
+        )
+        .group_by(Gravsatt.gravplats_id)
+        .all()
+    )
+    inv_map = {gid: cnt for gid, cnt in inv_saknar}
+    gs_map = {gid: cnt for gid, cnt in gs_saknar}
+
+    def _format_fullstandigt(kyrkogard, kvarter, gravplatsnummer):
+        parts = [p for p in (kyrkogard, (kvarter or "").strip(), (gravplatsnummer or "").strip()) if p]
+        return " ".join(parts) if parts else ""
+
+    gravplatser = (
+        db.query(Gravplats, MappConfig.namn)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .filter(Gravplats.id.in_(all_ids))
+        .all()
+    )
+    out = []
+    for g, mapp_namn in gravplatser:
+        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        slug = quote(fullstandigt, safe="") if fullstandigt else ""
+        out.append({
+            "id": g.id,
+            "fullstandigt": fullstandigt,
+            "mapp_namn": mapp_namn or "",
+            "antal_innehavare_saknar": inv_map.get(g.id, 0),
+            "antal_gravsatta_saknar": gs_map.get(g.id, 0),
+            "url_slug": slug,
+        })
+    out.sort(key=lambda x: (x["fullstandigt"] or ""))
+    return {"gravplatser": out, "antal": len(out)}
+
+
 @app.get("/listvy")
-async def listvy_sida():
-    """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser."""
+async def listvy_sida(current_user: User = Depends(get_current_user), admin: User = Depends(require_admin)):
+    """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser (endast admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "listvy.html")
 
 
@@ -324,6 +423,12 @@ async def admin_sida():
 async def loggar_sida():
     """Redigeringslogg för gravplatser (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "loggar.html")
+
+
+@app.get("/databasunderhall")
+async def databasunderhall_sida(admin: User = Depends(require_admin)):
+    """Databasunderhåll – meny med underhållsfunktioner (endast för admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall.html")
 
 
 @app.get("/gravplatser")
@@ -1400,7 +1505,9 @@ async def avancerad_sok_gravplatser(
                 "fornamn": inv.fornamn or "",
                 "efternamn": inv.efternamn or "",
                 "yrke": inv.yrke or "",
-                "adress": inv.adress or "",
+                "gatuadress": getattr(inv, "gatuadress", None) or inv.adress or "",
+                "postnummer": getattr(inv, "postnummer", None) or "",
+                "postort": getattr(inv, "postort", None) or "",
                 "kommentar": inv.kommentar or "",
             })
         return {"resultat_typ": "innehavare", "innehavare": out_inv, "antal": len(out_inv)}
@@ -1464,7 +1571,9 @@ async def avancerad_sok_gravplatser(
                 "fornamn": gs.fornamn or "",
                 "efternamn": gs.efternamn or "",
                 "yrke": getattr(gs, "yrke", None) or "",
-                "adress": gs.adress or "",
+                "gatuadress": getattr(gs, "gatuadress", None) or gs.adress or "",
+                "postnummer": getattr(gs, "postnummer", None) or "",
+                "postort": getattr(gs, "postort", None) or "",
                 "fodelse_ar": gs.fodelse_ar,
                 "fodelse_manad": gs.fodelse_manad,
                 "fodelse_dag": gs.fodelse_dag,
@@ -1797,7 +1906,9 @@ class InnehavareItem(BaseModel):
     fornamn: str = ""
     efternamn: str = ""
     yrke: str = ""
-    adress: str = ""
+    gatuadress: str = ""
+    postnummer: str = ""
+    postort: str = ""
     kommentar: str = ""
     sort_order: int = 0
 
@@ -1822,7 +1933,9 @@ class GravsattItem(BaseModel):
     fornamn: str = ""
     efternamn: str = ""
     yrke: str = ""
-    adress: str = ""
+    gatuadress: str = ""
+    postnummer: str = ""
+    postort: str = ""
     fodelse_ar: int | None = None
     fodelse_manad: int | None = None
     fodelse_dag: int | None = None
@@ -1874,10 +1987,10 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
 
     if not innehavare_rows and row and (row.gravrattsinnehavare or row.yrke or row.adress):
         fn, en = (row.gravrattsinnehavare or "", "") if row.gravrattsinnehavare else ("", "")
-        innehavare_list = [{"fornamn": fn, "efternamn": en, "yrke": row.yrke or "", "adress": row.adress or "", "kommentar": "", "sort_order": 0}]
+        innehavare_list = [{"fornamn": fn, "efternamn": en, "yrke": row.yrke or "", "gatuadress": row.adress or "", "postnummer": "", "postort": "", "kommentar": "", "sort_order": 0}]
     else:
         innehavare_list = [
-            {"fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": n.yrke or "", "adress": n.adress or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order}
+            {"fornamn": _inv_fornamn_efternamn(n)[0], "efternamn": _inv_fornamn_efternamn(n)[1], "yrke": n.yrke or "", "gatuadress": getattr(n, "gatuadress", None) or n.adress or "", "postnummer": getattr(n, "postnummer", None) or "", "postort": getattr(n, "postort", None) or "", "kommentar": getattr(n, "kommentar", None) or "", "sort_order": n.sort_order}
             for n in innehavare_rows
         ]
     narmast = (
@@ -1907,7 +2020,9 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "fornamn": _gs_fornamn_efternamn(g)[0],
             "efternamn": _gs_fornamn_efternamn(g)[1],
             "yrke": getattr(g, "yrke", None) or "",
-            "adress": g.adress,
+            "gatuadress": getattr(g, "gatuadress", None) or g.adress or "",
+            "postnummer": getattr(g, "postnummer", None) or "",
+            "postort": getattr(g, "postort", None) or "",
             "fodelse_ar": g.fodelse_ar,
             "fodelse_manad": g.fodelse_manad,
             "fodelse_dag": g.fodelse_dag,
@@ -2037,6 +2152,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
     db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id == gravplats_id).delete()
     for i, inv in enumerate(body.innehavare):
         fn, en = (inv.fornamn or "").strip(), (inv.efternamn or "").strip()
+        gatuadress = (inv.gatuadress or "").strip()
         db.add(GravplatsInnehavare(
             gravplats_id=gravplats_id,
             sort_order=i,
@@ -2044,7 +2160,10 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             fornamn=fn,
             efternamn=en,
             yrke=inv.yrke or "",
-            adress=inv.adress or "",
+            adress=gatuadress,  # behåll för bakåtkompatibilitet
+            gatuadress=gatuadress,
+            postnummer=(inv.postnummer or "").strip(),
+            postort=(inv.postort or "").strip(),
             kommentar=inv.kommentar or "",
         ))
     db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id == gravplats_id).delete()
@@ -2070,6 +2189,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
         if pos > 10:
             break
         fn, en = (gs.fornamn or "").strip(), (gs.efternamn or "").strip()
+        gatuadress = (gs.gatuadress or "").strip()
         db.add(Gravsatt(
             gravplats_id=gravplats_id,
             position=pos,
@@ -2078,7 +2198,10 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
             fornamn=fn,
             efternamn=en,
             yrke=gs.yrke or "",
-            adress=gs.adress or "",
+            adress=gatuadress,  # behåll för bakåtkompatibilitet
+            gatuadress=gatuadress,
+            postnummer=(gs.postnummer or "").strip(),
+            postort=(gs.postort or "").strip(),
             fodelse_ar=gs.fodelse_ar,
             fodelse_manad=gs.fodelse_manad,
             fodelse_dag=gs.fodelse_dag,

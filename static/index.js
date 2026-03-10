@@ -16,6 +16,11 @@
     if (!me) return;
     var el = document.getElementById('inloggad-anvandare');
     if (el) el.textContent = 'Inloggad som: ' + (me.username || '');
+    var listvyLink = document.getElementById('startsida-listvy-lank');
+    if (listvyLink) {
+      if (me.is_admin) listvyLink.removeAttribute('hidden');
+      else listvyLink.remove();
+    }
     var adminLink = document.getElementById('startsida-admin-lank');
     if (adminLink) {
       if (me.is_admin) adminLink.removeAttribute('hidden');
@@ -25,6 +30,11 @@
     if (loggarLink) {
       if (me.is_admin) loggarLink.removeAttribute('hidden');
       else loggarLink.remove();
+    }
+    var dbuhLink = document.getElementById('startsida-databasunderhall-lank');
+    if (dbuhLink) {
+      if (me.is_admin) dbuhLink.removeAttribute('hidden');
+      else dbuhLink.remove();
     }
   });
 
