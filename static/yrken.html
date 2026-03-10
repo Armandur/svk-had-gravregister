@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Yrken – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .yrken-main { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    .yrken-main h2 { margin: 0 0 1rem; font-size: 1.1rem; color: var(--accent, #2c5f4a); }
+    .yrken-tabell { width: 100%; border-collapse: collapse; background: var(--card, #fff); border: 1px solid var(--border, #ccc); border-radius: 8px; overflow: hidden; }
+    .yrken-tabell th, .yrken-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #eee); }
+    .yrken-tabell th { background: #f1f5f9; font-weight: 600; }
+    .yrken-tabell th.yrken-sorterbar { cursor: pointer; user-select: none; }
+    .yrken-tabell th.yrken-sorterbar:hover { text-decoration: underline; }
+    .yrken-tabell th .yrken-sort-pil { margin-left: 0.25rem; font-size: 0.85em; color: #64748b; }
+    .yrken-tabell th.yrken-th-antal { text-align: center; }
+    .yrken-tabell td.yrken-antal { text-align: center; font-variant-numeric: tabular-nums; }
+    .yrken-tabell tr:last-child td { border-bottom: none; }
+    .yrken-laddar { color: #64748b; }
+    .yrken-fel { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Meny</a> Yrken</h1>
+    <span id="inloggad-anvandare" class="topbar-inloggad" aria-live="polite"></span>
+  </header>
+
+  <main class="yrken-main">
+    <h2>Unika yrken (gravrättsinnehavare, närmast anhöriga, gravsatta)</h2>
+    <p id="yrken-status" class="yrken-laddar" aria-live="polite">Laddar …</p>
+    <table class="yrken-tabell" id="yrken-tabell" hidden aria-label="Yrken och antal förekomster">
+      <thead>
+        <tr>
+          <th scope="col" id="yrken-th-yrke" class="yrken-sorterbar" data-sort="yrke" aria-sort="ascending">Yrke<span class="yrken-sort-pil" aria-hidden="true"></span></th>
+          <th scope="col" id="yrken-th-antal" class="yrken-sorterbar yrken-th-antal" data-sort="antal" aria-sort="none">Antal<span class="yrken-sort-pil" aria-hidden="true"></span></th>
+        </tr>
+      </thead>
+      <tbody id="yrken-tbody"></tbody>
+    </table>
+  </main>
+
+  <script src="/static/auth.js"></script>
+  <script>gpEnsureAuth();</script>
+  <script>
+(function () {
+  const API = '/api';
+  (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function (me) {
+    const el = document.getElementById('inloggad-anvandare');
+    if (el && me) el.textContent = 'Inloggad som: ' + (me.username || '');
+  });
+
+  function esc(s) {
+    const div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  const statusEl = document.getElementById('yrken-status');
+  const tabellEl = document.getElementById('yrken-tabell');
+  const tbodyEl = document.getElementById('yrken-tbody');
+  const thYrke = document.getElementById('yrken-th-yrke');
+  const thAntal = document.getElementById('yrken-th-antal');
+
+  let yrkenData = [];
+  let sortBy = 'yrke';
+  let sortAsc = true;
+
+  function sortYrken(list) {
+    return list.slice().sort(function (a, b) {
+      if (sortBy === 'yrke') {
+        const cmp = (a.yrke || '').localeCompare(b.yrke || '', 'sv');
+        return sortAsc ? cmp : -cmp;
+      }
+      const na = a.antal || 0;
+      const nb = b.antal || 0;
+      if (na !== nb) return sortAsc ? na - nb : nb - na;
+      return (a.yrke || '').localeCompare(b.yrke || '', 'sv');
+    });
+  }
+
+  function updateSortPilar() {
+    var pilAsc = '\u25B2';
+    var pilDesc = '\u25BC';
+    thYrke.querySelector('.yrken-sort-pil').textContent = sortBy === 'yrke' ? (sortAsc ? pilAsc : pilDesc) : '';
+    thYrke.setAttribute('aria-sort', sortBy === 'yrke' ? (sortAsc ? 'ascending' : 'descending') : 'none');
+    thAntal.querySelector('.yrken-sort-pil').textContent = sortBy === 'antal' ? (sortAsc ? pilAsc : pilDesc) : '';
+    thAntal.setAttribute('aria-sort', sortBy === 'antal' ? (sortAsc ? 'ascending' : 'descending') : 'none');
+  }
+
+  function renderTable() {
+    var sorted = sortYrken(yrkenData);
+    tbodyEl.innerHTML = sorted.map(function (r) {
+      return '<tr><td>' + esc(r.yrke) + '</td><td class="yrken-antal">' + esc(String(r.antal)) + '</td></tr>';
+    }).join('');
+    updateSortPilar();
+  }
+
+  function onThClick(col) {
+    if (sortBy === col) {
+      sortAsc = !sortAsc;
+    } else {
+      sortBy = col;
+      sortAsc = col === 'yrke';
+    }
+    renderTable();
+  }
+
+  if (thYrke) thYrke.addEventListener('click', function () { onThClick('yrke'); });
+  if (thAntal) thAntal.addEventListener('click', function () { onThClick('antal'); });
+
+  fetch(API + '/yrken', { credentials: 'include' })
+    .then(function (res) {
+      if (!res.ok) throw new Error('Kunde inte ladda yrken');
+      return res.json();
+    })
+    .then(function (data) {
+      yrkenData = data.yrken || [];
+      if (yrkenData.length === 0) {
+        statusEl.textContent = 'Inga yrken registrerade.';
+        statusEl.className = '';
+        return;
+      }
+      statusEl.hidden = true;
+      tabellEl.removeAttribute('hidden');
+      renderTable();
+    })
+    .catch(function (err) {
+      statusEl.textContent = 'Kunde inte ladda yrken: ' + (err.message || 'nätverksfel');
+      statusEl.className = 'yrken-fel';
+    });
+})();
+  </script>
+</body>
+</html>
