@@ -222,11 +222,15 @@
           { label: 'Antal gravrättsinnehavare', key: 'antal_innehavare' },
           { label: 'Antal närmast anhöriga', key: 'antal_narmast_anhoriga' },
           { label: 'Antal gravsatta', key: 'antal_gravsatta' },
+          { label: 'Antal unika yrken', key: 'antal_unika_yrken', link: '/yrken' },
         ];
         statListEl.innerHTML = rader.map(function (r) {
           const v = data[r.key];
           const varde = typeof v === 'number' ? String(v) : '–';
-          return '<li><span>' + escapeHtml(r.label) + '</span><span class="stat-varde">' + escapeHtml(varde) + '</span></li>';
+          const valHtml = r.link
+            ? '<a href="' + escapeHtml(r.link) + '" class="stat-varde stat-varde-lank">' + escapeHtml(varde) + '</a>'
+            : '<span class="stat-varde">' + escapeHtml(varde) + '</span>';
+          return '<li><span>' + escapeHtml(r.label) + '</span>' + valHtml + '</li>';
         }).join('');
 
         var stapelWrap = document.getElementById('startsida-statistik-stapel-wrap');
