@@ -127,7 +127,7 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 - **Skiss på gravplatsen:** Lagras som **bild** i databasen (extraheras/inskannas från källan).
 - **Export/import:** Stöd för t.ex. JSON (och vid behov andra format).
 - **Kommentarer:** Möjlighet till en **kommentarsruta** per digitaliserad gravplats (för handskrivna tillägg, osäkerheter, undantag m.m.).
-- **Spårbarhet till källa:** Alla uppgifter som digitaliseras ska kunna **härledas tillbaka till respektive PDF-fil**. Varje post (gravplats, gravrättsinnehavare, gravsatt person, fältvärde) ska kunna kopplas till vilken PDF-fil och – vid behov – vilken del av sidan (övre/nedre halva) som källan kommer från.
+- **Spårbarhet till källa:** Varje gravplats är kopplad till de PDF-filer som utgör dess tre innehållssidor (mapp + start_sida) och eventuellt extramaterial. Det räcker för att kunna granska och verifiera digitaliseringen; enskilda fält behöver inte kopplas till specifik sida eller halva.
 
 ---
 
