@@ -5,6 +5,7 @@ import re
 import signal
 import sys
 import threading
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -403,6 +404,16 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         GravplatsInmatning.fardigtranskriberad == True
     ).count()
 
+    # Unika yrken (gravrättsinnehavare + närmast anhöriga + gravsatta)
+    def _yrke_list(q):
+        return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
+    alla_yrken = (
+        _yrke_list(db.query(GravplatsInnehavare.yrke))
+        + _yrke_list(db.query(GravplatsNarmastAnhorig.yrke))
+        + _yrke_list(db.query(Gravsatt.yrke))
+    )
+    antal_unika_yrken = len(set(alla_yrken))
+
     total_gravplatser = db.query(Gravplats).count()
 
     # Transkriberingsstatus per kyrkogård och gravkvarter (kyrkogård + kvarter)
@@ -472,7 +483,33 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         "antal_innehavare": antal_innehavare,
         "antal_narmast_anhoriga": antal_narmast_anhoriga,
         "antal_gravsatta": antal_gravsatta,
+        "antal_unika_yrken": antal_unika_yrken,
     }
+
+
+def _alla_yrken_med_antal(db: Session) -> list[dict]:
+    """Hämta alla yrken (trimmed, icke-tomma) från innehavare, närmast anhöriga och gravsatta med förekomstantal."""
+    def yrke_values(q):
+        return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
+    alla = (
+        yrke_values(db.query(GravplatsInnehavare.yrke))
+        + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
+        + yrke_values(db.query(Gravsatt.yrke))
+    )
+    counter = Counter(alla)
+    return [{"yrke": yrke, "antal": count} for yrke, count in sorted(counter.items(), key=lambda x: (x[0].lower(), x[0]))]
+
+
+@app.get("/api/yrken")
+async def get_yrken(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Lista alla unika yrken med antal förekomster, sorterade alfabetiskt."""
+    return {"yrken": _alla_yrken_med_antal(db)}
+
+
+@app.get("/yrken")
+async def yrken_sida():
+    """Sida med tabell över yrken och antal förekomster."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "yrken.html")
 
 
 @app.get("/api/mappar/{mapp_namn}/filer")
