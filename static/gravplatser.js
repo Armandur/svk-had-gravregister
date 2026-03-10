@@ -3299,9 +3299,7 @@ const URNA_VAL = [
 function blockGravsatt(idx, g) {
   const pos = idx + 1;
   const arBeteckning = !!g.ar_beteckning;
-  const beteckningCheckbox = pos === 1
-    ? `<label class="gp-gravsatt-beteckning"><input type="checkbox" name="gs_ar_beteckning_${idx}" ${arBeteckning ? 'checked' : ''} /> Gravsatt använd som beteckning (t.ex. familjegrav)</label>`
-    : '';
+  const beteckningCheckbox = `<label class="gp-gravsatt-beteckning"><input type="checkbox" name="gs_ar_beteckning_${idx}" ${arBeteckning ? 'checked' : ''} /> Gravsatt använd som beteckning (t.ex. familjegrav)</label>`;
   const beteckningKlass = arBeteckning ? ' gp-gravsatt-beteckning-checked' : '';
   const efternamnLabel = arBeteckning ? 'Beteckning' : 'Efternamn';
   const fodelseDatum = formatDatum(g.fodelse_ar, g.fodelse_manad, g.fodelse_dag);
