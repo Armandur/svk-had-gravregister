@@ -1376,12 +1376,13 @@ function startOcrOverlay(fig, initialEvent) {
       const trimmed = (text || '').trim();
       if (!ocrTargetElement) return;
       if (trimmed === '') {
-        if (arDatumFaltForOcr(ocrTargetElement)) return;
-        if (ocrNamnLage === 'f') {
+        if (!arDatumFaltForOcr(ocrTargetElement)) {
+          if (ocrNamnLage === 'f') {
+            ocrNamnLage = null;
+            ocrFoddenamnFalt = null;
+          }
           ocrNamnLage = null;
-          ocrFoddenamnFalt = null;
         }
-        ocrNamnLage = null;
         visaIkonSomTomExtrahering();
         return;
       }
@@ -1437,6 +1438,8 @@ function startOcrOverlay(fig, initialEvent) {
           } catch (_) {}
           markInmatningDirty();
           if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+        } else {
+          visaIkonSomTomExtrahering();
         }
       } else {
         infogaOcrIFalt(trimmed);
