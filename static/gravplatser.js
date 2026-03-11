@@ -336,10 +336,10 @@ function visaOcrIkonForFalt(input) {
         group.className = 'gp-ocr-falt-ikon-grupp';
       }
       group.innerHTML = '';
-      group.appendChild(ocrFaltIkonBtn);
       group.appendChild(window.gpOcrBtnEf);
       group.appendChild(window.gpOcrBtnFe);
       group.appendChild(window.gpOcrBtnF);
+      group.appendChild(ocrFaltIkonBtn);
       if (!wrap.contains(group)) wrap.appendChild(group);
     } else {
       wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
@@ -358,9 +358,9 @@ function visaOcrIkonForFalt(input) {
         group.className = 'gp-ocr-falt-ikon-grupp';
       }
       group.innerHTML = '';
-      group.appendChild(ocrFaltIkonBtn);
       group.appendChild(window.gpOcrBtnEf);
       group.appendChild(window.gpOcrBtnFe);
+      group.appendChild(ocrFaltIkonBtn);
       if (!wrap.contains(group)) wrap.appendChild(group);
     }
   }
@@ -403,7 +403,7 @@ function visaOcrIkonForFalt(input) {
     group.appendChild(ocrFaltIkonBtn);
     group.appendChild(window.gpOcrBtnAdress);
     if (!wrap.contains(group)) wrap.appendChild(group);
-  } else {
+  } else if (!isNamnFalt) {
     let wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
     if (!wrap) {
       wrap = document.createElement('span');
@@ -1774,10 +1774,10 @@ function visaIkonSomTomExtrahering() {
       group.className = 'gp-ocr-falt-ikon-grupp';
     }
     group.innerHTML = '';
-    group.appendChild(ocrFaltIkonBtn);
     if (window.gpOcrBtnEf) group.appendChild(window.gpOcrBtnEf);
     if (window.gpOcrBtnFe) group.appendChild(window.gpOcrBtnFe);
     if (window.gpOcrBtnF) group.appendChild(window.gpOcrBtnF);
+    group.appendChild(ocrFaltIkonBtn);
     wrap.appendChild(group);
   } else {
     wrap.appendChild(ocrFaltIkonBtn);

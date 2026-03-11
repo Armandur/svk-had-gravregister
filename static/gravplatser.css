@@ -910,12 +910,24 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   display: inline-block;
   width: 16rem;
   max-width: 100%;
-  padding-right: 2.25rem;
   box-sizing: border-box;
   vertical-align: middle;
 }
+/* Utrymme för knapparna till höger (en knapp = 2.25rem; namn = EF+FE+f.+textextrahering) */
+.gp-ocr-falt-wrap:not(.gp-ocr-falt-wrap-namn):not(.gp-ocr-falt-wrap-adress) {
+  padding-right: 2.25rem;
+}
 .gp-ocr-falt-wrap.gp-ocr-falt-wrap-namn {
-  padding-right: 4.5rem;
+  padding-right: 5.25rem;
+  min-width: 16rem;
+}
+.gp-ocr-falt-wrap.gp-ocr-falt-wrap-adress {
+  padding-right: 4.2rem;
+}
+.gp-ocr-falt-wrap > input,
+.gp-ocr-falt-wrap > textarea {
+  width: 100%;
+  box-sizing: border-box;
 }
 .gp-ocr-falt-ikon-grupp {
   position: absolute;
@@ -925,6 +937,8 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 /* Inuti gruppen ska knapparna inte vara absolutpositionerade – då staplas de sida vid sida */
 .gp-ocr-falt-ikon-grupp .gp-ocr-falt-ikon {
@@ -939,9 +953,6 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   height: 1.5rem;
   font-size: 0.7rem;
   font-weight: 600;
-}
-.gp-ocr-falt-wrap.gp-ocr-falt-wrap-adress {
-  padding-right: 4.2rem;
 }
 .gp-ocr-falt-ikon.gp-ocr-falt-ikon-adress {
   min-width: 2.5rem;
@@ -1296,6 +1307,11 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   max-width: 16rem;
 }
 
+.gp-innehavare-rad textarea[name="inv_postnummer"],
+.gp-innehavare-rad input[name="inv_postnummer"] {
+  max-width: 16rem;
+}
+
 .gp-na-rad input[name="na_gatuadress"],
 .gp-na-rad textarea[name="na_gatuadress"] {
   min-width: 12rem;
@@ -1304,7 +1320,7 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 
 .gp-na-rad input[name="na_postnummer"],
 .gp-na-rad textarea[name="na_postnummer"] {
-  max-width: 6rem;
+  max-width: 16rem;
 }
 
 .gp-rad-ta-bort,
@@ -1473,6 +1489,11 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 .gp-gravsatt-rad input,
 .gp-gravsatt-rad textarea,
 .gp-gravsatt-rad select {
+  max-width: 16rem;
+}
+
+.gp-gravsatt-rad textarea[name^="gs_postnummer_"],
+.gp-gravsatt-rad input[name^="gs_postnummer_"] {
   max-width: 16rem;
 }
 
