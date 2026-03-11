@@ -10,4 +10,10 @@ Samma texter visas i appen under **Hjälp** (länk på startsidan). Filerna i de
 | [extramaterial.md](extramaterial.md) | Extramaterial |
 | [grunddata.md](grunddata.md) | Grunddata och kyrkogårdar |
 
-För datamodell, fält och specialfall se [SPECIFICATION.md](../SPECIFICATION.md) i repo-root (finns även som "Specifikation" under Hjälp i appen).
+**Specifikation** (uppdelad i allmän modell och källdata-specifik):
+
+- [SPECIFICATION.md](../SPECIFICATION.md) – Översikt och länkar till delarna
+- [specifikation-generell.md](specifikation-generell.md) – Allmän modell (gravplats, kyrkogård, kvarter, gravrättsinnehavare, gravsatta, skiss, fält, lagring)
+- [specifikation-harnosand-skandix.md](specifikation-harnosand-skandix.md) – Format för Härnösands domkyrkoförsamling (Skandix/Remington System Sy)
+
+Samma texter finns under Hjälp i appen.

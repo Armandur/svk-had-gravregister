@@ -1,11 +1,11 @@
 # Översikt
 
-Gravregister är en webbapplikation för att digitalisera skannade gravregister (HKG/HKN). Du arbetar med PDF-filer som ligger i **källdata** (en mapp per arkiv) och matar in uppgifter om gravrättsinnehavare och gravsatta i databasen.
+Gravregister är en webbapplikation för att digitalisera skannade gravregister (HKG/HKN). Du arbetar med PDF-filer som ligger i **källdata** (en mapp per arkiv) och matar in uppgifter i databasen: **gravplatsen** (storlek, skiss, underhåll, monument m.m.), **gravrättsinnehavare**, **närmast anhörig** och **gravsatta**.
 
 ## Huvudfunktioner
 
 - **Bläddring:** Välj mapp (kyrkogård/gravkvarter), ange försättssidor om det behövs, och bläddra mellan gravplatser. Varje gravplats visas som tre delar (gravrättsinnehavare, gravsatta 1–5, gravsatta 6–10).
-- **Inmatning:** Fyll i formulär för gravrättsinnehavare och gravsatta; data sparas i databasen och kan exporteras.
+- **Inmatning:** Fyll i formulär för gravplats (storlek, skiss, underhåll, monument osv.), gravrättsinnehavare, närmast anhörig och gravsatta; data sparas i databasen och kan exporteras.
 - **Extramaterial:** PDF-sidor som inte följer den vanliga tre-sidorsstrukturen kan plockas ur och kopplas till en gravplats eller endast till mappen.
 - **Sökning:** Sök gravplatser på fullständigt nummer eller via avancerad sökning (kyrkogård, kvarter, namn m.m.).
 - **Grunddata:** Hantera kyrkogårdar och användare (admin).

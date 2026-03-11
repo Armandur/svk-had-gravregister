@@ -2,7 +2,7 @@
 
 Produktionsapplikation för digitalisering av skannade gravregister (HKG/HKN). Användaren bläddrar i PDF-källor, transkriberar gravrättsinnehavare och gravsatta, och hanterar extramaterial. All data lagras i en SQLite-databas.
 
-- **Specifikation (datamodell, fält, specialfall):** [SPECIFICATION.md](SPECIFICATION.md)
+- **Specifikation (detta format):** [SPECIFICATION.md](SPECIFICATION.md) är en översikt med länkar till **allmän modell** (begrepp och fält för gravregister i allmänhet) och **format för Härnösands domkyrkoförsamling (Skandix/Remington System Sy)** (källdata-specifikt). Appen kan i framtiden stödja andra arkivformat.
 - **Körning med Docker:** [DOCKER.md](DOCKER.md)
 - **Användardokumentation:** [docs/](docs/) (samma texter kan visas i appen under Hjälp)
 

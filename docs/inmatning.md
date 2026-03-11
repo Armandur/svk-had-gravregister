@@ -2,10 +2,23 @@
 
 ## Formulär per gravplats
 
-För varje gravplats fyller du i:
+För varje gravplats fyller du i fyra typer av uppgifter:
 
-- **Gravrättsinnehavare:** Gravrättsinnehavare, yrke, adress, närmast anhörig, storlek, skiss (bild), underhåll, gravrättstid, monument, gravens utformning, samt längst ned: gravplats nr, karta nr, gravbrev nr, utfärdat den.
-- **Gravsatta 1–5** (sida 2) och **Gravsatta 6–10** (sida 3): Namn, adress, födelse (år, månad, dag, föd.nr), död (år, månad, dag, dödsbok nr), gravsatt den, urna.
+### Gravplats (själva platsen)
+
+Uppgifter som hör till **gravplatsen**, inte till innehavaren: storlek, skiss (bild), underhåll, gravrättstid, monument, gravens utformning, samt längst ned: gravplats nr, karta nr, gravbrev nr, utfärdat den.
+
+### Gravrättsinnehavare
+
+**Personen/personerna** som har gravrätten: namn/benämning, yrke, adress (gatuadress, postnummer, postort). Det kan finnas flera innehavare per gravplats.
+
+### Närmast anhörig
+
+**Eget block** – t.ex. kontaktperson eller närmaste anhörig (inte samma som gravrättsinnehavare): namn, adress, eventuellt telefon och yrke. Det kan finnas flera poster per gravplats.
+
+### Gravsatta 1–5 och 6–10
+
+Namn, adress, födelse (år, månad, dag, föd.nr), död (år, månad, dag, dödsbok nr), gravsatt den, urna.
 
 Endast de fält som ofta förekommer i källmaterialet är obligatoriska; övriga kan lämnas tomma.
 
@@ -15,7 +28,7 @@ Vid inmatning kan du använda OCR för att extrahera text från bilden: markera 
 
 ## Kommentarer
 
-Använd kommentarsfältet för handskrivna tillägg, osäkerheter eller undantag (t.ex. "gravsatt 3 enl. övre del 13.pdf, handskriven numrering").
+Använd kommentarsfältet för handskrivna tillägg, osäkerheter eller undantag (t.ex. "gravsatt 3 enl. övre del 13.pdf, handskriven numrering"). Kommentar kan anges per gravplats, per gravrättsinnehavare, per närmast anhörig och per gravsatt.
 
 ## Specialfall
 

@@ -520,11 +520,11 @@ async def databasunderhall_sida(admin: User = Depends(require_admin)):
 DOCS_DIR = Path(__file__).parent.parent / "docs"
 SPECIFICATION_PATH = Path(__file__).parent.parent / "SPECIFICATION.md"
 
-# Slug -> (filpath, titel). specifikation är SPECIFICATION.md i repo-root.
+# Slug -> (filpath, titel). specifikation = SPECIFICATION.md (index); specifikation-generell och specifikation-harnosand-skandix i docs/.
 def _hjalp_fil(slug: str) -> tuple[Path, str] | None:
     if slug == "specifikation":
         if SPECIFICATION_PATH.exists():
-            return (SPECIFICATION_PATH, "Specifikation (datamodell och fält)")
+            return (SPECIFICATION_PATH, "Specifikation (översikt)")
         return None
     if not re.match(r"^[a-z0-9-]+$", slug):
         return None
@@ -535,6 +535,8 @@ def _hjalp_fil(slug: str) -> tuple[Path, str] | None:
         "inmatning": "Inmatning och transkribering",
         "extramaterial": "Extramaterial",
         "grunddata": "Grunddata och kyrkogårdar",
+        "specifikation-generell": "Specifikation – Allmän modell",
+        "specifikation-harnosand-skandix": "Specifikation – Härnösands domkyrkoförsamling (Skandix/Remington System Sy)",
     }
     if p.exists():
         return (p, titlar.get(slug, slug.replace("-", " ").title()))
@@ -557,11 +559,12 @@ async def api_hjalp_lista():
         ("inmatning", "Inmatning och transkribering"),
         ("extramaterial", "Extramaterial"),
         ("grunddata", "Grunddata och kyrkogårdar"),
+        ("specifikation", "Specifikation (översikt)"),
+        ("specifikation-generell", "Specifikation – Allmän modell"),
+        ("specifikation-harnosand-skandix", "Specifikation – Härnösands domkyrkoförsamling (Skandix/Remington System Sy)"),
     ]:
         if _hjalp_fil(slug):
             dokument.append({"slug": slug, "titel": titel})
-    if _hjalp_fil("specifikation"):
-        dokument.append({"slug": "specifikation", "titel": "Specifikation (datamodell och fält)"})
     return {"dokument": dokument}
 
 

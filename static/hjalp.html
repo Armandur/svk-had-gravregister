@@ -15,7 +15,11 @@
       overflow-y: auto;
     }
     .hjalp-sidebar h2 { margin: 0 1rem 0.5rem; font-size: 0.9rem; font-weight: 600; color: #64748b; }
+    .hjalp-sidebar h2.hjalp-meny-sektion { margin-top: 1rem; }
+    .hjalp-sidebar h2.hjalp-meny-sektion:first-child { margin-top: 0; }
     .hjalp-sidebar ul { list-style: none; padding: 0; margin: 0; }
+    .hjalp-sidebar ul.hjalp-meny-undergrupp { margin-left: 0.5rem; }
+    .hjalp-sidebar ul.hjalp-meny-undergrupp a { padding: 0.35rem 0.75rem; font-size: 0.9rem; }
     .hjalp-sidebar a {
       display: block;
       padding: 0.4rem 1rem;
@@ -56,7 +60,9 @@
   <div class="hjalp-wrap">
     <nav class="hjalp-sidebar" aria-label="Hjälpmeny">
       <h2>Dokumentation</h2>
-      <ul id="hjalp-lista"></ul>
+      <ul id="hjalp-lista-dokumentation" class="hjalp-meny-lista"></ul>
+      <h2 class="hjalp-meny-sektion">Specifikationer</h2>
+      <ul id="hjalp-lista-specifikationer" class="hjalp-meny-lista hjalp-meny-undergrupp"></ul>
     </nav>
     <main class="hjalp-main" id="hjalp-innehall" aria-live="polite">
       <p class="hjalp-ladda" id="hjalp-status">Laddar …</p>
@@ -67,10 +73,26 @@
   <script>
     (function() {
       const API = '/api';
-      const listaEl = document.getElementById('hjalp-lista');
+      const listaDokEl = document.getElementById('hjalp-lista-dokumentation');
+      const listaSpecEl = document.getElementById('hjalp-lista-specifikationer');
       const innehallEl = document.getElementById('hjalp-innehall');
       const statusEl = document.getElementById('hjalp-status');
       const markdownEl = document.getElementById('hjalp-markdown');
+
+      function addMenyLank(ul, d) {
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = '#';
+        a.setAttribute('data-slug', d.slug);
+        a.textContent = d.titel;
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.history.replaceState({ slug: d.slug }, '', '/hjalp?doc=' + encodeURIComponent(d.slug));
+          visaDoc(d.slug);
+        });
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
 
       function visaDoc(slug) {
         if (!slug) return;
@@ -85,8 +107,26 @@
           .then(function(md) {
             statusEl.hidden = true;
             markdownEl.innerHTML = marked.parse(md);
+            // Länkar till andra hjälpdokument (docs/*.md) ska öppna dokumentet i appen istället för filsökväg
+            var slugFromHref = function(href) {
+              if (!href) return null;
+              var m = href.match(/specifikation-generell\.md$/) || href.match(/specifikation-harnosand-skandix\.md$/);
+              if (m) return m[0].replace('.md', '');
+              return null;
+            };
+            markdownEl.querySelectorAll('a[href]').forEach(function(a) {
+              var slug = slugFromHref(a.getAttribute('href'));
+              if (slug) {
+                a.href = '/hjalp?doc=' + encodeURIComponent(slug);
+                a.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  window.history.replaceState({ slug: slug }, '', '/hjalp?doc=' + encodeURIComponent(slug));
+                  visaDoc(slug);
+                });
+              }
+            });
             markdownEl.hidden = false;
-            listaEl.querySelectorAll('a').forEach(function(a) {
+            document.querySelectorAll('.hjalp-meny-lista a').forEach(function(a) {
               a.classList.toggle('aktiv', a.getAttribute('data-slug') === slug);
             });
             var firstHeading = markdownEl.querySelector('h1');
@@ -107,21 +147,21 @@
             statusEl.textContent = 'Inga hjälpdokument tillgängliga.';
             return;
           }
-          statusEl.hidden = true;
-          dokument.forEach(function(d, i) {
-            const li = document.createElement('li');
-            const a = document.createElement('a');
-            a.href = '#';
-            a.setAttribute('data-slug', d.slug);
-            a.textContent = d.titel;
-            a.addEventListener('click', function(e) {
-              e.preventDefault();
-              window.history.replaceState({ slug: d.slug }, '', '/hjalp?doc=' + encodeURIComponent(d.slug));
-              visaDoc(d.slug);
-            });
-            li.appendChild(a);
-            listaEl.appendChild(li);
+          var docSlugs = ['overview', 'bladdring', 'inmatning', 'extramaterial', 'grunddata'];
+          var specSlugs = ['specifikation', 'specifikation-generell', 'specifikation-harnosand-skandix'];
+          var docMap = {};
+          var specMap = {};
+          dokument.forEach(function(d) {
+            if (docSlugs.indexOf(d.slug) !== -1) docMap[d.slug] = d;
+            if (specSlugs.indexOf(d.slug) !== -1) specMap[d.slug] = d;
           });
+          docSlugs.forEach(function(slug) {
+            if (docMap[slug]) addMenyLank(listaDokEl, docMap[slug]);
+          });
+          specSlugs.forEach(function(slug) {
+            if (specMap[slug]) addMenyLank(listaSpecEl, specMap[slug]);
+          });
+          statusEl.hidden = true;
           var params = new URLSearchParams(window.location.search);
           var slug = params.get('doc') || (dokument[0] && dokument[0].slug);
           if (dokument.some(function(d) { return d.slug === slug; })) {
