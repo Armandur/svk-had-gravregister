@@ -3966,16 +3966,16 @@ function gpToastTextFörNyttYrke(yrkenLista) {
   const formuleringar = [
     'Nytt yrke upptäckt: ' + yrkeText + '!',
     'Du upptäckte yrket ' + yrkeText + '!',
-    'Ett yrke vi inte sett förut: ' + yrkeText + '.',
-    'Upptäckt – ' + yrkeText + ' fanns inte i registret tidigare.',
-    'Pling! Yrket ' + yrkeText + ' är upptäckt.',
-    'Första gången vi ser ' + yrkeText + ' i arkivet.',
-    'Snyggt – du hittade yrket ' + yrkeText + '.',
+    'Ett yrke vi inte sett förut: ' + yrkeText + '!',
+    'Upptäckt! ' + yrkeText + ' fanns inte i registret tidigare.',
+    'Pling! Yrket ' + yrkeText + ' har vi inte sett förut!.',
+    'Första gången vi ser ' + yrkeText + ' i arkivet!',
+    'Snyggt - du hittade yrket ' + yrkeText + '!',
     'Yrket ' + yrkeText + ' dyker upp för första gången.',
     'Ny upptäckt i registret: ' + yrkeText + '.',
-    'Oj, ' + yrkeText + ' – det hade vi inte sett tidigare!',
-    'Kanon – ett nytt yrke upptäckt: ' + yrkeText + '.',
-    'Rätt coolt – ' + yrkeText + ' syns nu i systemet för första gången.',
+    'Oj, ' + yrkeText + ' - det hade vi inte sett tidigare!',
+    'Kanon - ett nytt yrke upptäckt: ' + yrkeText + '.',
+    'Rätt coolt - ' + yrkeText + ' syns nu i systemet för första gången!',
   ];
   return formuleringar[Math.floor(Math.random() * formuleringar.length)];
 }

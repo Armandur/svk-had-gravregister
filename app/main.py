@@ -532,6 +532,59 @@ async def set_user_username(
     return {"ok": True, "username": user.username}
 
 
+@app.get("/api/admin/users/{user_id:int}/preferences")
+async def get_user_preferences(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Hämta roliga saker-inställningar för en användare (endast admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    prefs = {}
+    if getattr(user, "preferences", None) and (user.preferences or "").strip():
+        try:
+            prefs = json.loads(user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {
+        "preferences": {
+            "fun_enabled": prefs.get("fun_enabled", True),
+            "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),
+            "sound_on_new_yrke": prefs.get("sound_on_new_yrke", True),
+        },
+    }
+
+
+@app.patch("/api/admin/users/{user_id:int}/preferences")
+async def set_user_preferences(
+    user_id: int,
+    body: MePreferencesBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Sätt roliga saker-inställningar för en användare (endast admin)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    prefs = {}
+    if getattr(user, "preferences", None) and (user.preferences or "").strip():
+        try:
+            prefs = json.loads(user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if body.fun_enabled is not None:
+        prefs["fun_enabled"] = body.fun_enabled
+    if body.toast_on_new_yrke is not None:
+        prefs["toast_on_new_yrke"] = body.toast_on_new_yrke
+    if body.sound_on_new_yrke is not None:
+        prefs["sound_on_new_yrke"] = body.sound_on_new_yrke
+    user.preferences = json.dumps(prefs) if prefs else None
+    db.commit()
+    return {"ok": True, "preferences": prefs}
+
+
 @app.delete("/api/admin/users/{user_id:int}")
 async def delete_user(
     user_id: int,

@@ -10,7 +10,7 @@
     .admin-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
     .admin-sida a { color: var(--accent, #2563eb); }
     .admin-lista { list-style: none; padding: 0; margin: 1rem 0; }
-    .admin-lista li { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; }
+    .admin-lista li { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
     .admin-lista li span { flex: 1; }
     .admin-lista .admin-namn { min-width: 8rem; }
     .admin-lista .admin-badge { font-size: 0.75rem; background: #2563eb; color: #fff; padding: 0.15rem 0.4rem; border-radius: 4px; }
@@ -23,6 +23,11 @@
     .admin-fel { color: #b91c1c; font-size: 0.9rem; margin-top: 0.5rem; }
     .admin-ok { color: #16a34a; font-size: 0.9rem; margin-top: 0.5rem; }
     .admin-brodtext { font-size: 0.9rem; color: #555; margin: -0.5rem 0 0.75rem 0; }
+    .admin-prefs-wrap { flex: 1 1 100%; margin-top: 0.5rem; padding: 0.75rem; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .admin-prefs-wrap label { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; cursor: pointer; font-weight: normal; }
+    .admin-prefs-wrap input[type="checkbox"] { margin: 0; }
+    .admin-prefs-wrap button { margin-top: 0.5rem; padding: 0.3rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
+    .admin-prefs-sparad { font-size: 0.85rem; color: #16a34a; margin-left: 0.5rem; }
   </style>
 </head>
 <body>
@@ -80,12 +85,20 @@
             (data.users || []).forEach(function(u) {
               const li = document.createElement('li');
               const isSelf = u.id === currentUserId;
+              li.setAttribute('data-user-id', u.id);
               li.innerHTML = '<span class="admin-namn">' + (u.username || '') + (u.is_admin ? ' <span class="admin-badge">admin</span>' : '') + '</span>' +
                 '<span class="admin-knappar">' +
                 '<button type="button" class="admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
                 '<button type="button" class="admin-byta-namn" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '">Byt namn</button>' +
+                '<button type="button" class="admin-roliga-saker" data-id="' + u.id + '">Roliga saker</button>' +
                 '<button type="button" class="admin-ta-bort" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
-                '</span>';
+                '</span>' +
+                '<div class="admin-prefs-wrap" id="admin-prefs-' + u.id + '" hidden>' +
+                '<label><input type="checkbox" id="admin-pref-fun-' + u.id + '" /> Aktivera roliga saker (toast och ljud)</label>' +
+                '<label><input type="checkbox" id="admin-pref-toast-' + u.id + '" /> Visa toast (nytt yrke och utmärkelser)</label>' +
+                '<label><input type="checkbox" id="admin-pref-sound-' + u.id + '" /> Spela ljud (nytt yrke och utmärkelser)</label>' +
+                '<br /><button type="button" class="admin-prefs-spara" data-id="' + u.id + '">Spara</button><span class="admin-prefs-sparad" id="admin-prefs-sparad-' + u.id + '" hidden>Sparat.</span>' +
+                '</div>';
               listEl.appendChild(li);
             });
             listEl.querySelectorAll('.admin-set-pwd').forEach(function(btn) {
@@ -147,6 +160,59 @@
                   if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte ta bort'); });
                   alert('Användaren borttagen.');
                   visaAnvandare();
+                }).catch(function(e) {
+                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                });
+              });
+            });
+            listEl.querySelectorAll('.admin-roliga-saker').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const wrap = document.getElementById('admin-prefs-' + id);
+                if (!wrap) return;
+                if (wrap.hidden) {
+                  wrap.hidden = false;
+                  fetch('/api/admin/users/' + id + '/preferences', { credentials: 'include' })
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(data) {
+                      if (!data || !data.preferences) return;
+                      const p = data.preferences;
+                      const funEl = document.getElementById('admin-pref-fun-' + id);
+                      const toastEl = document.getElementById('admin-pref-toast-' + id);
+                      const soundEl = document.getElementById('admin-pref-sound-' + id);
+                      if (funEl) funEl.checked = p.fun_enabled !== false;
+                      if (toastEl) toastEl.checked = p.toast_on_new_yrke !== false;
+                      if (soundEl) soundEl.checked = p.sound_on_new_yrke !== false;
+                    })
+                    .catch(function() {});
+                } else {
+                  wrap.hidden = true;
+                }
+              });
+            });
+            listEl.querySelectorAll('.admin-prefs-spara').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const funEl = document.getElementById('admin-pref-fun-' + id);
+                const toastEl = document.getElementById('admin-pref-toast-' + id);
+                const soundEl = document.getElementById('admin-pref-sound-' + id);
+                const sparadEl = document.getElementById('admin-prefs-sparad-' + id);
+                const body = {
+                  fun_enabled: funEl ? funEl.checked : true,
+                  toast_on_new_yrke: toastEl ? toastEl.checked : true,
+                  sound_on_new_yrke: soundEl ? soundEl.checked : true
+                };
+                fetch('/api/admin/users/' + id + '/preferences', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(body),
+                  credentials: 'include'
+                }).then(function(r) {
+                  if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte spara'); });
+                  if (sparadEl) {
+                    sparadEl.hidden = false;
+                    setTimeout(function() { sparadEl.hidden = true; }, 2500);
+                  }
                 }).catch(function(e) {
                   alert('Fel: ' + (e.message || 'nätverksfel'));
                 });
