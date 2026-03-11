@@ -700,11 +700,11 @@ async function uppdateraVy(behallInmatningState = false) {
     history.replaceState(null, '', fullUrl);
   }
 
-  const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
-  const offsetQ = 'offset=0';
-  const cacheQ = `_v=${cacheBust}`;
-  const split1och3 = (727 / 1597).toFixed(4);
-  const split2 = (870 / 1595).toFixed(4);
+    const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
+    const offsetQ = 'offset=0';
+    const cacheQ = `_v=${cacheBust}`;
+    const split1och3 = (727 / 1597).toFixed(4);
+    const split2 = (870 / 1595).toFixed(4);
 
   try {
     const params = new URLSearchParams();
@@ -715,6 +715,8 @@ async function uppdateraVy(behallInmatningState = false) {
     if (!halvorRes.ok) throw new Error('Kunde inte hämta halvor');
     const halvorData = await halvorRes.json();
     const halvor = halvorData.halvor || [];
+    const config = halvorData.config || {};
+    const delaSidor = config.dela_sidor || 'hojdled';
     const extramaterial = halvorData.extramaterial || [];
     currentExtramaterial = extramaterial;
     currentExtramaterialMapp = mappNamn;
@@ -732,12 +734,21 @@ async function uppdateraVy(behallInmatningState = false) {
         helaUrl = halvaUrl;
         pdfUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}`;
       } else {
-        const pos = h.content_sida - (gp.start_sida || 0);
-        const split = pos === 1 ? split2 : split1och3;
-        halvaUrl = `${base}/${h.content_sida}/halva?${offsetQ}&halva=${h.halva}&split=${split}&${cacheQ}`;
         helaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${h.content_sida}?${cacheQ}`;
         if (h.filnamn) {
           pdfUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}`;
+        }
+        if (delaSidor === 'ingen') {
+          halvaUrl = helaUrl;
+        } else if (h.segment_index != null) {
+          halvaUrl = `${base}/${h.content_sida}/halva?${offsetQ}&segment=${h.segment_index}&${cacheQ}`;
+          if (h.position != null && h.position >= 1 && h.position <= 3) {
+            halvaUrl += `&position=${h.position}`;
+          }
+        } else {
+          const pos = h.content_sida - (gp.start_sida || 0);
+          const split = pos === 1 ? split2 : split1och3;
+          halvaUrl = `${base}/${h.content_sida}/halva?${offsetQ}&halva=${h.halva}&split=${split}&${cacheQ}`;
         }
       }
       return { halvaUrl, helaUrl, pdfUrl };
@@ -753,9 +764,10 @@ async function uppdateraVy(behallInmatningState = false) {
         ? `<a href="${x.pdfUrl}" target="_blank" rel="noopener" class="gravplatser-halva-knapp">Öppna PDF</a>`
         : '';
       const h = halvor[i];
-      const isRegularHalva = h && h.content_sida != null && h.halva != null;
+      const seg = h.segment_index != null ? h.segment_index : (h.halva === 'ovre' ? 0 : 1);
+      const isRegularHalva = h && h.content_sida != null && (h.halva != null || h.segment_index != null);
       const doljKnapp = isRegularHalva
-        ? `<button type="button" class="gravplatser-halva-dolj" data-content-sida="${h.content_sida}" data-halva="${esc(h.halva)}" title="Dölj från gravplatsbilderna">Dölj</button>`
+        ? `<button type="button" class="gravplatser-halva-dolj" data-content-sida="${h.content_sida}" data-segment-index="${seg}" data-halva="${esc(h.halva || (seg === 0 ? 'ovre' : 'nedre'))}" title="Dölj från gravplatsbilderna">Dölj</button>`
         : '';
       const figcapContent = [pdfKnapp, doljKnapp].filter(Boolean).join(' ');
       const figcap = figcapContent ? `<figcaption class="gravplatser-halva-figcap">${figcapContent}</figcaption>` : '';
@@ -770,13 +782,17 @@ async function uppdateraVy(behallInmatningState = false) {
         e.preventDefault();
         e.stopPropagation();
         const contentSida = parseInt(btn.dataset.contentSida, 10);
+        const segmentIndex = btn.dataset.segmentIndex != null ? parseInt(btn.dataset.segmentIndex, 10) : null;
         const halva = btn.dataset.halva;
-        if (isNaN(contentSida) || !halva || currentGravplatsId == null) return;
+        if (isNaN(contentSida) || (segmentIndex == null && !halva) || currentGravplatsId == null) return;
         try {
+          const body = { content_sida: contentSida };
+          if (segmentIndex != null) body.segment_index = segmentIndex;
+          if (halva) body.halva = halva;
           const res = await fetch(`${API}/gravplats/${currentGravplatsId}/dold-halva`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content_sida: contentSida, halva: halva }),
+            body: JSON.stringify(body),
             credentials: 'include',
           });
           if (!res.ok) throw new Error('Kunde inte uppdatera');
@@ -2552,13 +2568,24 @@ function getSkissKallaUrl(s) {
   const mapp = currentExtramaterialMapp;
   if (!mapp) return null;
   if (s.source_type === 'halva' && s.content_sida != null && s.halva) {
+    const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
+    const offsetQ = 'offset=0';
+    // Matcha mot samma halva som gravplatsvyn (segment + position) så att skissen pekar på rätt bild
+    const halvor = currentHalvorList || [];
+    const seg = s.segment_index != null ? s.segment_index : (s.halva === 'ovre' ? 0 : 1);
+    const match = halvor.find((h) => h.content_sida === s.content_sida && (h.segment_index != null ? h.segment_index === seg : (h.halva === s.halva)));
+    if (match && match.segment_index != null) {
+      let url = `${base}/${s.content_sida}/halva?${offsetQ}&segment=${match.segment_index}&${cacheQ}`;
+      if (match.position != null && match.position >= 1 && match.position <= 3) url += `&position=${match.position}`;
+      return url;
+    }
+    // Fallback för gamla skisser eller när halvor inte laddats: använd halva + split
     const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
     const pos = s.content_sida - start;
     const split1och3 = (727 / 1597).toFixed(4);
     const split2 = (870 / 1595).toFixed(4);
     const split = pos === 1 ? split2 : split1och3;
-    const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
-    return `${base}/${s.content_sida}/halva?offset=0&halva=${encodeURIComponent(s.halva)}&split=${split}&${cacheQ}`;
+    return `${base}/${s.content_sida}/halva?${offsetQ}&halva=${encodeURIComponent(s.halva)}&split=${split}&${cacheQ}`;
   }
   if (s.source_type === 'extramaterial' && s.extramaterial_id != null) {
     const em = (currentExtramaterial || []).find((e) => e.id === s.extramaterial_id);
@@ -2680,10 +2707,17 @@ function oppnaSkissModal() {
       if (h.redan_halva && h.filnamn) {
         url = `${API}/mappar/${encodeURIComponent(mapp)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
       } else {
-        const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
-        const pos = (h.content_sida || 0) - start;
-        const split = pos === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
-        url = `${API}/mappar/${encodeURIComponent(mapp)}/sida/${h.content_sida}/halva?offset=0&halva=${encodeURIComponent(h.halva)}&split=${split}&${cacheQ}`;
+        const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
+        const offsetQ = 'offset=0';
+        if (h.segment_index != null) {
+          url = `${base}/${h.content_sida}/halva?${offsetQ}&segment=${h.segment_index}&${cacheQ}`;
+          if (h.position != null && h.position >= 1 && h.position <= 3) url += `&position=${h.position}`;
+        } else {
+          const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
+          const pos = (h.content_sida || 0) - start;
+          const split = pos === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
+          url = `${base}/${h.content_sida}/halva?${offsetQ}&halva=${encodeURIComponent(h.halva)}&split=${split}&${cacheQ}`;
+        }
       }
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2694,6 +2728,8 @@ function oppnaSkissModal() {
           source_type: 'halva',
           content_sida: h.content_sida,
           halva: h.halva,
+          segment_index: h.segment_index,
+          position: h.position,
           url,
         };
         visaSteg2();
@@ -2782,6 +2818,8 @@ function oppnaSkissModal() {
         source_type: valdKalla.source_type,
         content_sida: valdKalla.content_sida ?? null,
         halva: valdKalla.halva ?? null,
+        segment_index: valdKalla.segment_index ?? null,
+        position: valdKalla.position ?? null,
         extramaterial_id: valdKalla.extramaterial_id ?? null,
         x: currentRect.x,
         y: currentRect.y,

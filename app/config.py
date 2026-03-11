@@ -26,3 +26,8 @@ SESSION_SECRET_KEY = os.environ.get("SESSION_SECRET_KEY", "dev-secret-byta-i-pro
 
 # Första admin skapas vid start om inga användare finns (valfritt)
 ADMIN_INITIAL_PASSWORD = os.environ.get("ADMIN_INITIAL_PASSWORD", "")
+
+# Kyrkogårdar som visas i listan (grunddatahantering). Kommaseparerad lista, t.ex. KYRKOGARDAR=HKG,HKN,ÖVR
+_kyrkogardar_str = os.environ.get("KYRKOGARDAR", "HKG,HKN")
+KYRKOGARDAR = [k.strip() for k in _kyrkogardar_str.split(",") if k.strip()]
+

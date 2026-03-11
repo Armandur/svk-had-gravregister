@@ -21,6 +21,44 @@ let cacheBust = 0;
 /** Startposition för serie gravplatsnummer (1-baserat start_sida), null om ej satt. */
 let seriesStartSida = null;
 
+/** Lista kyrkogårdar från konfiguration (fylls vid laddning). */
+let kyrkogardarLista = [];
+
+async function laddaKyrkogardar() {
+  try {
+    const res = await fetch(`${API}/kyrkogardar`, { credentials: 'include' });
+    const data = await res.json();
+    kyrkogardarLista = data.kyrkogardar || [];
+    fyllKyrkogardSelect();
+  } catch (e) {
+    console.warn('Kunde inte ladda kyrkogårdar:', e);
+    kyrkogardarLista = [];
+    fyllKyrkogardSelect();
+  }
+}
+
+function fyllKyrkogardSelect() {
+  const select = document.getElementById('kyrkogard');
+  if (!select) return;
+  const befintligVal = select.value;
+  select.innerHTML = '<option value="">–</option>';
+  kyrkogardarLista.forEach((k) => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = k;
+    select.appendChild(opt);
+  });
+  if (befintligVal) {
+    if (!kyrkogardarLista.includes(befintligVal)) {
+      const opt = document.createElement('option');
+      opt.value = befintligVal;
+      opt.textContent = befintligVal;
+      select.appendChild(opt);
+    }
+    select.value = befintligVal;
+  }
+}
+
 async function laddaMappar() {
   const select = document.getElementById('mapp');
   select.disabled = true;
@@ -76,10 +114,37 @@ async function valjMapp(mappNamn) {
     }
     const configData = await configRes.json();
     window.mappForsettAntal = configData.forsett_antal ?? 0;
+    window.mappLayoutTyp = configData.layout_typ || 'standard_3_sidor';
+    window.mappDelaSidor = configData.dela_sidor || 'hojdled';
+    window.mappAntalDelar = configData.antal_delar_per_sida ?? 2;
+    window.mappAndelar = Array.isArray(configData.andelar) ? configData.andelar : [0.5];
     const kyrkogardEl = document.getElementById('kyrkogard');
     const gravkvarterEl = document.getElementById('gravkvarter');
-    if (kyrkogardEl) kyrkogardEl.value = configData.kyrkogard || '';
+    const layoutEl = document.getElementById('mapp-layout-typ');
+    const delaEl = document.getElementById('mapp-dela-sidor');
+    if (kyrkogardEl) {
+      const kg = configData.kyrkogard || '';
+      if (kg && !kyrkogardarLista.includes(kg)) {
+        const opt = document.createElement('option');
+        opt.value = kg;
+        opt.textContent = kg;
+        kyrkogardEl.appendChild(opt);
+      }
+      kyrkogardEl.value = kg;
+    }
     if (gravkvarterEl) gravkvarterEl.value = configData.gravkvarter || '';
+    if (layoutEl) layoutEl.value = window.mappLayoutTyp;
+    if (delaEl) delaEl.value = window.mappDelaSidor;
+    const perPos = configData.andelar_per_position || {};
+    const fmt = (v) => (v != null && Array.isArray(v) && v[0] != null) ? String(v[0]) : '';
+    const inp1 = document.getElementById('split-pos-1');
+    const inp2 = document.getElementById('split-pos-2');
+    const inp3 = document.getElementById('split-pos-3');
+    if (inp1) inp1.value = fmt(perPos['1']);
+    if (inp2) inp2.value = fmt(perPos['2']);
+    if (inp3) inp3.value = fmt(perPos['3']);
+    const splitPosWrap = document.getElementById('split-pos-wrap');
+    if (splitPosWrap) splitPosWrap.style.display = (window.mappLayoutTyp === 'standard_3_sidor' && window.mappDelaSidor !== 'ingen') ? '' : 'none';
     const gravplatsData = await gravplatsRes.json();
     window.gravplatser = gravplatsData.gravplatser || [];
 
@@ -93,13 +158,15 @@ async function valjMapp(mappNamn) {
 
     ogiltigförklaraBildcache(); // alltid färska bilder vid mappval (t.ex. efter databasåterställning)
 
-    if (innehållsSidor >= 3) {
+    const kravSidor = (window.mappLayoutTyp === 'standard_3_sidor') ? 3 : 1;
+    if (innehållsSidor >= kravSidor) {
       document.getElementById('visning').hidden = false;
       startSida = 1;
+      window.listvySegmentIndex = 0;
       uppdateraPdfBilder();
     } else {
       document.getElementById('visning').hidden = true;
-      document.getElementById('mapp-status').textContent += ' Behöver minst 3 innehållssidor för att visa en gravplats.';
+      document.getElementById('mapp-status').textContent += ' Behöver minst ' + kravSidor + ' innehållssida(er) för att visa.';
     }
   } catch (e) {
     document.getElementById('mapp-status').textContent = 'Kunde inte ladda filer: ' + e.message;
@@ -118,21 +185,43 @@ function antalInnehållsSidor() {
   return Math.max(0, getEffectiveFiler().length);
 }
 
-/** Alla start_sida för gravplatsblock (1, 3, 5, … upp till sista blocket). */
+/** Alla start_sida för gravplatsblock. standard_3_sidor: 1,3,5,…; 1_sida_per_grav: 1,2,3,…; 2_gravar_per_sida: varje sida räknas två gånger (segment 0,1). */
 function allaGravplatsStartSidor() {
   const max = antalInnehållsSidor();
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
   const out = [];
-  for (let s = 1; s + 2 <= max; s += 2) out.push(s);
+  if (layout === '1_sida_per_grav') {
+    for (let s = 1; s <= max; s++) out.push(s);
+  } else if (layout === '2_gravar_per_sida') {
+    for (let s = 1; s <= max; s++) { out.push(s); out.push(s); }
+  } else {
+    for (let s = 1; s + 2 <= max; s += 2) out.push(s);
+  }
+  return out;
+}
+
+/** Vid 2_gravar_per_sida: array av { start_sida, segment_index }; annars [{ start_sida, segment_index: 0 }, …]. */
+function allaGravplatsBlock() {
+  const max = antalInnehållsSidor();
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
+  const out = [];
+  if (layout === '1_sida_per_grav') {
+    for (let s = 1; s <= max; s++) out.push({ start_sida: s, segment_index: 0 });
+  } else if (layout === '2_gravar_per_sida') {
+    for (let s = 1; s <= max; s++) { out.push({ start_sida: s, segment_index: 0 }); out.push({ start_sida: s, segment_index: 1 }); }
+  } else {
+    for (let s = 1; s + 2 <= max; s += 2) out.push({ start_sida: s, segment_index: 0 });
+  }
   return out;
 }
 
 /** Räknar hur många gravplatser som saknar respektive fält. Returnerar { kyrkogard, kvarter, gravplatsnummer }. */
 function antalSaknarPerFalt() {
   const gravplatser = window.gravplatser || [];
-  const alla = allaGravplatsStartSidor();
+  const alla = allaGravplatsBlock();
   let kyrkogard = 0, kvarter = 0, gravplatsnummer = 0;
-  for (const s of alla) {
-    const g = gravplatser.find((x) => x.start_sida === s);
+  for (const b of alla) {
+    const g = gravplatser.find((x) => x.start_sida === b.start_sida && (x.segment_index || 0) === (b.segment_index || 0));
     if (!g || !String(g.kyrkogard || '').trim()) kyrkogard++;
     if (!g || !String(g.kvarter || '').trim()) kvarter++;
     if (!g || !String(g.gravplatsnummer || '').trim()) gravplatsnummer++;
@@ -158,6 +247,13 @@ function gravplatsSaknarValt(g, saknarKyrkogard, saknarKvarter, saknarGravplatsn
   return saknarK || saknarKv || saknarG;
 }
 
+/** Hitta gravplats för aktuell position (startSida + listvySegmentIndex). */
+function aktuellGravplats() {
+  const gravplatser = window.gravplatser || [];
+  const seg = window.listvySegmentIndex ?? 0;
+  return gravplatser.find((x) => x.start_sida === startSida && (x.segment_index || 0) === seg);
+}
+
 function visaHoppaSaknadTooltip(text) {
   const el = document.getElementById('hoppa-saknad-tooltip');
   if (!el) return;
@@ -178,15 +274,18 @@ function hoppaTillNastaSaknad() {
     return;
   }
   const gravplatser = window.gravplatser || [];
-  const alla = allaGravplatsStartSidor();
-  const nasta = alla.find((s) => s > startSida && gravplatsSaknarValt(
-    gravplatser.find((x) => x.start_sida === s),
+  const alla = allaGravplatsBlock();
+  const seg = window.listvySegmentIndex ?? 0;
+  const currentIdx = alla.findIndex((b) => b.start_sida === startSida && (b.segment_index || 0) === seg);
+  const nastaBlock = currentIdx >= 0 ? alla.slice(currentIdx + 1).find((b) => gravplatsSaknarValt(
+    gravplatser.find((x) => x.start_sida === b.start_sida && (x.segment_index || 0) === (b.segment_index || 0)),
     saknarKyrkogard,
     saknarKvarter,
     saknarGravplatsnummer,
-  ));
-  if (nasta != null) {
-    startSida = nasta;
+  )) : null;
+  if (nastaBlock) {
+    startSida = nastaBlock.start_sida;
+    window.listvySegmentIndex = nastaBlock.segment_index || 0;
     uppdateraPdfBilder();
   } else {
     visaHoppaSaknadTooltip('Ingen gravplats hittades som saknar valt fält.');
@@ -202,15 +301,18 @@ function hoppaTillFöregåendeSaknad() {
     return;
   }
   const gravplatser = window.gravplatser || [];
-  const alla = allaGravplatsStartSidor();
-  const foregaende = [...alla].reverse().find((s) => s < startSida && gravplatsSaknarValt(
-    gravplatser.find((x) => x.start_sida === s),
+  const alla = allaGravplatsBlock();
+  const seg = window.listvySegmentIndex ?? 0;
+  const currentIdx = alla.findIndex((b) => b.start_sida === startSida && (b.segment_index || 0) === seg);
+  const foregaendeBlock = currentIdx > 0 ? [...alla.slice(0, currentIdx)].reverse().find((b) => gravplatsSaknarValt(
+    gravplatser.find((x) => x.start_sida === b.start_sida && (x.segment_index || 0) === (b.segment_index || 0)),
     saknarKyrkogard,
     saknarKvarter,
     saknarGravplatsnummer,
-  ));
-  if (foregaende != null) {
-    startSida = foregaende;
+  )) : null;
+  if (foregaendeBlock) {
+    startSida = foregaendeBlock.start_sida;
+    window.listvySegmentIndex = foregaendeBlock.segment_index || 0;
     uppdateraPdfBilder();
   } else {
     visaHoppaSaknadTooltip('Ingen gravplats hittades som saknar valt fält.');
@@ -228,24 +330,61 @@ function getDisplayStartSida() {
   return idx >= 0 ? idx + 1 : startSida;
 }
 
+/** Sätter rutorubriker dynamiskt utifrån layout_typ. */
+function uppdateraRutaRubriker(layout) {
+  const titles = layout === '1_sida_per_grav'
+    ? ['Gravplats', '', '']
+    : layout === '2_gravar_per_sida'
+      ? ['Grav 1 (övre)', 'Grav 2 (nedre)', '']
+      : ['Sida 1 – Gravrätt', 'Sida 2 – Gravsatta 1–5', 'Sida 3 – Gravsatta 6–10'];
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('ruta-rubrik-' + i);
+    const halvaEl = document.getElementById('halva-rubrik-' + i);
+    if (el && titles[i - 1]) el.textContent = titles[i - 1];
+    if (halvaEl && titles[i - 1]) halvaEl.textContent = titles[i - 1];
+  }
+}
+
 function uppdateraPdfBilder() {
   const effectiveFiler = getEffectiveFiler();
   const excludeQ = urklipp.length ? '&exclude=' + encodeURIComponent(urklipp.join(',')) : '';
-
-  const s1 = startSida;
-  const s2 = startSida + 1;
-  const s3 = startSida + 2;
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
+  const delaSidor = window.mappDelaSidor || 'hojdled';
+  const seg = window.listvySegmentIndex ?? 0;
   const pdfBase = `${API}/mappar/${encodeURIComponent(valdMapp)}/pdf`;
   const offsetQ = 'offset=0';
   const cacheQ = `_v=${cacheBust}`;
   const sidaBase = `${API}/mappar/${encodeURIComponent(valdMapp)}/sida`;
   const visaHelaSidor = document.getElementById('visa-hela-sidor')?.checked === true;
 
+  let s1, s2, s3;
+  if (layout === '1_sida_per_grav') {
+    s1 = s2 = s3 = startSida;
+  } else if (layout === '2_gravar_per_sida') {
+    s1 = s2 = s3 = startSida;
+  } else {
+    s1 = startSida;
+    s2 = startSida + 1;
+    s3 = startSida + 2;
+  }
+
+  const anvandSegmentParam = delaSidor !== 'ingen' && !visaHelaSidor;
   let url1, url2, url3;
-  if (visaHelaSidor) {
+  if (visaHelaSidor || delaSidor === 'ingen') {
     url1 = `${sidaBase}/${s1}?${offsetQ}&${cacheQ}${excludeQ}`;
     url2 = `${sidaBase}/${s2}?${offsetQ}&${cacheQ}${excludeQ}`;
     url3 = `${sidaBase}/${s3}?${offsetQ}&${cacheQ}${excludeQ}`;
+  } else if (anvandSegmentParam) {
+    if (layout === '2_gravar_per_sida') {
+      url1 = `${sidaBase}/${s1}/halva?${offsetQ}&segment=0&${cacheQ}${excludeQ}`;
+      url2 = `${sidaBase}/${s2}/halva?${offsetQ}&segment=1&${cacheQ}${excludeQ}`;
+      url3 = url1;
+    } else {
+      // Standard 3 sidor: sida 1 och 2 = nedre (segment 1), sida 3 = övre (segment 0); position styr split
+      url1 = `${sidaBase}/${s1}/halva?${offsetQ}&segment=1&position=1&${cacheQ}${excludeQ}`;
+      url2 = `${sidaBase}/${s2}/halva?${offsetQ}&segment=1&position=2&${cacheQ}${excludeQ}`;
+      url3 = `${sidaBase}/${s3}/halva?${offsetQ}&segment=0&position=3&${cacheQ}${excludeQ}`;
+    }
   } else {
     const splitSida1och3 = (727 / 1597).toFixed(4);
     const splitSida2 = (870 / 1595).toFixed(4);
@@ -283,16 +422,65 @@ function uppdateraPdfBilder() {
   document.getElementById('link-sida-3').href = pdfHref(item3, s3);
 
   const maxSida = antalInnehållsSidor();
-  document.getElementById('btn-föregående').disabled = startSida <= 1;
-  document.getElementById('btn-nästa').disabled = s3 > maxSida;
+  let kanForegaende = true, kanNasta = true;
+  if (layout === '2_gravar_per_sida') {
+    kanForegaende = startSida > 1 || seg > 0;
+    kanNasta = startSida < maxSida || (startSida === maxSida && seg < 1);
+  } else if (layout === '1_sida_per_grav') {
+    kanForegaende = startSida > 1;
+    kanNasta = startSida < maxSida;
+  } else {
+    kanForegaende = startSida > 1;
+    kanNasta = s3 <= maxSida;
+  }
+  document.getElementById('btn-föregående').disabled = !kanForegaende;
+  document.getElementById('btn-nästa').disabled = !kanNasta;
+
+  const ruta3 = document.querySelector('.pdf-rutor .ruta:nth-child(3)');
+  const halva3 = document.getElementById('halva-img-3')?.closest('.halva-ruta');
+  if (layout === '2_gravar_per_sida') {
+    if (ruta3) ruta3.style.display = 'none';
+    if (halva3) halva3.style.display = 'none';
+  } else {
+    if (ruta3) ruta3.style.display = '';
+    if (halva3) halva3.style.display = '';
+  }
+  if (layout === '1_sida_per_grav') {
+    if (ruta3) ruta3.style.display = 'none';
+    if (halva3) halva3.style.display = 'none';
+    const ruta2 = document.querySelector('.pdf-rutor .ruta:nth-child(2)');
+    const halva2 = document.getElementById('halva-img-2')?.closest('.halva-ruta');
+    if (ruta2) ruta2.style.display = 'none';
+    if (halva2) halva2.style.display = 'none';
+  } else {
+    const ruta2 = document.querySelector('.pdf-rutor .ruta:nth-child(2)');
+    const halva2 = document.getElementById('halva-img-2')?.closest('.halva-ruta');
+    if (ruta2) ruta2.style.display = '';
+    if (halva2) halva2.style.display = '';
+  }
 
   const registreratEl = document.getElementById('gravplats-registrerat');
-  const g = (window.gravplatser || []).find((x) => x.start_sida === startSida);
+  const g = aktuellGravplats();
   if (registreratEl) {
     registreratEl.textContent = g && g.fullstandigt ? 'Registrerat: ' + g.fullstandigt : '';
   }
+  const alla = allaGravplatsBlock();
+  const currentIdx = alla.findIndex((b) => b.start_sida === startSida && (b.segment_index || 0) === seg);
+  const gravplatsIndikatorEl = document.getElementById('gravplats-indikator');
+  if (gravplatsIndikatorEl && alla.length > 0) {
+    const num = currentIdx >= 0 ? currentIdx + 1 : 0;
+    gravplatsIndikatorEl.textContent = num > 0 ? 'Gravplats ' + num + ' av ' + alla.length : '';
+  }
+  uppdateraRutaRubriker(layout);
+  const enterHint = document.getElementById('enter-hint');
+  const enterGaNasta = document.getElementById('enter-ga-nasta');
+  if (enterHint && enterGaNasta) enterHint.hidden = !enterGaNasta.checked;
   const cb3 = document.getElementById('sida3-ovre-nasta');
   if (cb3) cb3.checked = !!(g && g.sida3_ovre_tillhor_nasta);
+  const halvaKopplingEl = document.getElementById('halva-koppling');
+  if (halvaKopplingEl) halvaKopplingEl.style.display = (layout === 'standard_3_sidor') ? '' : 'none';
+  const splitPosWrap = document.getElementById('split-pos-wrap');
+  if (splitPosWrap) splitPosWrap.style.display = (layout === 'standard_3_sidor' && delaSidor !== 'ingen') ? '' : 'none';
   const gravplatsnummerEl = document.getElementById('gravplatsnummer');
   const gravkvarterEl = document.getElementById('gravkvarter');
   if (gravplatsnummerEl) gravplatsnummerEl.value = g ? (g.gravplatsnummer || '') : '';
@@ -320,8 +508,22 @@ function uppdateraPdfBilder() {
 function uppdateraSerieVisning() {
   const startVisa = document.getElementById('serie-start-visa');
   const slutVisa = document.getElementById('serie-slut-visa');
+  const antalVisa = document.getElementById('serie-antal-visa');
   if (startVisa) startVisa.textContent = seriesStartSida != null ? 'Start: sida ' + seriesStartSida : 'Start: –';
   if (slutVisa) slutVisa.textContent = 'Slut: sida ' + startSida;
+  if (antalVisa && seriesStartSida != null) {
+    const layout = window.mappLayoutTyp || 'standard_3_sidor';
+    const seg = window.listvySegmentIndex ?? 0;
+    let antal = 0;
+    if (layout === '2_gravar_per_sida' && startSida >= seriesStartSida) {
+      antal = (startSida - seriesStartSida) * 2 + seg + 1;
+    } else if ((layout === 'standard_3_sidor' || layout === '1_sida_per_grav') && startSida >= seriesStartSida && (layout === '1_sida_per_grav' || (startSida - seriesStartSida) % 2 === 0)) {
+      antal = layout === '1_sida_per_grav' ? (startSida - seriesStartSida + 1) : (startSida - seriesStartSida) / 2 + 1;
+    }
+    antalVisa.textContent = antal > 0 ? 'Antal i serien: ' + antal : '';
+  } else if (document.getElementById('serie-antal-visa')) {
+    document.getElementById('serie-antal-visa').textContent = '';
+  }
 }
 
 let listvyLightboxIndex = 0;
@@ -753,44 +955,111 @@ async function sparaMappConfig() {
   if (!valdMapp) return;
   const kyrkogard = document.getElementById('kyrkogard')?.value?.trim() || null;
   const gravkvarter = document.getElementById('gravkvarter')?.value?.trim() || null;
+  const layoutTyp = document.getElementById('mapp-layout-typ')?.value || 'standard_3_sidor';
+  const delaSidor = document.getElementById('mapp-dela-sidor')?.value || 'hojdled';
+  window.mappLayoutTyp = layoutTyp;
+  window.mappDelaSidor = delaSidor;
+  const body = {
+    kyrkogard,
+    gravkvarter,
+    forsett_antal: window.mappForsettAntal ?? 0,
+    layout_typ: layoutTyp,
+    dela_sidor: delaSidor,
+  };
+  const v1 = document.getElementById('split-pos-1')?.value?.trim();
+  const v2 = document.getElementById('split-pos-2')?.value?.trim();
+  const v3 = document.getElementById('split-pos-3')?.value?.trim();
+  if (v1 !== '' || v2 !== '' || v3 !== '') {
+    body.andelar_per_position = {};
+    if (v1 !== '') body.andelar_per_position['1'] = [parseFloat(v1)];
+    if (v2 !== '') body.andelar_per_position['2'] = [parseFloat(v2)];
+    if (v3 !== '') body.andelar_per_position['3'] = [parseFloat(v3)];
+  } else {
+    body.andelar_per_position = {};
+  }
   try {
     await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kyrkogard, gravkvarter, forsett_antal: window.mappForsettAntal ?? 0 }),
+      body: JSON.stringify(body),
       credentials: 'include',
     });
+    if (valdMapp && document.getElementById('visning') && !document.getElementById('visning').hidden) {
+      uppdateraPdfBilder();
+    }
   } catch (e) {
     console.warn('Kunde inte spara mappconfig:', e);
   }
 }
 document.getElementById('kyrkogard')?.addEventListener('change', sparaMappConfig);
 document.getElementById('gravkvarter')?.addEventListener('blur', sparaMappConfig);
+document.getElementById('mapp-layout-typ')?.addEventListener('change', sparaMappConfig);
+document.getElementById('mapp-dela-sidor')?.addEventListener('change', sparaMappConfig);
+document.getElementById('split-pos-1')?.addEventListener('blur', sparaMappConfig);
+document.getElementById('split-pos-2')?.addEventListener('blur', sparaMappConfig);
+document.getElementById('split-pos-3')?.addEventListener('blur', sparaMappConfig);
+
+document.getElementById('split-pos-standard')?.addEventListener('click', () => {
+  const inp1 = document.getElementById('split-pos-1');
+  const inp2 = document.getElementById('split-pos-2');
+  const inp3 = document.getElementById('split-pos-3');
+  if (inp1) inp1.value = '';
+  if (inp2) inp2.value = '';
+  if (inp3) inp3.value = '';
+  sparaMappConfig();
+});
+
+document.getElementById('mappinställningar-toggle')?.addEventListener('click', () => {
+  const btn = document.getElementById('mappinställningar-toggle');
+  const innehall = document.getElementById('mappinställningar-innehall');
+  if (!btn || !innehall) return;
+  const expanded = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', expanded);
+  innehall.hidden = !expanded;
+});
+
+document.getElementById('enter-ga-nasta')?.addEventListener('change', () => {
+  const enterHint = document.getElementById('enter-hint');
+  const enterGaNasta = document.getElementById('enter-ga-nasta');
+  if (enterHint && enterGaNasta) enterHint.hidden = !enterGaNasta.checked;
+});
 
 document.getElementById('gravplatsnummer')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && document.getElementById('enter-ga-nasta')?.checked) {
     e.preventDefault();
-    const maxSida = antalInnehållsSidor();
-    if (startSida + 2 <= maxSida) sparaGravplatsOchGåNästa();
+    if (kanGaNasta()) sparaGravplatsOchGåNästa();
   }
 });
 
 document.getElementById('btn-föregående').addEventListener('click', () => {
-  if (startSida > 1) {
-    startSida -= 2; // föregående gravplats: tidigare ruta 1 blir nu ruta 3
-    if (startSida < 1) startSida = 1;
-    uppdateraPdfBilder();
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
+  if (layout === '2_gravar_per_sida') {
+    if (window.listvySegmentIndex > 0) {
+      window.listvySegmentIndex = 0;
+    } else if (startSida > 1) {
+      startSida--;
+      window.listvySegmentIndex = 1;
+    }
+  } else if (layout === '1_sida_per_grav') {
+    if (startSida > 1) startSida--;
+  } else {
+    if (startSida > 1) {
+      startSida -= 2;
+      if (startSida < 1) startSida = 1;
+    }
   }
+  uppdateraPdfBilder();
 });
 
 async function sparaHalvaKoppling() {
   if (!valdMapp) return;
-  const g = (window.gravplatser || []).find((x) => x.start_sida === startSida);
+  const g = aktuellGravplats();
   let kvarter = document.getElementById('gravkvarter')?.value?.trim() ?? '';
   let gravplatsnummer = document.getElementById('gravplatsnummer')?.value?.trim() ?? '';
   if (!kvarter && g && g.kvarter && String(g.kvarter).trim()) kvarter = g.kvarter.trim();
   if (!gravplatsnummer && g && g.gravplatsnummer && String(g.gravplatsnummer).trim()) gravplatsnummer = g.gravplatsnummer.trim();
   const sida3OvreNasta = document.getElementById('sida3-ovre-nasta')?.checked ?? false;
+  const seg = window.listvySegmentIndex ?? 0;
   try {
     await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, {
       method: 'POST',
@@ -799,6 +1068,7 @@ async function sparaHalvaKoppling() {
         kvarter,
         gravplatsnummer,
         start_sida: startSida,
+        segment_index: seg,
         sida1_ovre_tillhor_denna: false,
         sida3_ovre_tillhor_nasta: sida3OvreNasta,
       }),
@@ -812,9 +1082,9 @@ async function sparaHalvaKoppling() {
   }
 }
 
-/** Returnerar true om formulärets värden skiljer sig från sparad gravplats för aktuell startSida. */
+/** Returnerar true om formulärets värden skiljer sig från sparad gravplats för aktuell position. */
 function harGravplatsDataAndrats() {
-  const g = (window.gravplatser || []).find((x) => x.start_sida === startSida);
+  const g = aktuellGravplats();
   let kvarter = document.getElementById('gravkvarter')?.value?.trim() ?? '';
   let gravplatsnummer = document.getElementById('gravplatsnummer')?.value?.trim() ?? '';
   if (!kvarter && g && g.kvarter && String(g.kvarter).trim()) kvarter = g.kvarter.trim();
@@ -830,12 +1100,14 @@ function harGravplatsDataAndrats() {
 async function sparaGravplats() {
   if (!valdMapp) return;
   if (!harGravplatsDataAndrats()) return;
-  const g = (window.gravplatser || []).find((x) => x.start_sida === startSida);
+  const g = aktuellGravplats();
   let kvarter = document.getElementById('gravkvarter')?.value?.trim() ?? '';
   let gravplatsnummer = document.getElementById('gravplatsnummer')?.value?.trim() ?? '';
   if (!kvarter && g && g.kvarter && String(g.kvarter).trim()) kvarter = g.kvarter.trim();
   if (!gravplatsnummer && g && g.gravplatsnummer && String(g.gravplatsnummer).trim()) gravplatsnummer = g.gravplatsnummer.trim();
   const sida3OvreNasta = document.getElementById('sida3-ovre-nasta')?.checked ?? false;
+  const seg = window.listvySegmentIndex ?? 0;
+  const statusEl = document.getElementById('spara-status');
   try {
     await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, {
       method: 'POST',
@@ -844,6 +1116,7 @@ async function sparaGravplats() {
         kvarter,
         gravplatsnummer,
         start_sida: startSida,
+        segment_index: seg,
         sida1_ovre_tillhor_denna: false,
         sida3_ovre_tillhor_nasta: sida3OvreNasta,
       }),
@@ -852,25 +1125,56 @@ async function sparaGravplats() {
     const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, { credentials: 'include' });
     const data = await res.json();
     window.gravplatser = data.gravplatser || [];
+    if (statusEl) {
+      statusEl.textContent = gravplatsnummer ? 'Sparat för gravplats ' + gravplatsnummer : 'Sparat';
+      clearTimeout(sparaGravplats._tid);
+      sparaGravplats._tid = setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+    }
     uppdateraPdfBilder();
   } catch (e) {
     console.warn('Kunde inte spara gravplats:', e);
+    if (statusEl) statusEl.textContent = 'Kunde inte spara';
   }
 }
 
-async function sparaGravplatsOchGåNästa() {
+function gaTillNastaBlock() {
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
   const maxSida = antalInnehållsSidor();
-  if (startSida + 2 > maxSida) return;
+  const seg = window.listvySegmentIndex ?? 0;
+  if (layout === '2_gravar_per_sida') {
+    if (seg < 1) {
+      window.listvySegmentIndex = 1;
+    } else {
+      startSida++;
+      window.listvySegmentIndex = 0;
+    }
+  } else if (layout === '1_sida_per_grav') {
+    startSida++;
+  } else {
+    startSida += 2;
+  }
+}
+
+function kanGaNasta() {
+  const layout = window.mappLayoutTyp || 'standard_3_sidor';
+  const maxSida = antalInnehållsSidor();
+  const seg = window.listvySegmentIndex ?? 0;
+  if (layout === '2_gravar_per_sida') return startSida < maxSida || (startSida === maxSida && seg < 1);
+  if (layout === '1_sida_per_grav') return startSida < maxSida;
+  return startSida + 2 <= maxSida;
+}
+
+async function sparaGravplatsOchGåNästa() {
+  if (!kanGaNasta()) return;
   await sparaGravplats();
   document.getElementById('gravplatsnummer').value = '';
-  startSida += 2;
+  gaTillNastaBlock();
   uppdateraPdfBilder();
 }
 
 document.getElementById('btn-spara-gravplats')?.addEventListener('click', () => { sparaGravplats(); });
 document.getElementById('btn-nästa').addEventListener('click', () => {
-  const maxSida = antalInnehållsSidor();
-  if (startSida + 2 <= maxSida) sparaGravplatsOchGåNästa();
+  if (kanGaNasta()) sparaGravplatsOchGåNästa();
 });
 
 document.getElementById('btn-föregående-saknad')?.addEventListener('click', hoppaTillFöregåendeSaknad);
@@ -899,16 +1203,21 @@ document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
   if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
   if (document.getElementById('visning').hidden) return;
-  const maxSida = antalInnehållsSidor();
   if (e.key === 'ArrowLeft') {
-    if (startSida > 1) {
-      startSida -= 2;
-      if (startSida < 1) startSida = 1;
+    const layout = window.mappLayoutTyp || 'standard_3_sidor';
+    const seg = window.listvySegmentIndex ?? 0;
+    if (layout === '2_gravar_per_sida' && (seg > 0 || startSida > 1)) {
+      if (seg > 0) window.listvySegmentIndex = 0;
+      else { startSida--; window.listvySegmentIndex = 1; }
+      uppdateraPdfBilder();
+    } else if ((layout === '1_sida_per_grav' || layout === 'standard_3_sidor') && startSida > 1) {
+      if (layout === 'standard_3_sidor') { startSida -= 2; if (startSida < 1) startSida = 1; }
+      else startSida--;
       uppdateraPdfBilder();
     }
     e.preventDefault();
   } else if (e.key === 'ArrowRight') {
-    if (startSida + 2 <= maxSida) sparaGravplatsOchGåNästa();
+    if (kanGaNasta()) sparaGravplatsOchGåNästa();
     e.preventDefault();
   }
 });
@@ -1057,18 +1366,5 @@ async function visaExtramaterialMapp() {
 }
 document.getElementById('em-visa-mapp')?.addEventListener('click', visaExtramaterialMapp);
 
-document.getElementById('dev-meny-toggle')?.addEventListener('click', () => {
-  const innehall = document.getElementById('dev-meny-innehall');
-  if (innehall) innehall.hidden = !innehall.hidden;
-});
-document.getElementById('dev-nolla-cache')?.addEventListener('click', () => {
-  ogiltigförklaraBildcache();
-  if (valdMapp && document.getElementById('visning') && !document.getElementById('visning').hidden) {
-    uppdateraPdfBilder();
-  }
-});
-document.getElementById('dev-stang-av')?.addEventListener('click', () => {
-  fetch(`${API}/dev/shutdown`, { method: 'POST', credentials: 'include' }).catch(() => {});
-});
-
 laddaMappar();
+laddaKyrkogardar();
