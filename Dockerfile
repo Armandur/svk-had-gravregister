@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 COPY static/ ./static/
+COPY docs/ ./docs/
+COPY SPECIFICATION.md ./
 
 # Volym för data: sätt DATA_DIR=/data och mounta katalog med gravregister.db och källdata/
 # DATABASE_PATH kan överstyras (t.ex. /data/gravregister-dev.db) för att dela källdata men ha olika db-filer
