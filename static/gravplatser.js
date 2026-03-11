@@ -2568,13 +2568,24 @@ function getSkissKallaUrl(s) {
   const mapp = currentExtramaterialMapp;
   if (!mapp) return null;
   if (s.source_type === 'halva' && s.content_sida != null && s.halva) {
+    const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
+    const offsetQ = 'offset=0';
+    // Matcha mot samma halva som gravplatsvyn (segment + position) så att skissen pekar på rätt bild
+    const halvor = currentHalvorList || [];
+    const seg = s.segment_index != null ? s.segment_index : (s.halva === 'ovre' ? 0 : 1);
+    const match = halvor.find((h) => h.content_sida === s.content_sida && (h.segment_index != null ? h.segment_index === seg : (h.halva === s.halva)));
+    if (match && match.segment_index != null) {
+      let url = `${base}/${s.content_sida}/halva?${offsetQ}&segment=${match.segment_index}&${cacheQ}`;
+      if (match.position != null && match.position >= 1 && match.position <= 3) url += `&position=${match.position}`;
+      return url;
+    }
+    // Fallback för gamla skisser eller när halvor inte laddats: använd halva + split
     const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
     const pos = s.content_sida - start;
     const split1och3 = (727 / 1597).toFixed(4);
     const split2 = (870 / 1595).toFixed(4);
     const split = pos === 1 ? split2 : split1och3;
-    const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
-    return `${base}/${s.content_sida}/halva?offset=0&halva=${encodeURIComponent(s.halva)}&split=${split}&${cacheQ}`;
+    return `${base}/${s.content_sida}/halva?${offsetQ}&halva=${encodeURIComponent(s.halva)}&split=${split}&${cacheQ}`;
   }
   if (s.source_type === 'extramaterial' && s.extramaterial_id != null) {
     const em = (currentExtramaterial || []).find((e) => e.id === s.extramaterial_id);
@@ -2696,10 +2707,17 @@ function oppnaSkissModal() {
       if (h.redan_halva && h.filnamn) {
         url = `${API}/mappar/${encodeURIComponent(mapp)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
       } else {
-        const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
-        const pos = (h.content_sida || 0) - start;
-        const split = pos === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
-        url = `${API}/mappar/${encodeURIComponent(mapp)}/sida/${h.content_sida}/halva?offset=0&halva=${encodeURIComponent(h.halva)}&split=${split}&${cacheQ}`;
+        const base = `${API}/mappar/${encodeURIComponent(mapp)}/sida`;
+        const offsetQ = 'offset=0';
+        if (h.segment_index != null) {
+          url = `${base}/${h.content_sida}/halva?${offsetQ}&segment=${h.segment_index}&${cacheQ}`;
+          if (h.position != null && h.position >= 1 && h.position <= 3) url += `&position=${h.position}`;
+        } else {
+          const start = currentGravplatsStartSida != null ? currentGravplatsStartSida : 0;
+          const pos = (h.content_sida || 0) - start;
+          const split = pos === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
+          url = `${base}/${h.content_sida}/halva?${offsetQ}&halva=${encodeURIComponent(h.halva)}&split=${split}&${cacheQ}`;
+        }
       }
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2710,6 +2728,8 @@ function oppnaSkissModal() {
           source_type: 'halva',
           content_sida: h.content_sida,
           halva: h.halva,
+          segment_index: h.segment_index,
+          position: h.position,
           url,
         };
         visaSteg2();
@@ -2798,6 +2818,8 @@ function oppnaSkissModal() {
         source_type: valdKalla.source_type,
         content_sida: valdKalla.content_sida ?? null,
         halva: valdKalla.halva ?? null,
+        segment_index: valdKalla.segment_index ?? null,
+        position: valdKalla.position ?? null,
         extramaterial_id: valdKalla.extramaterial_id ?? null,
         x: currentRect.x,
         y: currentRect.y,

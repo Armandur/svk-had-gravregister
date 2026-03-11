@@ -23,6 +23,7 @@ from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY
 from app.database import (
     SessionLocal,
     User,
+    Kyrkogard,
     MappConfig,
     Extramaterial,
     InfogadTomSida,
@@ -309,6 +310,77 @@ async def delete_user(
     return {"ok": True}
 
 
+# ---------- Admin: kyrkogårdar (listan för grunddatahantering) ----------
+
+class KyrkogardCreateBody(BaseModel):
+    kod: str
+
+
+def _antal_gravplatser_kyrkogard(db: Session, kod: str) -> int:
+    """Antal gravplatser som har denna kyrkogård (trimmar kyrkogard-fältet)."""
+    return (
+        db.query(Gravplats)
+        .filter(Gravplats.kyrkogard.isnot(None))
+        .filter(func.trim(Gravplats.kyrkogard) == kod.strip())
+        .count()
+    )
+
+
+@app.get("/api/admin/kyrkogardar")
+async def list_admin_kyrkogardar(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Lista kyrkogårdar med info om de kan tas bort (saknar gravplatser)."""
+    rows = db.query(Kyrkogard).order_by(Kyrkogard.kod).all()
+    result = []
+    for r in rows:
+        antal = _antal_gravplatser_kyrkogard(db, r.kod)
+        result.append({"kod": r.kod, "kan_ta_bort": antal == 0})
+    return {"kyrkogardar": result}
+
+
+@app.post("/api/admin/kyrkogardar")
+async def create_kyrkogard(
+    body: KyrkogardCreateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Lägg till en kyrkogård. Koden måste vara unik."""
+    kod = (body.kod or "").strip()
+    if not kod:
+        raise HTTPException(status_code=400, detail="Kyrkogård måste ha en kod")
+    if db.query(Kyrkogard).filter(Kyrkogard.kod == kod).first():
+        raise HTTPException(status_code=400, detail="Denna kyrkogård finns redan")
+    db.add(Kyrkogard(kod=kod))
+    db.commit()
+    return {"ok": True, "kod": kod}
+
+
+@app.delete("/api/admin/kyrkogardar/{kod}")
+async def delete_kyrkogard(
+    kod: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort en kyrkogård. Möjligt endast om inga gravplatser är kopplade till den."""
+    kod_stripped = (kod or "").strip()
+    if not kod_stripped:
+        raise HTTPException(status_code=400, detail="Ogiltig kod")
+    antal = _antal_gravplatser_kyrkogard(db, kod_stripped)
+    if antal > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Kan inte ta bort: det finns {antal} gravplatser kopplade till denna kyrkogård.",
+        )
+    row = db.query(Kyrkogard).filter(Kyrkogard.kod == kod_stripped).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Kyrkogården hittades inte")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/api/admin/databasunderhall/gravplatser-saknar-postnummer-ort")
 async def get_gravplatser_saknar_postnummer_ort(
     admin: User = Depends(require_admin),
@@ -413,6 +485,18 @@ async def listvy_sida(current_user: User = Depends(get_current_user), admin: Use
     return FileResponse(Path(__file__).parent.parent / "static" / "listvy.html")
 
 
+@app.get("/grunddata")
+async def grunddatahantering_sida(admin: User = Depends(require_admin)):
+    """Grunddatahantering – undermeny (listvy, kyrkogårdar) (endast admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "grunddatahantering.html")
+
+
+@app.get("/grunddata/kyrkogardar")
+async def grunddata_kyrkogardar_sida(admin: User = Depends(require_admin)):
+    """Hantera kyrkogårdar – lägg till/ta bort (endast admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "grunddata-kyrkogardar.html")
+
+
 @app.get("/admin")
 async def admin_sida():
     """Användarhantering (endast för admin)."""
@@ -456,6 +540,13 @@ async def list_mappar(current_user: User = Depends(get_current_user)):
         if d.is_dir() and not d.name.startswith(".")
     ]
     return {"mappar": sorted(mappar)}
+
+
+@app.get("/api/kyrkogardar")
+async def list_kyrkogardar(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Lista kyrkogårdar för grunddatahantering (lagrade i databasen, kan hanteras under Admin)."""
+    rows = db.query(Kyrkogard).order_by(Kyrkogard.kod).all()
+    return {"kyrkogardar": [r.kod for r in rows]}
 
 
 @app.get("/api/statistik")
@@ -1170,10 +1261,18 @@ async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Sess
 
 @app.get("/api/gravplatser/trad")
 async def gravplatser_trad(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Trädstruktur: kyrkogårdar med underliggande kvarter (distinct från registrerade gravplatser) och antal gravplatser."""
+    """Trädstruktur: kyrkogårdar med underliggande kvarter (endast gravplatser som har kyrkogård, kvarter och gravplatsnummer)."""
+    filt = and_(
+        Gravplats.kyrkogard.isnot(None),
+        Gravplats.kyrkogard != "",
+        Gravplats.kvarter.isnot(None),
+        Gravplats.kvarter != "",
+        Gravplats.gravplatsnummer.isnot(None),
+        Gravplats.gravplatsnummer != "",
+    )
     rows = (
         db.query(Gravplats.kyrkogard, Gravplats.kvarter)
-        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+        .filter(filt)
         .distinct()
         .all()
     )
@@ -1192,10 +1291,10 @@ async def gravplatser_trad(db: Session = Depends(get_db), current_user: User = D
     # Sortera kyrkogårdar (t.ex. HKG, HKN)
     kyrkogardar = sorted(trad.keys(), key=lambda x: (x.upper(), x))
 
-    # Antal gravplatser per kyrkogård och kvarter
+    # Antal gravplatser per kyrkogård och kvarter (endast med alla fält ifyllda)
     count_rows = (
         db.query(Gravplats.kyrkogard, Gravplats.kvarter, func.count(Gravplats.id).label("antal"))
-        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+        .filter(filt)
         .group_by(Gravplats.kyrkogard, Gravplats.kvarter)
         .all()
     )
@@ -1275,7 +1374,7 @@ async def list_gravplats_global(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista gravplatser för en kyrkogård och kvarter (över alla mappar). Returnerar mapp_namn per gravplats för halvor-API."""
+    """Lista gravplatser för en kyrkogård och kvarter (över alla mappar). Endast poster som har kyrkogård, kvarter och gravplatsnummer."""
     if not kyrkogard.strip() or not kvarter.strip():
         return {"gravplatser": []}
     items = (
@@ -1284,6 +1383,8 @@ async def list_gravplats_global(
         .filter(
             Gravplats.kyrkogard == kyrkogard.strip(),
             Gravplats.kvarter == kvarter.strip(),
+            Gravplats.gravplatsnummer.isnot(None),
+            Gravplats.gravplatsnummer != "",
         )
         .order_by(Gravplats.start_sida)
         .all()
@@ -2237,6 +2338,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "source_type": s.source_type,
             "content_sida": s.content_sida,
             "halva": s.halva,
+            "segment_index": getattr(s, "segment_index", None),
             "extramaterial_id": s.extramaterial_id,
             "x": s.x,
             "y": s.y,
@@ -2438,6 +2540,8 @@ class SkissCreateBody(BaseModel):
     source_type: str  # "halva" | "extramaterial"
     content_sida: int | None = None
     halva: str | None = None  # "nedre" | "ovre"
+    segment_index: int | None = None  # 0, 1, … för att bygga rätt bild-URL (segment+position)
+    position: int | None = None  # 1, 2, 3 för standard_3_sidor; används vid URL-byggnad i frontend
     extramaterial_id: int | None = None
     x: float = 0.0
     y: float = 0.0
@@ -2474,6 +2578,7 @@ async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Dep
         source_type=body.source_type,
         content_sida=body.content_sida,
         halva=body.halva,
+        segment_index=body.segment_index,
         extramaterial_id=body.extramaterial_id,
         x=max(0, min(1, body.x)),
         y=max(0, min(1, body.y)),
@@ -2489,6 +2594,7 @@ async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Dep
         "source_type": s.source_type,
         "content_sida": s.content_sida,
         "halva": s.halva,
+        "segment_index": s.segment_index,
         "extramaterial_id": s.extramaterial_id,
         "x": s.x,
         "y": s.y,
