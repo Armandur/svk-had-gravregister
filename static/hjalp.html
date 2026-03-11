@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hjälp – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .hjalp-wrap { display: flex; flex: 1; min-height: 0; }
+    .hjalp-sidebar {
+      flex: 0 0 220px;
+      background: var(--card, #fff);
+      border-right: 1px solid var(--border, #ccc);
+      padding: 1rem 0;
+      overflow-y: auto;
+    }
+    .hjalp-sidebar h2 { margin: 0 1rem 0.5rem; font-size: 0.9rem; font-weight: 600; color: #64748b; }
+    .hjalp-sidebar h2.hjalp-meny-sektion { margin-top: 1rem; }
+    .hjalp-sidebar h2.hjalp-meny-sektion:first-child { margin-top: 0; }
+    .hjalp-sidebar ul { list-style: none; padding: 0; margin: 0; }
+    .hjalp-sidebar ul.hjalp-meny-undergrupp { margin-left: 0.5rem; }
+    .hjalp-sidebar ul.hjalp-meny-undergrupp a { padding: 0.35rem 0.75rem; font-size: 0.9rem; }
+    .hjalp-sidebar a {
+      display: block;
+      padding: 0.4rem 1rem;
+      color: var(--text, #222);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .hjalp-sidebar a:hover, .hjalp-sidebar a:focus { background: #f1f5f9; color: var(--accent, #2c5f4a); }
+    .hjalp-sidebar a.aktiv { background: #e8f0ee; color: var(--accent); font-weight: 500; }
+    .hjalp-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      max-width: 52rem;
+    }
+    .hjalp-main .markdown-body { font-size: 1rem; line-height: 1.6; }
+    .hjalp-main .markdown-body h1 { font-size: 1.5rem; margin-top: 0; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .hjalp-main .markdown-body h2 { font-size: 1.25rem; margin-top: 1.5rem; }
+    .hjalp-main .markdown-body h3 { font-size: 1.1rem; margin-top: 1rem; }
+    .hjalp-main .markdown-body table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    .hjalp-main .markdown-body th, .hjalp-main .markdown-body td { border: 1px solid var(--border); padding: 0.4rem 0.75rem; text-align: left; }
+    .hjalp-main .markdown-body th { background: #f8fafc; font-weight: 600; }
+    .hjalp-main .markdown-body code { background: #f1f5f9; padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.9em; }
+    .hjalp-main .markdown-body pre { background: #f1f5f9; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    .hjalp-main .markdown-body pre code { background: none; padding: 0; }
+    .hjalp-header { flex-shrink: 0; padding: 0.5rem 1rem; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+    .hjalp-header a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .hjalp-header a:hover { text-decoration: underline; }
+    .hjalp-tom { color: #64748b; font-style: italic; }
+    .hjalp-ladda { color: #64748b; }
+  </style>
+</head>
+<body>
+  <header class="hjalp-header">
+    <a href="/">← Startsida</a>
+    <h1 style="margin:0; font-size:1.1rem; font-weight:600;">Hjälp</h1>
+  </header>
+  <div class="hjalp-wrap">
+    <nav class="hjalp-sidebar" aria-label="Hjälpmeny">
+      <h2>Dokumentation</h2>
+      <ul id="hjalp-lista-dokumentation" class="hjalp-meny-lista"></ul>
+      <h2 class="hjalp-meny-sektion">Specifikationer</h2>
+      <ul id="hjalp-lista-specifikationer" class="hjalp-meny-lista hjalp-meny-undergrupp"></ul>
+    </nav>
+    <main class="hjalp-main" id="hjalp-innehall" aria-live="polite">
+      <p class="hjalp-ladda" id="hjalp-status">Laddar …</p>
+      <div id="hjalp-markdown" class="markdown-body" hidden></div>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    (function() {
+      const API = '/api';
+      const listaDokEl = document.getElementById('hjalp-lista-dokumentation');
+      const listaSpecEl = document.getElementById('hjalp-lista-specifikationer');
+      const innehallEl = document.getElementById('hjalp-innehall');
+      const statusEl = document.getElementById('hjalp-status');
+      const markdownEl = document.getElementById('hjalp-markdown');
+
+      function addMenyLank(ul, d) {
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = '#';
+        a.setAttribute('data-slug', d.slug);
+        a.textContent = d.titel;
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.history.replaceState({ slug: d.slug }, '', '/hjalp?doc=' + encodeURIComponent(d.slug));
+          visaDoc(d.slug);
+        });
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
+
+      function visaDoc(slug) {
+        if (!slug) return;
+        statusEl.textContent = 'Laddar …';
+        statusEl.hidden = false;
+        markdownEl.hidden = true;
+        fetch(`${API}/hjalp/${encodeURIComponent(slug)}`, { credentials: 'include' })
+          .then(function(r) {
+            if (!r.ok) throw new Error('Kunde inte hämta dokument');
+            return r.text();
+          })
+          .then(function(md) {
+            statusEl.hidden = true;
+            markdownEl.innerHTML = marked.parse(md);
+            // Länkar till andra hjälpdokument (docs/*.md) ska öppna dokumentet i appen istället för filsökväg
+            var slugFromHref = function(href) {
+              if (!href) return null;
+              var m = href.match(/specifikation-generell\.md$/) || href.match(/specifikation-harnosand-skandix\.md$/);
+              if (m) return m[0].replace('.md', '');
+              return null;
+            };
+            markdownEl.querySelectorAll('a[href]').forEach(function(a) {
+              var slug = slugFromHref(a.getAttribute('href'));
+              if (slug) {
+                a.href = '/hjalp?doc=' + encodeURIComponent(slug);
+                a.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  window.history.replaceState({ slug: slug }, '', '/hjalp?doc=' + encodeURIComponent(slug));
+                  visaDoc(slug);
+                });
+              }
+            });
+            markdownEl.hidden = false;
+            document.querySelectorAll('.hjalp-meny-lista a').forEach(function(a) {
+              a.classList.toggle('aktiv', a.getAttribute('data-slug') === slug);
+            });
+            var firstHeading = markdownEl.querySelector('h1');
+            if (firstHeading) document.title = firstHeading.textContent + ' – Gravregister';
+          })
+          .catch(function() {
+            statusEl.textContent = 'Kunde inte ladda dokumentet.';
+            statusEl.hidden = false;
+            markdownEl.hidden = true;
+          });
+      }
+
+      fetch(`${API}/hjalp`, { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          const dokument = data.dokument || [];
+          if (dokument.length === 0) {
+            statusEl.textContent = 'Inga hjälpdokument tillgängliga.';
+            return;
+          }
+          var docSlugs = ['overview', 'bladdring', 'inmatning', 'extramaterial', 'grunddata'];
+          var specSlugs = ['specifikation', 'specifikation-generell', 'specifikation-harnosand-skandix'];
+          var docMap = {};
+          var specMap = {};
+          dokument.forEach(function(d) {
+            if (docSlugs.indexOf(d.slug) !== -1) docMap[d.slug] = d;
+            if (specSlugs.indexOf(d.slug) !== -1) specMap[d.slug] = d;
+          });
+          docSlugs.forEach(function(slug) {
+            if (docMap[slug]) addMenyLank(listaDokEl, docMap[slug]);
+          });
+          specSlugs.forEach(function(slug) {
+            if (specMap[slug]) addMenyLank(listaSpecEl, specMap[slug]);
+          });
+          statusEl.hidden = true;
+          var params = new URLSearchParams(window.location.search);
+          var slug = params.get('doc') || (dokument[0] && dokument[0].slug);
+          if (dokument.some(function(d) { return d.slug === slug; })) {
+            visaDoc(slug);
+          } else {
+            visaDoc(dokument[0].slug);
+          }
+        })
+        .catch(function() {
+          statusEl.textContent = 'Kunde inte ladda hjälpmenyn.';
+        });
+
+      window.addEventListener('popstate', function() {
+        var params = new URLSearchParams(window.location.search);
+        var slug = params.get('doc');
+        if (slug) visaDoc(slug);
+      });
+    })();
+  </script>
+</body>
+</html>

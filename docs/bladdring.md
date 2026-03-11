@@ -1,0 +1,30 @@
+# Bläddring och visning
+
+## Val av mapp
+
+Under **källdata** finns en undermapp per arkiv (kyrkogård/gravkvarter). Varje mapp innehåller PDF-filer numrerade som sidorna i det fysiska registret (1.pdf, 2.pdf, …).
+
+När du väljer mapp anger du:
+
+- **Kyrkogård** (t.ex. HKG, HKN)
+- **Gravkvarter** (t.ex. 1–24, U för HKG; Allm, A, D, … för HKN)
+- **Försättssidor:** Antal sidor i början som inte tillhör gravregistret (0, 1 eller 2). Bläddringen med "tre sidor per gravplats" startar efter dessa.
+
+Du kan ändra gravkvarter när du bläddrar om registret byter kvarter inom samma mapp.
+
+## Tre delar per gravplats
+
+Varje gravplats använder tre PDF-sidor:
+
+1. **Del 1:** Gravrättsinnehavare och gravplatsnummer (nedre halvan av sida 1).
+2. **Del 2:** Gravsatta 1–5 (nedre halvan av sida 2).
+3. **Del 3:** Gravsatta 6–10 (övre halvan av sida 3).
+
+Layouten kan visas horisontellt (tre rutor bredvid varandra) eller vertikalt (staplade). I rubriken för varje del finns en länk till motsvarande PDF-fil.
+
+## Bläddring
+
+- **Nästa gravplats:** Flyttar vyn två innehållssidor framåt (tidigare sida 3 blir nu sida 1 för nästa grav).
+- **Föregående gravplats:** Flyttar vyn två sidor bakåt.
+
+Beskärning (övre/nedre halva) följer de andelar som anges i specifikationen och kan justeras per mapp om källmaterialet avviker.
