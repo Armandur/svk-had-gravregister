@@ -48,6 +48,8 @@ let ocrFoddenamnFalt = null;
 let ocrNamnSplitIndex = null;
 /** 'ef' | 'fe' när modalen visar namn-split; null annars. */
 let ocrModalNamnLage = null;
+/** Targetfält för aktuell OCR-modal (namn- eller adress-split). */
+let ocrModalTargetElement = null;
 /** true när modalen visar adress-split (dela gatuadress | postnummer+postort). */
 let ocrModalAdressLage = false;
 /** true om fokus sattes via mus/pekare (klick); false vid tabb – ikonen visas bara vid pekare. */
@@ -631,7 +633,11 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
   }
 }
 
-async function uppdateraVy() {
+/**
+ * Uppdaterar vy (halvor, extramaterial, dolda).
+ * @param {boolean} [behallInmatningState=false] – om true nollställs inte inmatningsläge (redigera/osparat); använd vid t.ex. Dölj/Visa igen.
+ */
+async function uppdateraVy(behallInmatningState = false) {
   const rubrikEl = document.getElementById('gp-rubrik');
   const halvorEl = document.getElementById('gp-halvor');
   const btnTillbaka = document.getElementById('gp-btn-tillbaka');
@@ -774,7 +780,7 @@ async function uppdateraVy() {
             credentials: 'include',
           });
           if (!res.ok) throw new Error('Kunde inte uppdatera');
-          await uppdateraVy();
+          await uppdateraVy(true);
         } catch (err) {
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
@@ -796,9 +802,11 @@ async function uppdateraVy() {
     uppdateraExtramaterialSektion([], null);
     uppdateraDoldaSektion([], null, null, 0);
   }
-  inmatningDirty = false;
+  if (!behallInmatningState) {
+    inmatningDirty = false;
+    uppdateraInmatningSektionerVidGravplatsbyte();
+  }
   uppdateraInmatningSparaKnapp();
-  uppdateraInmatningSektionerVidGravplatsbyte();
 }
 
 /** I visa-läget: fäll ut alla inmatningssektioner (aria-expanded, innehall synlig). */
@@ -904,7 +912,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
           credentials: 'include',
         });
         if (!res.ok) throw new Error('Kunde inte uppdatera');
-        await uppdateraVy();
+        await uppdateraVy(true);
       } catch (err) {
         alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
       }
@@ -980,7 +988,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
             { method: 'DELETE' }
           );
           if (!res.ok) throw new Error('Kunde inte uppdatera');
-          await uppdateraVy();
+          await uppdateraVy(true);
         } catch (err) {
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
@@ -995,7 +1003,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
             credentials: 'include',
           });
           if (!res.ok) throw new Error('Kunde inte uppdatera');
-          await uppdateraVy();
+          await uppdateraVy(true);
         } catch (err) {
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
@@ -1474,11 +1482,15 @@ function startOcrOverlay(fig, initialEvent) {
       w: width * scaleX,
       h: height * scaleY,
     };
+    // Frys vilket fält som ska uppdateras – även om användaren hinner flytta fokus innan OCR-resultatet kommer.
+    const targetElement = ocrTargetElement;
     runOcr(halvaUrl, rectNatural).then((text) => {
       const trimmed = (text || '').trim();
-      if (!ocrTargetElement) return;
+      const target = targetElement;
+      if (!target) return;
+      if (!document.body.contains(target)) return;
       if (trimmed === '') {
-        if (!arDatumFaltForOcr(ocrTargetElement)) {
+        if (!arDatumFaltForOcr(target)) {
           if (ocrNamnLage === 'f') {
             ocrNamnLage = null;
             ocrFoddenamnFalt = null;
@@ -1490,7 +1502,7 @@ function startOcrOverlay(fig, initialEvent) {
         return;
       }
       if (ocrNamnLage === 'f') {
-        const falt = ocrFoddenamnFalt || getNamnParFalt(ocrTargetElement)?.efternamn;
+        const falt = ocrFoddenamnFalt || getNamnParFalt(target)?.efternamn;
         ocrNamnLage = null;
         ocrFoddenamnFalt = null;
         if (falt) {
@@ -1510,8 +1522,8 @@ function startOcrOverlay(fig, initialEvent) {
         const normaliserad = trimmed.replace(/\s+/g, ' ').trim();
         const parts = normaliserad.split(/\s+/).filter(Boolean);
         if (parts.length === 2) {
-          const par = getNamnParFalt(ocrTargetElement);
-          if (par && ocrTargetElement) {
+          const par = getNamnParFalt(target);
+          if (par && target) {
             const part1 = parts[0];
             const part2 = parts[1];
             if (lage === 'ef') {
@@ -1527,30 +1539,39 @@ function startOcrOverlay(fig, initialEvent) {
           }
           return;
         }
-        showOcrModalNamnSplit(normaliserad, lage);
+        showOcrModalNamnSplit(normaliserad, lage, target);
         return;
       }
       if (ocrAdressLage) {
         ocrAdressLage = false;
-        showOcrModalAdressSplit(trimmed);
+        showOcrModalAdressSplit(trimmed, target);
         return;
       }
-      if (arDatumFaltForOcr(ocrTargetElement)) {
+      if (arDatumFaltForOcr(target)) {
         const normaliserat = normaliseraUtfordatDen(trimmed);
         if (normaliserat) {
-          ocrTargetElement.value = normaliserat;
-          ocrTargetElement.focus();
-          const len = ocrTargetElement.value.length;
+          target.value = normaliserat;
+          target.focus();
+          const len = target.value.length;
           try {
-            ocrTargetElement.setSelectionRange(len, len);
+            target.setSelectionRange(len, len);
           } catch (_) {}
           markInmatningDirty();
-          if (ocrTargetElement.tagName === 'TEXTAREA') autoExpandTextarea(ocrTargetElement);
+          if (target.tagName === 'TEXTAREA') autoExpandTextarea(target);
         } else {
           visaIkonSomTomExtrahering();
         }
       } else {
-        infogaOcrIFalt(trimmed);
+        // Infoga i det fält som gällde när markeringen gjordes, oavsett nuvarande fokus.
+        const befintlig = target.value || '';
+        target.value = befintlig + (trimmed || '');
+        target.focus();
+        const len = target.value.length;
+        try {
+          target.setSelectionRange(len, len);
+        } catch (_) {}
+        markInmatningDirty();
+        if (target.tagName === 'TEXTAREA') autoExpandTextarea(target);
       }
     }).catch((err) => {
       alert('OCR misslyckades: ' + (err && err.message ? err.message : 'okänt fel'));
@@ -1806,7 +1827,7 @@ function showOcrModal(extractedText) {
   autoExpandTextarea(textarea);
 }
 
-function showOcrModalNamnSplit(text, lage) {
+function showOcrModalNamnSplit(text, lage, targetElement) {
   const modal = document.getElementById('gp-ocr-modal');
   const namnWrap = document.getElementById('gp-ocr-modal-namn');
   const namnTextEl = document.getElementById('gp-ocr-namn-text');
@@ -1815,6 +1836,7 @@ function showOcrModalNamnSplit(text, lage) {
   const textarea = document.getElementById('gp-ocr-modal-text');
   const knapparEl = document.getElementById('gp-ocr-modal-knappar');
   if (!modal || !namnWrap || !namnTextEl) return;
+  ocrModalTargetElement = targetElement || ocrTargetElement;
   ocrModalNamnLage = lage;
   hintEl?.setAttribute('hidden', '');
   textarea?.setAttribute('hidden', '');
@@ -1824,8 +1846,8 @@ function showOcrModalNamnSplit(text, lage) {
   namnTextEl.innerHTML = '';
   const n = text.length;
   const applyAndClose = (splitIndex) => {
-    const par = getNamnParFalt(ocrTargetElement);
-    if (par && ocrTargetElement) {
+    const par = getNamnParFalt(ocrModalTargetElement);
+    if (par && ocrModalTargetElement) {
       const part1 = text.slice(0, splitIndex).trim();
       const part2 = text.slice(splitIndex).trim();
       if (lage === 'ef') {
@@ -1840,6 +1862,7 @@ function showOcrModalNamnSplit(text, lage) {
       markInmatningDirty();
     }
     ocrModalNamnLage = null;
+    ocrModalTargetElement = null;
     namnWrap.setAttribute('hidden', '');
     if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
     hintEl?.removeAttribute('hidden');
@@ -1876,7 +1899,7 @@ function showOcrModalNamnSplit(text, lage) {
   if (firstSplit) firstSplit.focus();
 }
 
-function showOcrModalAdressSplit(text) {
+function showOcrModalAdressSplit(text, targetElement) {
   const modal = document.getElementById('gp-ocr-modal');
   const namnWrap = document.getElementById('gp-ocr-modal-namn');
   const namnTextEl = document.getElementById('gp-ocr-namn-text');
@@ -1886,6 +1909,7 @@ function showOcrModalAdressSplit(text) {
   const textarea = document.getElementById('gp-ocr-modal-text');
   const knapparEl = document.getElementById('gp-ocr-modal-knappar');
   if (!modal || !namnWrap || !namnTextEl) return;
+  ocrModalTargetElement = targetElement || ocrTargetElement;
   ocrModalAdressLage = true;
   ocrModalNamnLage = null;
   hintEl?.setAttribute('hidden', '');
@@ -1897,8 +1921,8 @@ function showOcrModalAdressSplit(text) {
   namnTextEl.innerHTML = '';
   const n = text.length;
   const applyAndClose = (splitIndex) => {
-    const trio = getAdressTrioFalt(ocrTargetElement);
-    if (trio && ocrTargetElement) {
+    const trio = getAdressTrioFalt(ocrModalTargetElement);
+    if (trio && ocrModalTargetElement) {
       const gatuadress = text.slice(0, splitIndex).trim();
       const rest = text.slice(splitIndex);
       const { postnummer, postort } = parsePostnummerPostort(rest);
@@ -1911,6 +1935,7 @@ function showOcrModalAdressSplit(text) {
       markInmatningDirty();
     }
     ocrModalAdressLage = false;
+    ocrModalTargetElement = null;
     namnWrap.setAttribute('hidden', '');
     if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
     if (namnHintEl) namnHintEl.textContent = 'Klicka mellan två tecken för att ange var namnet ska delas.';
@@ -1957,6 +1982,7 @@ function closeOcrModal(anvand) {
   if (ocrModalNamnLage) {
     ocrModalNamnLage = null;
     ocrNamnSplitIndex = null;
+    ocrModalTargetElement = null;
     if (namnWrap) namnWrap.setAttribute('hidden', '');
     if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
     document.getElementById('gp-ocr-modal-hint')?.removeAttribute('hidden');
@@ -1967,6 +1993,7 @@ function closeOcrModal(anvand) {
   }
   if (ocrModalAdressLage) {
     ocrModalAdressLage = false;
+    ocrModalTargetElement = null;
     const namnHintEl = document.getElementById('gp-ocr-modal-namn-hint');
     if (namnHintEl) namnHintEl.textContent = 'Klicka mellan två tecken för att ange var namnet ska delas.';
     if (namnWrap) namnWrap.setAttribute('hidden', '');
@@ -3069,7 +3096,8 @@ function renderInmatningSektion(sektion) {
     innehall.innerHTML = `
       <label>Storlek <textarea name="storlek" class="gp-falt-expanderbar" rows="1">${esc(d.storlek)}</textarea></label>
       <div class="gp-skisser-lista" id="gp-skisser-lista"></div>
-      <button type="button" class="gp-lagg-till-skiss" id="gp-lagg-till-skiss">+ Lägg till skiss</button>`;
+      <button type="button" class="gp-lagg-till-skiss" id="gp-lagg-till-skiss">+ Lägg till skiss</button>
+      <p class="gp-skiss-info" id="gp-lagg-till-skiss-hint">Skisser sparas direkt till gravplatsen när du markerat skissen och klickat på "Spara skiss" - du behöver inte klicka på "Spara" på gravplatsen.</p>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
     const skisser = d.skisser || [];
     const listEl = innehall.querySelector('#gp-skisser-lista');
@@ -3745,6 +3773,7 @@ async function sparaInmatning() {
     });
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
+    uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
   } catch (e) {
     visaSparStatus('Kunde inte spara: ' + e.message, false);
