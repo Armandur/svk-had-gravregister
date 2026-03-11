@@ -3833,6 +3833,11 @@ async function sparaInmatning() {
   if (!valideraAllaDatumFalt()) return;
   const payload = samlaInmatningData();
   if (!payload) return;
+  let achievementsBefore = null;
+  try {
+    const beforeRes = await fetch(`${API}/me/achievements`, { credentials: 'include' });
+    if (beforeRes.ok) achievementsBefore = await beforeRes.json();
+  } catch (_) { /* ignorerar */ }
   try {
     const res = await fetch(`${API}/gravplats/${currentGravplatsId}/inmatning`, {
       method: 'PUT',
@@ -3864,6 +3869,43 @@ async function sparaInmatning() {
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
+    if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
+      fetch(`${API}/me`, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((me) => {
+          const p = (me && me.preferences) || {};
+          if (p.fun_enabled !== false) {
+            if (p.toast_on_new_yrke !== false) {
+              gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
+            }
+            if (p.sound_on_new_yrke !== false) {
+              gpPlayPling();
+            }
+          }
+        })
+        .catch(() => {});
+    }
+    if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
+      const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
+      if (newlyEarned.length > 0) {
+        fetch(`${API}/me`, { credentials: 'include' })
+          .then((r) => r.ok ? r.json() : null)
+          .then((me) => {
+            const p = (me && me.preferences) || {};
+            if (p.fun_enabled !== false) {
+              if (p.toast_on_new_yrke !== false) {
+                newlyEarned.forEach((item) => {
+                  gpShowToast(gpToastTextFörAchievement(item.level, item.label));
+                });
+              }
+              if (p.sound_on_new_yrke !== false) {
+                gpPlayPling();
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
   } catch (e) {
     visaSparStatus('Kunde inte spara: ' + e.message, false);
   }
@@ -3880,6 +3922,101 @@ function visaSparStatus(meddelande, ok) {
     el.textContent = '';
     el.hidden = true;
   }, 4000);
+}
+
+function gpAchievementLevelRank(level) {
+  if (!level) return 0;
+  if (level === 'bronze') return 1;
+  if (level === 'silver') return 2;
+  if (level === 'gold') return 3;
+  return 0;
+}
+
+/** Returnerar listan achievement som just uppnåtts (högre nivå än före). */
+function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
+  const beforeByKey = {};
+  (beforeNivaer || []).forEach(function (n) {
+    beforeByKey[n.achievement_key] = n.earned_level;
+  });
+  const result = [];
+  (afterNivaer || []).forEach(function (n) {
+    const afterRank = gpAchievementLevelRank(n.earned_level);
+    const beforeRank = gpAchievementLevelRank(beforeByKey[n.achievement_key]);
+    if (afterRank > beforeRank) {
+      result.push({ level: n.earned_level, label: n.label || n.achievement_key });
+    }
+  });
+  return result;
+}
+
+function gpToastTextFörAchievement(level, label) {
+  const nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : level || '';
+  const formuleringar = [
+    'Grattis! Du fick ' + nivåNamn + ' i ' + label + '!',
+    'Utmärkt – ' + nivåNamn + ' i ' + label + '. Bra jobbat!',
+    '🎉 ' + nivåNamn.charAt(0).toUpperCase() + nivåNamn.slice(1) + ' i ' + label + ' – grattis!',
+  ];
+  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+}
+
+/** Slumpad gratulation när användaren upptäcker ett nytt unikt yrke. */
+function gpToastTextFörNyttYrke(yrkenLista) {
+  const yrken = yrkenLista && yrkenLista.length ? yrkenLista : [];
+  const yrkeText = yrken.length > 1 ? yrken.join(', ') : (yrken[0] || '');
+  const formuleringar = [
+    'Nytt yrke upptäckt: ' + yrkeText + '!',
+    'Du upptäckte yrket ' + yrkeText + '!',
+    'Ett yrke vi inte sett förut: ' + yrkeText + '.',
+    'Upptäckt – ' + yrkeText + ' fanns inte i registret tidigare.',
+    'Pling! Yrket ' + yrkeText + ' är upptäckt.',
+    'Första gången vi ser ' + yrkeText + ' i arkivet.',
+    'Snyggt – du hittade yrket ' + yrkeText + '.',
+    'Yrket ' + yrkeText + ' dyker upp för första gången.',
+    'Ny upptäckt i registret: ' + yrkeText + '.',
+    'Oj, ' + yrkeText + ' – det hade vi inte sett tidigare!',
+    'Kanon – ett nytt yrke upptäckt: ' + yrkeText + '.',
+    'Rätt coolt – ' + yrkeText + ' syns nu i systemet för första gången.',
+  ];
+  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+}
+
+/** Toast för "roliga saker" (t.ex. nytt unikt yrke). */
+function gpShowToast(text) {
+  const el = document.createElement('div');
+  el.setAttribute('role', 'alert');
+  el.setAttribute('aria-live', 'polite');
+  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;z-index:10000;animation:gp-toast-in 0.2s ease;';
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'gp-toast-out 0.2s ease forwards';
+    setTimeout(() => el.remove(), 220);
+  }, 3500);
+}
+
+/** Kort pling-ljud (spelar Ping-sound.mp3 från static, faller tillbaka till Web Audio om fil saknas). */
+function gpPlayPling() {
+  try {
+    const audio = new Audio('/static/Ping-sound.mp3');
+    audio.volume = 0.6;
+    audio.play().catch(function () { /* ignorerar om autoplay blockeras eller fil saknas */ });
+  } catch (e) {
+    try {
+      const C = typeof AudioContext !== 'undefined' ? AudioContext : (window.webkitAudioContext || window.AudioContext);
+      if (!C) return;
+      const ctx = new C();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e2) { /* ignorerar om ljud inte stöds */ }
+  }
 }
 
 document.querySelectorAll('.gp-sektion-rubrik').forEach((btn) => {

@@ -14,7 +14,11 @@ window.gpEnsureAuth = function () {
   }).then(function (me) {
     if (me) {
       var el = document.getElementById('inloggad-anvandare');
-      if (el) el.textContent = 'Inloggad som: ' + (me.username || '');
+      if (el) {
+        var username = (me.username || '').trim();
+        var safe = username.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        el.innerHTML = 'Inloggad som: <a href="/prestationer">' + safe + '</a>';
+      }
     }
     return me;
   }).catch(function () {

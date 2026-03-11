@@ -48,7 +48,11 @@
   const API = '/api';
   (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function (me) {
     const el = document.getElementById('inloggad-anvandare');
-    if (el && me) el.textContent = 'Inloggad som: ' + (me.username || '');
+    if (el && me) {
+      const username = (me.username || '').trim();
+      const safe = username.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      el.innerHTML = 'Inloggad som: <a href="/prestationer">' + safe + '</a>';
+    }
   });
 
   function esc(s) {

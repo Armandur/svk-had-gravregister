@@ -1,5 +1,6 @@
 """FastAPI-app för gravregister – digitalisering av skannade gravregister (HKG/HKN)."""
 import base64
+import json
 import os
 import re
 import signal
@@ -37,6 +38,7 @@ from app.database import (
     GravplatsRedigeringslogg,
     GravplatsSkiss,
     Gravsatt,
+    AchievementNiva,
     init_db,
     get_db,
 )
@@ -144,10 +146,198 @@ async def logout(request: Request):
     return {"ok": True}
 
 
+class MePreferencesBody(BaseModel):
+    fun_enabled: bool | None = None
+    toast_on_new_yrke: bool | None = None
+    sound_on_new_yrke: bool | None = None
+
+
+@app.patch("/api/me/preferences")
+async def patch_me_preferences(
+    body: MePreferencesBody,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Uppdatera egna preferenser (roliga saker, toast/ljud vid nytt yrke)."""
+    prefs = {}
+    if getattr(current_user, "preferences", None) and (current_user.preferences or "").strip():
+        try:
+            prefs = json.loads(current_user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if body.fun_enabled is not None:
+        prefs["fun_enabled"] = body.fun_enabled
+    if body.toast_on_new_yrke is not None:
+        prefs["toast_on_new_yrke"] = body.toast_on_new_yrke
+    if body.sound_on_new_yrke is not None:
+        prefs["sound_on_new_yrke"] = body.sound_on_new_yrke
+    current_user.preferences = json.dumps(prefs) if prefs else None
+    db.commit()
+    return {"ok": True, "preferences": prefs}
+
+
 @app.get("/api/me")
 async def me(current_user: User = Depends(get_current_user)):
-    """Aktuell inloggad användare."""
-    return {"id": current_user.id, "username": current_user.username, "is_admin": current_user.is_admin}
+    """Aktuell inloggad användare med preferenser."""
+    prefs = {}
+    if getattr(current_user, "preferences", None) and current_user.preferences.strip():
+        try:
+            prefs = json.loads(current_user.preferences)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "is_admin": current_user.is_admin,
+        "preferences": {
+            "fun_enabled": prefs.get("fun_enabled", True),
+            "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),
+            "sound_on_new_yrke": prefs.get("sound_on_new_yrke", True),
+        },
+    }
+
+
+@app.get("/api/me/achievements")
+async def me_achievements(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Statistik för prestationssidan: antal sparade registreringar, innehavare, gravsatta m.m. + achievement-nivåer."""
+    first_last = (
+        db.query(
+            func.min(GravplatsRedigeringslogg.edited_at).label("first"),
+            func.max(GravplatsRedigeringslogg.edited_at).label("last"),
+        )
+        .filter(GravplatsRedigeringslogg.user_id == current_user.id)
+        .first()
+    )
+    first_at = first_last.first if first_last else None
+    last_at = first_last.last if first_last else None
+    nivaer = _compute_achievements_niva(db, current_user.id)
+    # Rekonstruera antal från nivaer (så vi inte duplicerar logik)
+    antal_registreringar = next((n["current_value"] for n in nivaer if n["achievement_key"] == "registreringar"), 0)
+    antal_fardigtranskriberade = next((n["current_value"] for n in nivaer if n["achievement_key"] == "fardigtranskriberade"), 0)
+    antal_innehavare = next((n["current_value"] for n in nivaer if n["achievement_key"] == "innehavare"), 0)
+    antal_narmast_anhoriga = next((n["current_value"] for n in nivaer if n["achievement_key"] == "narmast_anhoriga"), 0)
+    antal_gravsatta = next((n["current_value"] for n in nivaer if n["achievement_key"] == "gravsatta"), 0)
+    antal_skisser = next((n["current_value"] for n in nivaer if n["achievement_key"] == "skisser"), 0)
+    antal_unika_yrken = next((n["current_value"] for n in nivaer if n["achievement_key"] == "unika_yrken"), 0)
+    return {
+        "antal_registreringar": antal_registreringar,
+        "antal_fardigtranskriberade": antal_fardigtranskriberade,
+        "antal_innehavare": antal_innehavare,
+        "antal_narmast_anhoriga": antal_narmast_anhoriga,
+        "antal_gravsatta": antal_gravsatta,
+        "antal_skisser": antal_skisser,
+        "antal_unika_yrken": antal_unika_yrken,
+        "forsta_registrering": first_at,
+        "senaste_registrering": last_at,
+        "nivaer": nivaer,
+    }
+
+
+# ---------- Admin: användarhantering (endast admin) ----------
+
+def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
+    """Beräkna achievement-nivåer för en användare (används av me_achievements och put_inmatning)."""
+    mina_gravplatser_subq = (
+        db.query(GravplatsInmatning.gravplats_id).filter(
+            GravplatsInmatning.last_edited_by_user_id == user_id
+        ).distinct().subquery()
+    )
+    mina_ids = [r[0] for r in db.query(mina_gravplatser_subq.c.gravplats_id).all()]
+
+    antal_registreringar = (
+        db.query(GravplatsRedigeringslogg).filter(GravplatsRedigeringslogg.user_id == user_id).count()
+    )
+    antal_fardigtranskriberade = (
+        db.query(GravplatsInmatning.gravplats_id)
+        .filter(
+            GravplatsInmatning.last_edited_by_user_id == user_id,
+            GravplatsInmatning.fardigtranskriberad == True,
+        )
+        .distinct()
+        .count()
+    )
+    antal_innehavare = 0
+    antal_narmast_anhoriga = 0
+    antal_gravsatta = 0
+    antal_skisser = 0
+    unika_yrken_set = set()
+    if mina_ids:
+        antal_innehavare = db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.in_(mina_ids)).count()
+        antal_narmast_anhoriga = db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_ids)).count()
+        antal_gravsatta = db.query(Gravsatt).filter(Gravsatt.gravplats_id.in_(mina_ids)).count()
+        antal_skisser = db.query(GravplatsSkiss).filter(GravplatsSkiss.gravplats_id.in_(mina_ids)).count()
+        for q in (
+            db.query(GravplatsInnehavare.yrke).filter(GravplatsInnehavare.gravplats_id.in_(mina_ids)),
+            db.query(GravplatsNarmastAnhorig.yrke).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_ids)),
+            db.query(Gravsatt.yrke).filter(Gravsatt.gravplats_id.in_(mina_ids)),
+        ):
+            for row in q.all():
+                if row[0] is not None:
+                    y = str(row[0]).strip()
+                    if y:
+                        unika_yrken_set.add(y)
+    antal_unika_yrken = len(unika_yrken_set)
+
+    # Antal gravplatser med mer än 3 gravsatta (storgravar) bland användarens gravplatser
+    antal_storgravar = 0
+    if mina_ids:
+        gravsatta_per_gravplats = (
+            db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id).label("cnt"))
+            .filter(Gravsatt.gravplats_id.in_(mina_ids))
+            .group_by(Gravsatt.gravplats_id)
+            .all()
+        )
+        antal_storgravar = sum(1 for _, cnt in gravsatta_per_gravplats if (cnt or 0) > 3)
+
+    niva_rows = db.query(AchievementNiva).order_by(AchievementNiva.achievement_key, AchievementNiva.threshold).all()
+    key_to_thresholds = {}
+    for n in niva_rows:
+        key = n.achievement_key
+        if key not in key_to_thresholds:
+            key_to_thresholds[key] = {}
+        key_to_thresholds[key][n.level] = {"threshold": n.threshold, "label": n.label or str(n.threshold)}
+
+    value_by_key = {
+        "registreringar": antal_registreringar,
+        "fardigtranskriberade": antal_fardigtranskriberade,
+        "innehavare": antal_innehavare,
+        "narmast_anhoriga": antal_narmast_anhoriga,
+        "gravsatta": antal_gravsatta,
+        "skisser": antal_skisser,
+        "unika_yrken": antal_unika_yrken,
+        "storgravar": antal_storgravar,
+    }
+    achievement_labels_sv = {
+        "registreringar": "Sparade registreringar",
+        "fardigtranskriberade": "Färdigtranskriberade gravplatser",
+        "innehavare": "Gravrättsinnehavare",
+        "narmast_anhoriga": "Närmast anhöriga",
+        "gravsatta": "Gravsatta",
+        "skisser": "Skisser",
+        "unika_yrken": "Unika yrken",
+        "storgravar": "Storgravar (>3 gravsatta)",
+    }
+    nivaer = []
+    for key, thresholds in key_to_thresholds.items():
+        value = value_by_key.get(key, 0)
+        earned = None
+        for level in ("gold", "silver", "bronze"):
+            if level in thresholds and value >= thresholds[level]["threshold"]:
+                earned = level
+                break
+        nivaer.append({
+            "achievement_key": key,
+            "label": achievement_labels_sv.get(key, key),
+            "bronze": thresholds.get("bronze"),
+            "silver": thresholds.get("silver"),
+            "gold": thresholds.get("gold"),
+            "current_value": value,
+            "earned_level": earned,
+        })
+    return nivaer
 
 
 # ---------- Admin: användarhantering (endast admin) ----------
@@ -174,6 +364,55 @@ async def list_users(admin: User = Depends(require_admin), db: Session = Depends
     """Lista alla användare (endast admin)."""
     users = db.query(User).order_by(User.username).all()
     return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]}
+
+
+@app.get("/api/admin/achievement-niva")
+async def list_achievement_niva(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista alla prestationsnivåer (brons/silver/guld) – endast admin."""
+    rows = db.query(AchievementNiva).order_by(AchievementNiva.achievement_key, AchievementNiva.threshold).all()
+    return {
+        "nivaer": [
+            {
+                "id": r.id,
+                "achievement_key": r.achievement_key,
+                "level": r.level,
+                "threshold": r.threshold,
+                "label": r.label,
+            }
+            for r in rows
+        ],
+    }
+
+
+class AchievementNivaUpdateBody(BaseModel):
+    achievement_key: str
+    level: str  # bronze, silver, gold
+    threshold: int
+    label: str | None = None
+
+
+@app.patch("/api/admin/achievement-niva")
+async def update_achievement_niva(
+    body: AchievementNivaUpdateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Uppdatera en prestationsnivå (gränsvärde) – endast admin."""
+    row = (
+        db.query(AchievementNiva)
+        .filter(
+            AchievementNiva.achievement_key == body.achievement_key,
+            AchievementNiva.level == body.level,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Nivån hittades inte")
+    row.threshold = body.threshold
+    if body.label is not None:
+        row.label = body.label
+    db.commit()
+    return {"ok": True, "achievement_key": row.achievement_key, "level": row.level, "threshold": row.threshold}
 
 
 @app.get("/api/loggar/gravplatser")
@@ -503,6 +742,12 @@ async def admin_sida():
     return FileResponse(Path(__file__).parent.parent / "static" / "admin.html")
 
 
+@app.get("/admin/achievement-niva")
+async def admin_achievement_niva_sida():
+    """Admin-sida för att justera prestationsnivåer (brons/silver/guld)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "admin-achievement-niva.html")
+
+
 @app.get("/loggar")
 async def loggar_sida():
     """Redigeringslogg för gravplatser (endast för admin)."""
@@ -763,6 +1008,18 @@ def _alla_yrken_med_antal(db: Session) -> list[dict]:
     return [{"yrke": yrke, "antal": count} for yrke, count in sorted(counter.items(), key=lambda x: (x[0].lower(), x[0]))]
 
 
+def _unika_yrken_set(db: Session) -> set[str]:
+    """Returnera mängd av alla unika (trimmed, icke-tomma) yrken i databasen."""
+    def yrke_values(q):
+        return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
+    alla = (
+        yrke_values(db.query(GravplatsInnehavare.yrke))
+        + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
+        + yrke_values(db.query(Gravsatt.yrke))
+    )
+    return set(alla)
+
+
 @app.get("/api/yrken")
 async def get_yrken(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Lista alla unika yrken med antal förekomster, sorterade alfabetiskt."""
@@ -773,6 +1030,12 @@ async def get_yrken(db: Session = Depends(get_db), current_user: User = Depends(
 async def yrken_sida():
     """Sida med tabell över yrken och antal förekomster."""
     return FileResponse(Path(__file__).parent.parent / "static" / "yrken.html")
+
+
+@app.get("/prestationer")
+async def prestationer_sida():
+    """Sida med prestationspanel och inställningar för roliga saker."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "prestationer.html")
 
 
 @app.get("/api/mappar/{mapp_namn}/filer")
@@ -2490,6 +2753,7 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
                 status_code=409,
                 detail="Gravplatsen har ändrats av någon annan. Ladda om sidan och gör om dina ändringar.",
             )
+    yrken_före = _unika_yrken_set(db)
     row.storlek = body.storlek or ""
     row.underhall_text = body.underhall_text or ""
     row.underhall_overstruket = body.underhall_overstruket
@@ -2591,7 +2855,26 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
         edited_at=row.last_edited_at,
     ))
     db.commit()
-    return _inmatning_response(gravplats_id, db)
+    yrken_efter = _unika_yrken_set(db)
+    nya_yrken_i_systemet = yrken_efter - yrken_före
+    yrken_i_bodyn = set()
+    for inv in body.innehavare or []:
+        y = (inv.yrke or "").strip()
+        if y:
+            yrken_i_bodyn.add(y)
+    for na in body.narmast_anhoriga or []:
+        y = (na.yrke or "").strip()
+        if y:
+            yrken_i_bodyn.add(y)
+    for gs in body.gravsatta or []:
+        y = (gs.yrke or "").strip()
+        if y:
+            yrken_i_bodyn.add(y)
+    new_unique_yrken = sorted(nya_yrken_i_systemet & yrken_i_bodyn)
+    resp = _inmatning_response(gravplats_id, db)
+    resp["new_unique_yrken"] = new_unique_yrken
+    resp["achievements_snapshot"] = _compute_achievements_niva(db, current_user.id)
+    return resp
 
 
 @app.get("/api/gravplats/{gravplats_id:int}/inmatning/skiss")
