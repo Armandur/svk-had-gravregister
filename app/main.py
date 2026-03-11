@@ -1,4 +1,4 @@
-"""FastAPI-app för gravregister-PoC."""
+"""FastAPI-app för gravregister – digitalisering av skannade gravregister (HKG/HKN)."""
 import base64
 import os
 import re
@@ -12,7 +12,7 @@ from urllib.parse import quote
 
 import fitz  # PyMuPDF
 from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import and_, case, func, or_, tuple_, update
@@ -54,7 +54,7 @@ CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
 
 app = FastAPI(
     title="Gravregister – digitalisering",
-    description="PoC för att digitalisera skannade gravregister (HKG/HKN).",
+    description="Applikation för att digitalisera skannade gravregister (HKG/HKN).",
 )
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
@@ -513,6 +513,70 @@ async def loggar_sida():
 async def databasunderhall_sida(admin: User = Depends(require_admin)):
     """Databasunderhåll – meny med underhållsfunktioner (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall.html")
+
+
+# ---------- Hjälp / dokumentation (samma .md-filer som i repo) ----------
+
+DOCS_DIR = Path(__file__).parent.parent / "docs"
+SPECIFICATION_PATH = Path(__file__).parent.parent / "SPECIFICATION.md"
+
+# Slug -> (filpath, titel). specifikation är SPECIFICATION.md i repo-root.
+def _hjalp_fil(slug: str) -> tuple[Path, str] | None:
+    if slug == "specifikation":
+        if SPECIFICATION_PATH.exists():
+            return (SPECIFICATION_PATH, "Specifikation (datamodell och fält)")
+        return None
+    if not re.match(r"^[a-z0-9-]+$", slug):
+        return None
+    p = DOCS_DIR / f"{slug}.md"
+    titlar = {
+        "overview": "Översikt",
+        "bladdring": "Bläddring och visning",
+        "inmatning": "Inmatning och transkribering",
+        "extramaterial": "Extramaterial",
+        "grunddata": "Grunddata och kyrkogårdar",
+    }
+    if p.exists():
+        return (p, titlar.get(slug, slug.replace("-", " ").title()))
+    return None
+
+
+@app.get("/hjalp")
+async def hjalp_sida():
+    """Hjälpsida – visar dokumentation (samma .md-filer som i docs/)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "hjalp.html")
+
+
+@app.get("/api/hjalp")
+async def api_hjalp_lista():
+    """Lista tillgängliga hjälpdokument (slug och titel)."""
+    dokument = []
+    for slug, titel in [
+        ("overview", "Översikt"),
+        ("bladdring", "Bläddring och visning"),
+        ("inmatning", "Inmatning och transkribering"),
+        ("extramaterial", "Extramaterial"),
+        ("grunddata", "Grunddata och kyrkogårdar"),
+    ]:
+        if _hjalp_fil(slug):
+            dokument.append({"slug": slug, "titel": titel})
+    if _hjalp_fil("specifikation"):
+        dokument.append({"slug": "specifikation", "titel": "Specifikation (datamodell och fält)"})
+    return {"dokument": dokument}
+
+
+@app.get("/api/hjalp/{slug}")
+async def api_hjalp_innehall(slug: str):
+    """Hämta ett hjälpdokument som markdown (samma filer som i docs/)."""
+    res = _hjalp_fil(slug)
+    if not res:
+        raise HTTPException(status_code=404, detail="Dokument hittades inte")
+    path, _ = res
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        raise HTTPException(status_code=404, detail="Dokument kunde inte läsas")
+    return PlainTextResponse(content, media_type="text/markdown; charset=utf-8")
 
 
 @app.get("/gravplatser")

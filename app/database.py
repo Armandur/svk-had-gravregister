@@ -223,7 +223,7 @@ class GravplatsNarmastAnhorig(Base):
 
 
 class Gravsatt(Base):
-    """Gravsatt person (position 1–10). Position 1 kan vara beteckning (t.ex. familjegrav) istället för person."""
+    """Gravsatt person (position 1–10). Vilken position som helst kan vara beteckning (t.ex. familjegrav) istället för person."""
     __tablename__ = "gravsatt"
     __table_args__ = (UniqueConstraint("gravplats_id", "position", name="uq_gravsatt_gravplats_pos"),)
 

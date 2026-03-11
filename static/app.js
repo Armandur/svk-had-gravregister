@@ -1,5 +1,5 @@
 /**
- * Gravregister PoC – välj mapp, visa 3 PDF-sidor per gravplats.
+ * Gravregister – välj mapp, visa 3 PDF-sidor per gravplats, bläddring och inmatning.
  */
 
 const API = '/api';

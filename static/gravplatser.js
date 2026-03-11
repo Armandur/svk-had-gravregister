@@ -38,7 +38,7 @@ let ocrVantarPaBild = false;
 let ocrJustAvslutad = false;
 /** Ikonknapp för "Markera område" som visas bredvid fokuserat fält (skapas vid behov). */
 let ocrFaltIkonBtn = null;
-/** 'ef' | 'fe' när användaren valt EF/FE och väntar på bildmarkering; null annars. 'f' = föddenamn (f. ), samma flöde. */
+/** 'ef' | 'fe' när användaren valt EF/FE och väntar på bildmarkering; null annars. 'f' = namn som ogift (f. född), samma flöde. */
 let ocrNamnLage = null;
 /** true när användaren valt Adress och väntar på bildmarkering. */
 let ocrAdressLage = false;
@@ -270,8 +270,8 @@ function visaOcrIkonForFalt(input) {
       window.gpOcrBtnF = document.createElement('button');
       window.gpOcrBtnF.type = 'button';
       window.gpOcrBtnF.className = 'gp-ocr-falt-ikon gp-ocr-falt-ikon-f';
-      window.gpOcrBtnF.setAttribute('aria-label', 'Lägg till f. föddenamn – markera område på bild');
-      window.gpOcrBtnF.title = 'Lägg till f. (föddenamn) – markera område på bild med flicknamnet; texten läggs till i slutet av efternamnsfältet';
+      window.gpOcrBtnF.setAttribute('aria-label', 'Lägg till namn som ogift (f. född) – markera område på bild');
+      window.gpOcrBtnF.title = 'Lägg till f. (född) – namn som ogift; markera område på bild med flicknamnet, texten läggs till i slutet av efternamnsfältet';
       window.gpOcrBtnF.textContent = 'f.';
       window.gpOcrBtnF.addEventListener('click', (ev) => {
         ev.preventDefault();

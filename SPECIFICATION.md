@@ -125,8 +125,9 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 
 - **Primär lagring:** Databas. Gravplatser, gravsatta, gravrättsinnehavare samt **extramaterial** (vilka PDF:er som är extramaterial, valfri typ-beteckning och antingen koppling till en gravplats eller endast till mappen) lagras här och matas in via programmet så att bläddring och koppling till källor fungerar.
 - **Skiss på gravplatsen:** Lagras som **bild** i databasen (extraheras/inskannas från källan).
+- **Adress:** Adress kan lagras och visas som **Gatuadress**, **Postnummer** och **Postort** (för gravrättsinnehavare, närmast anhörig och gravsatta).
+- **Kommentarer:** Möjlighet till kommentar **per gravplats** (för handskrivna tillägg, osäkerheter, undantag). Kommentar kan även anges **per gravrättsinnehavare**, **per närmast anhörig** och **per gravsatt**.
 - **Export/import:** Stöd för t.ex. JSON (och vid behov andra format).
-- **Kommentarer:** Möjlighet till en **kommentarsruta** per digitaliserad gravplats (för handskrivna tillägg, osäkerheter, undantag m.m.).
 - **Spårbarhet till källa:** Varje gravplats är kopplad till de PDF-filer som utgör dess tre innehållssidor (mapp + start_sida) och eventuellt extramaterial. Det räcker för att kunna granska och verifiera digitaliseringen; enskilda fält behöver inte kopplas till specifik sida eller halva.
 
 ---
@@ -134,7 +135,7 @@ Gravsatta 1–5 finns på **sida 2 (nedre halvan)**. Gravsatta 6–10 finns på 
 ## 8. Specialfall
 
 - **Färre än 6 gravsatta:** Raderna för gravsatta 6–10 används inte (övre halvan tom).
-- **Gravbeteckning på position 1:** I vissa fall har gravsatt position 1 använts för en beteckning på graven (t.ex. "Per Augusts familjegrav") i stället för en person. Den första faktiska gravsatta personen står då från position 2. Programmet ska tillåta att position 1 används antingen som person eller som beteckning/benämning.
+- **Gravbeteckning (beteckning istället för person):** En gravsatt position (1–10) kan användas för en beteckning på graven (t.ex. "Per Augusts familjegrav") i stället för en person. Programmet ska tillåta att **vilken position som helst** används antingen som person eller som beteckning/benämning.
 - **Underhåll – "för all framtid" överstruket:** Om texten "för all framtid" är överstruken betyder det att underhållet bara gällde viss tid (inte för all framtid). Detta ska kunna anges/registreras i digitaliseringen.
 
 - **Gravplatsnummer med intervall eller plus:** Gravplatsnumret behöver inte vara en enskild siffra – i källan kan det anges som t.ex. **1-2**, **1+2**, **7+8** osv. Samma tre-sidorsstruktur gäller; det är alltså en namngivning i registret, inte att gravar “slås ihop” som specialfall.
