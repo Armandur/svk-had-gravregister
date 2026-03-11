@@ -40,12 +40,16 @@ let ocrJustAvslutad = false;
 let ocrFaltIkonBtn = null;
 /** 'ef' | 'fe' när användaren valt EF/FE och väntar på bildmarkering; null annars. 'f' = föddenamn (f. ), samma flöde. */
 let ocrNamnLage = null;
+/** true när användaren valt Adress och väntar på bildmarkering. */
+let ocrAdressLage = false;
 /** När ocrNamnLage === 'f': efternamnsfältet där " f. " + extraherad text ska läggas till. */
 let ocrFoddenamnFalt = null;
 /** I namn-split-modal: valt delningsindex (0..n) eller null om användaren inte klickat. */
 let ocrNamnSplitIndex = null;
 /** 'ef' | 'fe' när modalen visar namn-split; null annars. */
 let ocrModalNamnLage = null;
+/** true när modalen visar adress-split (dela gatuadress | postnummer+postort). */
+let ocrModalAdressLage = false;
 /** true om fokus sattes via mus/pekare (klick); false vid tabb – ikonen visas bara vid pekare. */
 let focusViaPointer = false;
 
@@ -83,6 +87,43 @@ function getNamnParFalt(element) {
   return { fornamn, efternamn };
 }
 
+/** Returnerar true om fältet är ett adressfält (Gatuadress, Postnummer eller Postort) där Adress-OCR-knappen ska visas. */
+function arAdressFaltForOcr(element) {
+  const name = element && element.getAttribute('name');
+  if (!name) return false;
+  return name === 'inv_gatuadress' || name === 'inv_postnummer' || name === 'inv_postort' ||
+    name === 'na_gatuadress' || name === 'na_postnummer' || name === 'na_postort' ||
+    (name.startsWith('gs_gatuadress_') && /^gs_gatuadress_\d+$/.test(name)) ||
+    (name.startsWith('gs_postnummer_') && /^gs_postnummer_\d+$/.test(name)) ||
+    (name.startsWith('gs_postort_') && /^gs_postort_\d+$/.test(name));
+}
+
+/** Returnerar { gatuadress, postnummer, postort } – DOM-elementen för de tre adressfälten i samma rad som element. */
+function getAdressTrioFalt(element) {
+  if (!element) return null;
+  const row = element.closest('.gp-innehavare-rad, .gp-na-rad, .gp-gravsatt-block');
+  if (!row) return null;
+  const gatuadress = row.querySelector('[name="inv_gatuadress"], [name="na_gatuadress"], [name^="gs_gatuadress_"]');
+  const postnummer = row.querySelector('[name="inv_postnummer"], [name="na_postnummer"], [name^="gs_postnummer_"]');
+  const postort = row.querySelector('[name="inv_postort"], [name="na_postort"], [name^="gs_postort_"]');
+  if (!gatuadress || !postnummer || !postort) return null;
+  return { gatuadress, postnummer, postort };
+}
+
+/**
+ * Parsar text efter gatuadress till postnummer (NNN NN) och postort.
+ * NNNNN normaliseras till NNN NN; resten tolkas som postort.
+ */
+function parsePostnummerPostort(rest) {
+  const s = (rest || '').trim();
+  if (!s) return { postnummer: '', postort: '' };
+  const withSpace = /^(\d{3})\s+(\d{2})\s*(.*)$/.exec(s);
+  if (withSpace) return { postnummer: withSpace[1] + ' ' + withSpace[2], postort: (withSpace[3] || '').trim() };
+  const fiveDigits = /^(\d{5})\s*(.*)$/.exec(s);
+  if (fiveDigits) return { postnummer: fiveDigits[1].slice(0, 3) + ' ' + fiveDigits[1].slice(3), postort: (fiveDigits[2] || '').trim() };
+  return { postnummer: '', postort: s };
+}
+
 /** Tar bort wrap från ett fält (om det har gp-ocr-falt-wrap) och eventuellt från det andra fältet i namnparet. */
 function unwrapOcrFaltWrap(wrap) {
   if (!wrap?.classList?.contains('gp-ocr-falt-wrap')) return;
@@ -110,6 +151,24 @@ function unwrapOcrFaltWrap(wrap) {
       }
     }
   }
+  if (field && arAdressFaltForOcr(field)) {
+    const trio = getAdressTrioFalt(field);
+    if (trio) {
+      for (const f of [trio.gatuadress, trio.postnummer, trio.postort]) {
+        if (f === field) continue;
+        const otherWrap = f.parentElement;
+        if (otherWrap?.classList?.contains('gp-ocr-falt-wrap')) {
+          const otherGroup = otherWrap.querySelector('.gp-ocr-falt-ikon-grupp');
+          if (otherGroup) otherGroup.remove();
+          const otherField = otherWrap.querySelector('input, textarea');
+          if (otherField && otherWrap.parentNode) {
+            otherWrap.parentNode.insertBefore(otherField, otherWrap);
+            otherWrap.remove();
+          }
+        }
+      }
+    }
+  }
 }
 
 /** Visar textextraheringsikonen bredvid det angivna textfältet (wrap + ikon). Anropa vid klick-fokus eller klick i redan fokuserat fält. */
@@ -121,11 +180,13 @@ function visaOcrIkonForFalt(input) {
   const par = isNamnFalt ? getNamnParFalt(input) : null;
   const arFornamn = par && input === par.fornamn;
   const arEfternamn = par && input === par.efternamn;
+  const isAdressFalt = arAdressFaltForOcr(input);
   if (existingWrap?.classList?.contains('gp-ocr-falt-wrap')) {
     const group = existingWrap.querySelector('.gp-ocr-falt-ikon-grupp');
     const hasMainBtn = ocrFaltIkonBtn && existingWrap.contains(ocrFaltIkonBtn);
     const hasFullGroup = group && (arEfternamn ? group.contains(ocrFaltIkonBtn) : true);
     if (hasMainBtn || hasFullGroup) return;
+    if (isAdressFalt && group && window.gpOcrBtnAdress && group.contains(window.gpOcrBtnAdress)) return;
   }
   if (!ocrFaltIkonBtn) {
     ocrFaltIkonBtn = document.createElement('button');
@@ -139,6 +200,7 @@ function visaOcrIkonForFalt(input) {
       if (ocrVantarPaBild) {
         ocrVantarPaBild = false;
         ocrNamnLage = null;
+        ocrAdressLage = false;
         ocrFoddenamnFalt = null;
         uppdateraOcrKnapp();
         return;
@@ -299,6 +361,46 @@ function visaOcrIkonForFalt(input) {
       group.appendChild(window.gpOcrBtnFe);
       if (!wrap.contains(group)) wrap.appendChild(group);
     }
+  }
+  function ensureOcrBtnAdress() {
+    if (!window.gpOcrBtnAdress) {
+      window.gpOcrBtnAdress = document.createElement('button');
+      window.gpOcrBtnAdress.type = 'button';
+      window.gpOcrBtnAdress.className = 'gp-ocr-falt-ikon gp-ocr-falt-ikon-adress';
+      window.gpOcrBtnAdress.setAttribute('aria-label', 'Extrahera hel adressrad – markera område på bild');
+      window.gpOcrBtnAdress.title = 'Extrahera hel adressrad till Gatuadress, Postnummer, Postort – markera område på bild';
+      window.gpOcrBtnAdress.textContent = 'Adress';
+      window.gpOcrBtnAdress.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        if (!ocrTargetElement) return;
+        ocrAdressLage = true;
+        ocrVantarPaBild = true;
+        const g = ev.target.closest('.gp-ocr-falt-ikon-grupp');
+        if (g) g.remove();
+        uppdateraOcrKnapp();
+      });
+    }
+  }
+  if (isAdressFalt) {
+    let wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
+    if (!wrap) {
+      wrap = document.createElement('span');
+      wrap.className = 'gp-ocr-falt-wrap gp-ocr-falt-wrap-adress';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+    } else {
+      wrap.classList.add('gp-ocr-falt-wrap-adress');
+    }
+    ensureOcrBtnAdress();
+    let group = wrap.querySelector('.gp-ocr-falt-ikon-grupp');
+    if (!group) {
+      group = document.createElement('div');
+      group.className = 'gp-ocr-falt-ikon-grupp';
+    }
+    group.innerHTML = '';
+    group.appendChild(ocrFaltIkonBtn);
+    group.appendChild(window.gpOcrBtnAdress);
+    if (!wrap.contains(group)) wrap.appendChild(group);
   } else {
     let wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
     if (!wrap) {
@@ -1382,6 +1484,7 @@ function startOcrOverlay(fig, initialEvent) {
             ocrFoddenamnFalt = null;
           }
           ocrNamnLage = null;
+          ocrAdressLage = false;
         }
         visaIkonSomTomExtrahering();
         return;
@@ -1425,6 +1528,11 @@ function startOcrOverlay(fig, initialEvent) {
           return;
         }
         showOcrModalNamnSplit(normaliserad, lage);
+        return;
+      }
+      if (ocrAdressLage) {
+        ocrAdressLage = false;
+        showOcrModalAdressSplit(trimmed);
         return;
       }
       if (arDatumFaltForOcr(ocrTargetElement)) {
@@ -1768,6 +1876,78 @@ function showOcrModalNamnSplit(text, lage) {
   if (firstSplit) firstSplit.focus();
 }
 
+function showOcrModalAdressSplit(text) {
+  const modal = document.getElementById('gp-ocr-modal');
+  const namnWrap = document.getElementById('gp-ocr-modal-namn');
+  const namnTextEl = document.getElementById('gp-ocr-namn-text');
+  const rubrikEl = document.getElementById('gp-ocr-modal-rubrik');
+  const hintEl = document.getElementById('gp-ocr-modal-hint');
+  const namnHintEl = document.getElementById('gp-ocr-modal-namn-hint');
+  const textarea = document.getElementById('gp-ocr-modal-text');
+  const knapparEl = document.getElementById('gp-ocr-modal-knappar');
+  if (!modal || !namnWrap || !namnTextEl) return;
+  ocrModalAdressLage = true;
+  ocrModalNamnLage = null;
+  hintEl?.setAttribute('hidden', '');
+  textarea?.setAttribute('hidden', '');
+  if (knapparEl) knapparEl.setAttribute('hidden', '');
+  namnWrap.removeAttribute('hidden');
+  if (rubrikEl) rubrikEl.textContent = 'Dela adress (Gatuadress | Postnummer, Postort)';
+  if (namnHintEl) namnHintEl.textContent = 'Klicka mellan två tecken för att ange var gatuadressen slutar och postnummer börjar.';
+  namnTextEl.innerHTML = '';
+  const n = text.length;
+  const applyAndClose = (splitIndex) => {
+    const trio = getAdressTrioFalt(ocrTargetElement);
+    if (trio && ocrTargetElement) {
+      const gatuadress = text.slice(0, splitIndex).trim();
+      const rest = text.slice(splitIndex);
+      const { postnummer, postort } = parsePostnummerPostort(rest);
+      trio.gatuadress.value = gatuadress;
+      trio.postnummer.value = postnummer;
+      trio.postort.value = postort;
+      if (trio.gatuadress.tagName === 'TEXTAREA') autoExpandTextarea(trio.gatuadress);
+      if (trio.postnummer.tagName === 'TEXTAREA') autoExpandTextarea(trio.postnummer);
+      if (trio.postort.tagName === 'TEXTAREA') autoExpandTextarea(trio.postort);
+      markInmatningDirty();
+    }
+    ocrModalAdressLage = false;
+    namnWrap.setAttribute('hidden', '');
+    if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
+    if (namnHintEl) namnHintEl.textContent = 'Klicka mellan två tecken för att ange var namnet ska delas.';
+    hintEl?.removeAttribute('hidden');
+    textarea?.removeAttribute('hidden');
+    if (knapparEl) knapparEl.removeAttribute('hidden');
+    modal.hidden = true;
+  };
+  for (let i = 0; i <= n; i++) {
+    const splitSpan = document.createElement('span');
+    splitSpan.className = 'gp-ocr-namn-split';
+    splitSpan.dataset.index = String(i);
+    splitSpan.setAttribute('role', 'button');
+    splitSpan.setAttribute('tabindex', '0');
+    splitSpan.setAttribute('aria-label', `Dela efter tecken ${i}`);
+    splitSpan.addEventListener('click', () => applyAndClose(i));
+    splitSpan.addEventListener('mouseenter', () => splitSpan.classList.add('gp-ocr-namn-split-hover'));
+    splitSpan.addEventListener('mouseleave', () => splitSpan.classList.remove('gp-ocr-namn-split-hover'));
+    splitSpan.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        applyAndClose(i);
+      }
+    });
+    namnTextEl.appendChild(splitSpan);
+    if (i < n) {
+      const charSpan = document.createElement('span');
+      charSpan.className = 'gp-ocr-namn-char';
+      charSpan.textContent = text[i];
+      namnTextEl.appendChild(charSpan);
+    }
+  }
+  modal.hidden = false;
+  const firstSplit = namnTextEl.querySelector('.gp-ocr-namn-split');
+  if (firstSplit) firstSplit.focus();
+}
+
 function closeOcrModal(anvand) {
   const modal = document.getElementById('gp-ocr-modal');
   const textarea = document.getElementById('gp-ocr-modal-text');
@@ -1777,6 +1957,18 @@ function closeOcrModal(anvand) {
   if (ocrModalNamnLage) {
     ocrModalNamnLage = null;
     ocrNamnSplitIndex = null;
+    if (namnWrap) namnWrap.setAttribute('hidden', '');
+    if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
+    document.getElementById('gp-ocr-modal-hint')?.removeAttribute('hidden');
+    textarea.removeAttribute('hidden');
+    document.getElementById('gp-ocr-modal-knappar')?.removeAttribute('hidden');
+    modal.hidden = true;
+    return;
+  }
+  if (ocrModalAdressLage) {
+    ocrModalAdressLage = false;
+    const namnHintEl = document.getElementById('gp-ocr-modal-namn-hint');
+    if (namnHintEl) namnHintEl.textContent = 'Klicka mellan två tecken för att ange var namnet ska delas.';
     if (namnWrap) namnWrap.setAttribute('hidden', '');
     if (rubrikEl) rubrikEl.textContent = 'Extraherad text';
     document.getElementById('gp-ocr-modal-hint')?.removeAttribute('hidden');
@@ -2073,7 +2265,7 @@ document.getElementById('gp-inmatning')?.addEventListener('focusout', (e) => {
   if (!e.target.matches('input, textarea')) return;
   const inmatning = document.getElementById('gp-inmatning');
   const next = e.relatedTarget;
-  if (next && inmatning && (inmatning.contains(next) || next === ocrFaltIkonBtn || next === window.gpOcrBtnEf || next === window.gpOcrBtnFe || next === window.gpOcrBtnF)) return;
+  if (next && inmatning && (inmatning.contains(next) || next === ocrFaltIkonBtn || next === window.gpOcrBtnEf || next === window.gpOcrBtnFe || next === window.gpOcrBtnF || next === window.gpOcrBtnAdress)) return;
   if (!ocrFaltIkonBtn?.parentElement) return;
   let wrapToUnwrap = ocrFaltIkonBtn.parentElement;
   if (wrapToUnwrap.classList?.contains('gp-ocr-falt-ikon-grupp')) wrapToUnwrap = wrapToUnwrap.parentElement;
@@ -2087,6 +2279,7 @@ document.getElementById('gp-btn-ocr-omrade')?.addEventListener('click', () => {
   if (ocrVantarPaBild) {
     ocrVantarPaBild = false;
     ocrNamnLage = null;
+    ocrAdressLage = false;
     ocrFoddenamnFalt = null;
     uppdateraOcrKnapp();
     return;
@@ -2140,7 +2333,8 @@ document.getElementById('gp-ocr-modal')?.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeOcrModal(false);
   else if (e.key === 'Enter') {
     e.preventDefault();
-    if (ocrModalNamnLage && ocrNamnSplitIndex == null) closeOcrModal(false);
+    if (ocrModalAdressLage) closeOcrModal(false);
+    else if (ocrModalNamnLage && ocrNamnSplitIndex == null) closeOcrModal(false);
     else closeOcrModal(true);
   }
 });
