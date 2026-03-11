@@ -797,6 +797,31 @@ def _blank_page_png_bytes(dpi: int = 150, split: float | None = None, halva: str
     return png_bytes
 
 
+def _segment_bounds(andelar: list[float], segment_index: int) -> tuple[float, float]:
+    """Returnera (start, end) andel 0–1 för segment_index. andelar = gränser t.ex. [0.455] -> segment 0: 0–0.455, 1: 0.455–1."""
+    bounds = [0.0] + [float(x) for x in andelar] + [1.0]
+    bounds = sorted(set(bounds))
+    i = max(0, min(segment_index, len(bounds) - 2))
+    return bounds[i], bounds[i + 1]
+
+
+def _clip_rect_for_segment(
+    page_rect: fitz.Rect,
+    segment_index: int,
+    andelar: list[float],
+    dela_sidor: str,
+) -> fitz.Rect | None:
+    """Rektangel för segment (0, 1, …). dela_sidor: hojdled = vertikal, breddled = horisontell. None = hela sidan."""
+    if dela_sidor == "ingen" or not andelar or segment_index < 0:
+        return None
+    start, end = _segment_bounds(andelar, segment_index)
+    r = page_rect
+    if dela_sidor == "breddled":
+        return fitz.Rect(r.width * start, 0, r.width * end, r.height)
+    else:
+        return fitz.Rect(0, r.height * start, r.width, r.height * end)
+
+
 def _content_page_1based(filnamn: str, effective_names: list[str]) -> int | None:
     """1-baserat innehållssidanummer för filnamn i listan, eller None om inte med."""
     try:
@@ -870,41 +895,55 @@ async def pdf_sida_halva(
     mapp_namn: str,
     sida_nummer: int,
     offset: int = 0,
-    halva: str = "nedre",
+    halva: str | None = None,
+    segment: int | None = None,
+    position: int | None = None,
     split: float = 0.5,
     exclude: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returnera övre eller nedre del av en PDF-sida som PNG. Vid tom sida returneras motsvarande halva."""
+    """Returnera en del (segment) av en PDF-sida som PNG. position=1,2,3 styr vilken split som används (standard_3_sidor)."""
     if offset < 0 or offset > 2:
         raise HTTPException(status_code=400, detail="offset måste vara 0, 1 eller 2")
-    if halva not in ("nedre", "ovre"):
-        raise HTTPException(status_code=400, detail="halva måste vara nedre eller ovre")
-    if not 0 < split < 1:
+    # Bestäm segment_index: antingen segment-param eller halva (ovre=1, nedre=0)
+    if segment is not None:
+        if segment < 0:
+            raise HTTPException(status_code=400, detail="segment måste vara >= 0")
+        segment_index = segment
+    elif halva in ("nedre", "ovre"):
+        segment_index = 1 if halva == "ovre" else 0
+    else:
+        segment_index = 0
+    if split and not 0 < split < 1 and segment is None and halva:
         raise HTTPException(status_code=400, detail="split måste vara mellan 0 och 1")
     excluded = _excluded_filenames_for_mapp(db, mapp_namn) | _parse_exclude_param(exclude)
     item = _content_page_to_item(mapp_namn, excluded, sida_nummer, db)
     if item is None:
         raise HTTPException(status_code=404, detail="Sidan finns inte")
     typ, val = item
+    mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
+    dela_sidor = getattr(mapp_config, "dela_sidor", None) or "hojdled"
+    andelar = _mapp_config_andelar(mapp_config, position=position) if mapp_config else _mapp_config_andelar(None, position=position)
     if typ == "blank":
-        png_bytes = _blank_page_png_bytes(dpi=150, split=split, halva=halva)
+        # Tom sida: segment 0 = övre, 1 = nedre
+        use_halva = "ovre" if segment_index == 0 else "nedre"
+        use_split = andelar[0] if len(andelar) >= 1 else split
+        png_bytes = _blank_page_png_bytes(dpi=150, split=use_split, halva=use_halva)
         return Response(content=png_bytes, media_type="image/png", headers=CACHE_HEADERS)
     doc = fitz.open(val)
     try:
         page = doc[0]
-        mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
+        r = page.rect
         redan_halva_set = _redan_halva_filenames_for_mapp(db, mapp_config.id if mapp_config else None)
-        if val.name in redan_halva_set:
+        if val.name in redan_halva_set or dela_sidor == "ingen":
             pix = page.get_pixmap(dpi=150)
         else:
-            r = page.rect
-            if halva == "ovre":
-                clip = fitz.Rect(0, 0, r.width, r.height * split)
+            clip = _clip_rect_for_segment(r, segment_index, andelar, dela_sidor)
+            if clip is not None:
+                pix = page.get_pixmap(dpi=150, clip=clip)
             else:
-                clip = fitz.Rect(0, r.height * split, r.width, r.height)
-            pix = page.get_pixmap(dpi=150, clip=clip)
+                pix = page.get_pixmap(dpi=150)
         png_bytes = pix.tobytes("png")
         return Response(content=png_bytes, media_type="image/png", headers=CACHE_HEADERS)
     finally:
@@ -944,6 +983,11 @@ class MappConfigSchema(BaseModel):
     kyrkogard: str | None = None
     gravkvarter: str | None = None
     forsett_antal: int = 0
+    layout_typ: str | None = None  # standard_3_sidor | 1_sida_per_grav | 2_gravar_per_sida
+    dela_sidor: str | None = None  # ingen | hojdled | breddled
+    antal_delar_per_sida: int | None = None  # 1, 2, 3, …
+    andelar: list[float] | None = None
+    andelar_per_position: dict[str, list[float]] | None = None
 
 
 class ExtramaterialSchema(BaseModel):
@@ -959,18 +1003,95 @@ class ExtramaterialPatchSchema(BaseModel):
     kommentar: str | None = None
 
 
+def _mapp_config_andelar(row: MappConfig | None, position: int | None = None) -> list[float]:
+    """Returnera andelar från mapp_config. position 1,2,3 = position i block (standard_3_sidor).
+    Om position anges och andelar_per_position finns används den; annars andelar; annars klassiska default (727/1597, 870/1595)."""
+    import json as _json
+    # Klassiska default för standard 3-sidors layout (sida 1 och 3: 727/1597, sida 2: 870/1595)
+    CLASSIC_1_3 = [727 / 1597]
+    CLASSIC_2 = [870 / 1595]
+    if not row:
+        if position == 2:
+            return CLASSIC_2
+        if position in (1, 3):
+            return CLASSIC_1_3
+        return [0.5]
+    layout = getattr(row, "layout_typ", None) or "standard_3_sidor"
+    if position is not None and position in (1, 2, 3):
+        per_pos = getattr(row, "andelar_per_position", None)
+        if per_pos:
+            try:
+                d = _json.loads(per_pos) if isinstance(per_pos, str) else per_pos
+                if isinstance(d, dict) and str(position) in d:
+                    a = d[str(position)]
+                    if isinstance(a, list) and len(a) >= 1:
+                        return [float(x) for x in a]
+            except (TypeError, ValueError):
+                pass
+        if layout == "standard_3_sidor":
+            return CLASSIC_2 if position == 2 else CLASSIC_1_3
+    if getattr(row, "andelar", None):
+        try:
+            a = _json.loads(row.andelar) if isinstance(row.andelar, str) else row.andelar
+            return a if isinstance(a, list) and len(a) >= 1 else [0.5]
+        except (TypeError, ValueError):
+            pass
+    if layout == "standard_3_sidor" and position in (1, 2, 3):
+        return CLASSIC_2 if position == 2 else CLASSIC_1_3
+    return [0.5]
+
+
+def _mapp_config_andelar_per_position(row: MappConfig | None) -> dict[str, list[float]] | None:
+    """Returnera andelar_per_position som dict eller None."""
+    if not row:
+        return None
+    per_pos = getattr(row, "andelar_per_position", None)
+    if not per_pos:
+        return None
+    try:
+        import json as _json
+        d = _json.loads(per_pos) if isinstance(per_pos, str) else per_pos
+        if isinstance(d, dict):
+            return {k: [float(x) for x in v] for k, v in d.items() if isinstance(v, list) and v}
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
 @app.get("/api/mappar/{mapp_namn}/config")
 async def get_mapp_config(mapp_namn: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Hämta sparad konfiguration för mappen (kyrkogård, gravkvarter, försättssidor)."""
+    """Hämta sparad konfiguration för mappen (kyrkogård, gravkvarter, försättssidor, grunddata-layout)."""
     _mapp_path(mapp_namn)  # validera
     row = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
     if not row:
-        return {"mapp": mapp_namn, "kyrkogard": None, "gravkvarter": None, "forsett_antal": 0}
+        return {
+            "mapp": mapp_namn,
+            "kyrkogard": None,
+            "gravkvarter": None,
+            "forsett_antal": 0,
+            "layout_typ": "standard_3_sidor",
+            "dela_sidor": "hojdled",
+            "antal_delar_per_sida": 2,
+            "andelar": [0.5],
+            "andelar_per_position": None,
+        }
+    andelar = _mapp_config_andelar(row)
+    per_pos = getattr(row, "andelar_per_position", None)
+    try:
+        import json as _json_mod
+        andelar_per_position = _json_mod.loads(per_pos) if isinstance(per_pos, str) and per_pos else (per_pos if isinstance(per_pos, dict) else None)
+    except (TypeError, ValueError):
+        andelar_per_position = None
     return {
         "mapp": mapp_namn,
         "kyrkogard": row.kyrkogard,
         "gravkvarter": row.gravkvarter,
         "forsett_antal": row.forsett_antal,
+        "layout_typ": getattr(row, "layout_typ", None) or "standard_3_sidor",
+        "dela_sidor": getattr(row, "dela_sidor", None) or "hojdled",
+        "antal_delar_per_sida": getattr(row, "antal_delar_per_sida", None) or 2,
+        "andelar": andelar,
+        "andelar_per_position": andelar_per_position,
     }
 
 
@@ -981,15 +1102,27 @@ async def save_mapp_config(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Spara konfiguration för mappen (kyrkogård, kvarter, försättssidor)."""
+    """Spara konfiguration för mappen (kyrkogård, kvarter, försättssidor, grunddata-layout)."""
+    import json as _json
     _mapp_path(mapp_namn)
     row = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
     if not row:
         row = MappConfig(namn=mapp_namn)
         db.add(row)
+        db.flush()
     row.kyrkogard = body.kyrkogard
     row.gravkvarter = body.gravkvarter
     row.forsett_antal = max(0, min(2, body.forsett_antal))
+    if body.layout_typ is not None and body.layout_typ in ("standard_3_sidor", "1_sida_per_grav", "2_gravar_per_sida"):
+        row.layout_typ = body.layout_typ
+    if body.dela_sidor is not None and body.dela_sidor in ("ingen", "hojdled", "breddled"):
+        row.dela_sidor = body.dela_sidor
+    if body.antal_delar_per_sida is not None and body.antal_delar_per_sida >= 1:
+        row.antal_delar_per_sida = min(20, body.antal_delar_per_sida)
+    if body.andelar is not None and len(body.andelar) >= 1:
+        row.andelar = _json.dumps([float(x) for x in body.andelar])
+    if body.andelar_per_position is not None:
+        row.andelar_per_position = _json.dumps({k: [float(x) for x in v] for k, v in body.andelar_per_position.items() if isinstance(v, list) and v})
     db.commit()
     return {"ok": True}
 
@@ -1001,6 +1134,7 @@ class GravplatsSchema(BaseModel):
     kvarter: str = ""
     gravplatsnummer: str = ""
     start_sida: int  # 1-baserat
+    segment_index: int = 0  # vid 2_gravar_per_sida: 0 eller 1 på samma sida
     sida1_ovre_tillhor_denna: bool = False
     sida3_ovre_tillhor_nasta: bool = False
 
@@ -1015,7 +1149,7 @@ async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Sess
     q = db.query(Gravplats).filter(Gravplats.mapp_id == mapp_config.id)
     if start_sida is not None:
         q = q.filter(Gravplats.start_sida == start_sida)
-    items = q.order_by(Gravplats.start_sida).all()
+    items = q.order_by(Gravplats.start_sida, Gravplats.segment_index).all()
     return {
         "gravplatser": [
             {
@@ -1023,6 +1157,7 @@ async def list_gravplats(mapp_namn: str, start_sida: int | None = None, db: Sess
                 "kvarter": g.kvarter,
                 "gravplatsnummer": g.gravplatsnummer,
                 "start_sida": g.start_sida,
+                "segment_index": getattr(g, "segment_index", 0),
                 "kyrkogard": g.kyrkogard,
                 "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
                 "sida1_ovre_tillhor_denna": getattr(g, "sida1_ovre_tillhor_denna", False),
@@ -1656,25 +1791,40 @@ def _format_fullstandigt(kyrkogard: str | None, kvarter: str, gravplatsnummer: s
     return " ".join(parts) if parts else ""
 
 
-def _gravplats_halvor(g: Gravplats, foregaende_grav: Gravplats | None = None) -> list[dict]:
+def _gravplats_halvor(
+    g: Gravplats,
+    foregaende_grav: Gravplats | None = None,
+    layout_typ: str = "standard_3_sidor",
+) -> list[dict]:
     """
-    Lista vilka halvor (content_sida + nedre/ovre) som tillhör denna gravplats.
-    Standard: sida 1 nedre (gravrätt), sida 2 nedre (gravsatta 1–5), sida 3 övre (gravsatta 6–10).
-    sida1_ovre_tillhor_denna: inkludera även sida 1 övre.
-    sida3_ovre_tillhor_nasta: sida 3 övre tillhör nästa grav, exkludera den här.
-    Om foregaende_grav har sida3_ovre_tillhor_nasta så tillhör övre halvan av vår sida 1 (gravsatta 6–10 från föreg. sida) denna grav – visas sist.
+    Lista vilka delar (content_sida + segment_index / halva) som tillhör denna gravplats.
+    layout_typ standard_3_sidor: sida 1 nedre (gravrätt), sida 2 nedre (gravsatta 1–5), sida 3 övre (gravsatta 6–10).
+    1_sida_per_grav: en sida, en del (segment_index 0).
+    2_gravar_per_sida: en sida, en del = g.segment_index.
     """
+    segment_idx = getattr(g, "segment_index", 0) or 0
+    if layout_typ == "1_sida_per_grav":
+        return [{"content_sida": g.start_sida, "segment_index": 0, "halva": "nedre", "typ": "gravplats"}]
+    if layout_typ == "2_gravar_per_sida":
+        return [{
+            "content_sida": g.start_sida,
+            "segment_index": segment_idx,
+            "halva": "ovre" if segment_idx == 0 else "nedre",
+            "typ": "gravplats",
+        }]
+    # standard_3_sidor: segment 0 = övre (första andelen), segment 1 = nedre (andra andelen)
+    # position 1,2,3 = första, andra, tredje sidan i blocket (för split-per-position)
     s1, s2, s3 = g.start_sida, g.start_sida + 1, g.start_sida + 2
     halvor = [
-        {"content_sida": s1, "halva": "nedre", "typ": "gravrätt"},
-        {"content_sida": s2, "halva": "nedre", "typ": "gravsatta_1_5"},
+        {"content_sida": s1, "segment_index": 1, "halva": "nedre", "typ": "gravrätt", "position": 1},
+        {"content_sida": s2, "segment_index": 1, "halva": "nedre", "typ": "gravsatta_1_5", "position": 2},
     ]
     if getattr(g, "sida1_ovre_tillhor_denna", False):
-        halvor.append({"content_sida": s1, "halva": "ovre", "typ": "gravrätt_ovre"})
+        halvor.append({"content_sida": s1, "segment_index": 0, "halva": "ovre", "typ": "gravrätt_ovre", "position": 1})
     if not getattr(g, "sida3_ovre_tillhor_nasta", False):
-        halvor.append({"content_sida": s3, "halva": "ovre", "typ": "gravsatta_6_10"})
+        halvor.append({"content_sida": s3, "segment_index": 0, "halva": "ovre", "typ": "gravsatta_6_10", "position": 3})
     if foregaende_grav and getattr(foregaende_grav, "sida3_ovre_tillhor_nasta", False):
-        halvor.append({"content_sida": s1, "halva": "ovre", "typ": "gravsatta_6_10_fran_foregaende_sida"})
+        halvor.append({"content_sida": s1, "segment_index": 0, "halva": "ovre", "typ": "gravsatta_6_10_fran_foregaende_sida", "position": 1})
     return halvor
 
 
@@ -1705,15 +1855,18 @@ async def get_gravplats_halvor(
     g = q.first()
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
-    foregaende = (
-        db.query(Gravplats)
-        .filter(
-            Gravplats.mapp_id == mapp_config.id,
-            Gravplats.start_sida == g.start_sida - 2,
+    layout_typ = getattr(mapp_config, "layout_typ", None) or "standard_3_sidor"
+    foregaende = None
+    if layout_typ == "standard_3_sidor":
+        foregaende = (
+            db.query(Gravplats)
+            .filter(
+                Gravplats.mapp_id == mapp_config.id,
+                Gravplats.start_sida == g.start_sida - 2,
+            )
+            .first()
         )
-        .first()
-    )
-    halvor = _gravplats_halvor(g, foregaende)
+    halvor = _gravplats_halvor(g, foregaende, layout_typ=layout_typ)
     # Anrik med filnamn för varje content_sida (för knapp "öppna PDF" och "visa hela sidan")
     excluded = _excluded_filenames_for_mapp(db, mapp_namn)
     expanded = _expanded_effective_list(mapp_namn, excluded, db)
@@ -1739,10 +1892,17 @@ async def get_gravplats_halvor(
             "filnamn": em.filnamn,
             "typ": em.typ or "halva",
         })
-    # Exkludera vanliga halvor som användaren dolt (gravplats_dold_halva)
+    # Exkludera vanliga delar som användaren dolt (gravplats_dold_halva)
     dold_halvor_rows = db.query(GravplatsDoldHalva).filter(GravplatsDoldHalva.gravplats_id == g.id).all()
-    dold_halvor_set = {(r.content_sida, r.halva) for r in dold_halvor_rows}
-    halvor = [h for h in halvor if (h.get("content_sida"), h.get("halva")) not in dold_halvor_set]
+    # Normalisera till segment 0=ovre, 1=nedre (halva-kolumnen är auktoritativ för gamla rader)
+    def _dold_segment(r):
+        if getattr(r, "halva", None) == "ovre":
+            return 0
+        if getattr(r, "halva", None) == "nedre":
+            return 1
+        return getattr(r, "segment_index", 0)
+    dold_segment_set = {(r.content_sida, _dold_segment(r)) for r in dold_halvor_rows}
+    halvor = [h for h in halvor if (h.get("content_sida"), h.get("segment_index", 0)) not in dold_segment_set]
     # Alla extramaterial knutna till denna gravplats (ej dolda) – för utfällbar sektion
     extramaterial_lista = [
         {"id": em.id, "filnamn": em.filnamn, "typ": em.typ or "", "redan_halva": getattr(em, "redan_halva", False), "kommentar": getattr(em, "kommentar", None) or ""}
@@ -1774,10 +1934,18 @@ async def get_gravplats_halvor(
             item = expanded[r.content_sida - 1]
             if item.get("t") == "f":
                 filnamn = item.get("v")
+        seg = getattr(r, "segment_index", None)
+        if seg is None and getattr(r, "halva", None) == "ovre":
+            seg = 0
+        elif seg is None and getattr(r, "halva", None) == "nedre":
+            seg = 1
+        elif seg is None:
+            seg = 0
         dolda_lista.append({
             "type": "halva",
             "content_sida": r.content_sida,
-            "halva": r.halva,
+            "segment_index": seg,
+            "halva": getattr(r, "halva", None) or ("ovre" if seg == 0 else "nedre"),
             "filnamn": filnamn or "",
         })
     return {
@@ -1788,6 +1956,14 @@ async def get_gravplats_halvor(
             "gravplatsnummer": g.gravplatsnummer,
             "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
             "start_sida": g.start_sida,
+            "segment_index": getattr(g, "segment_index", 0),
+        },
+        "mapp_namn": mapp_namn,
+        "config": {
+            "layout_typ": layout_typ,
+            "dela_sidor": getattr(mapp_config, "dela_sidor", None) or "hojdled",
+            "andelar": _mapp_config_andelar(mapp_config),
+            "andelar_per_position": _mapp_config_andelar_per_position(mapp_config),
         },
         "halvor": halvor,
         "extramaterial": extramaterial_lista,
@@ -1797,26 +1973,29 @@ async def get_gravplats_halvor(
 
 class DoldHalvaBody(BaseModel):
     content_sida: int
-    halva: str  # "nedre" | "ovre"
+    segment_index: int | None = None  # 0, 1, …; om None används halva (nedre=0, ovre=1)
+    halva: str | None = None  # "nedre" | "ovre" bakåtkompatibilitet
 
 
 @app.post("/api/gravplats/{gravplats_id:int}/dold-halva")
 async def post_dold_halva(gravplats_id: int, body: DoldHalvaBody, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Dölj en vanlig gravplatsbild (halva) från bildraden – den visas i sektion Dolda."""
+    """Dölj en vanlig gravplatsbild (segment) från bildraden – den visas i sektion Dolda."""
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    seg = body.segment_index if body.segment_index is not None else (1 if body.halva == "ovre" else 0)
+    halva_val = body.halva or ("ovre" if seg == 1 else "nedre")
     existing = (
         db.query(GravplatsDoldHalva)
         .filter(
             GravplatsDoldHalva.gravplats_id == gravplats_id,
             GravplatsDoldHalva.content_sida == body.content_sida,
-            GravplatsDoldHalva.halva == body.halva,
+            GravplatsDoldHalva.segment_index == seg,
         )
         .first()
     )
     if not existing:
-        row = GravplatsDoldHalva(gravplats_id=gravplats_id, content_sida=body.content_sida, halva=body.halva)
+        row = GravplatsDoldHalva(gravplats_id=gravplats_id, content_sida=body.content_sida, segment_index=seg, halva=halva_val)
         db.add(row)
         db.commit()
     return {"ok": True}
@@ -1826,7 +2005,8 @@ async def post_dold_halva(gravplats_id: int, body: DoldHalvaBody, db: Session = 
 async def delete_dold_halva(
     gravplats_id: int,
     content_sida: int,
-    halva: str,
+    segment_index: int | None = None,
+    halva: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1834,10 +2014,11 @@ async def delete_dold_halva(
     g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    seg = segment_index if segment_index is not None else (1 if halva == "ovre" else 0)
     db.query(GravplatsDoldHalva).filter(
         GravplatsDoldHalva.gravplats_id == gravplats_id,
         GravplatsDoldHalva.content_sida == content_sida,
-        GravplatsDoldHalva.halva == halva,
+        GravplatsDoldHalva.segment_index == seg,
     ).delete()
     db.commit()
     return {"ok": True}
@@ -1858,9 +2039,14 @@ async def save_gravplats(
         db.add(mapp_config)
         db.flush()
     kyrkogard = mapp_config.kyrkogard or None
+    segment_idx = getattr(body, "segment_index", 0) or 0
     existing = (
         db.query(Gravplats)
-        .filter(Gravplats.mapp_id == mapp_config.id, Gravplats.start_sida == body.start_sida)
+        .filter(
+            Gravplats.mapp_id == mapp_config.id,
+            Gravplats.start_sida == body.start_sida,
+            Gravplats.segment_index == segment_idx,
+        )
         .first()
     )
     kvarter = body.kvarter.strip() if body.kvarter else ""
@@ -1880,6 +2066,7 @@ async def save_gravplats(
             kvarter=kvarter,
             gravplatsnummer=gravplatsnummer,
             start_sida=body.start_sida,
+            segment_index=segment_idx,
             kyrkogard=kyrkogard,
             sida1_ovre_tillhor_denna=body.sida1_ovre_tillhor_denna,
             sida3_ovre_tillhor_nasta=body.sida3_ovre_tillhor_nasta,
@@ -1892,6 +2079,7 @@ async def save_gravplats(
         "kvarter": g.kvarter,
         "gravplatsnummer": g.gravplatsnummer,
         "start_sida": g.start_sida,
+        "segment_index": getattr(g, "segment_index", 0),
         "kyrkogard": g.kyrkogard,
         "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
         "sida1_ovre_tillhor_denna": g.sida1_ovre_tillhor_denna,

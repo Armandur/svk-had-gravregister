@@ -173,6 +173,23 @@
         </select>
         <label>Kvarter:</label>
         <input type="text" id="gravkvarter" placeholder="t.ex. Allm, 1, U" title="Behålls mellan sidbyten tills du byter" />
+        <label title="Grunddataformat för denna mapp">Layout:</label>
+        <select id="mapp-layout-typ" title="Standard = 3 sidor per gravplats; 1 sida = en sida per grav; 2 per sida = två gravar per PDF-sida">
+          <option value="standard_3_sidor">Standard (3 sidor/grav)</option>
+          <option value="1_sida_per_grav">1 sida per grav</option>
+          <option value="2_gravar_per_sida">2 gravar per sida</option>
+        </select>
+        <label title="Dela varje sida i delar (höjd/bredd) eller visa hela">Dela sidor:</label>
+        <select id="mapp-dela-sidor">
+          <option value="ingen">Ingen</option>
+          <option value="hojdled">Höjdled</option>
+          <option value="breddled">Breddled</option>
+        </select>
+        <span class="split-pos-wrap" id="split-pos-wrap" title="Var splitlinjen ska gå (0–1). Tomt = klassiska värden.">
+          <label>Split pos 1:</label><input type="number" id="split-pos-1" min="0" max="1" step="0.001" placeholder="0.455" size="6" />
+          <label>Split pos 2:</label><input type="number" id="split-pos-2" min="0" max="1" step="0.001" placeholder="0.545" size="6" />
+          <label>Split pos 3:</label><input type="number" id="split-pos-3" min="0" max="1" step="0.001" placeholder="0.455" size="6" />
+        </span>
         <label>Gravplatsnr:</label>
         <input type="text" id="gravplatsnummer" placeholder="t.ex. 1+2" title="Från handlingen; sparas när du går till nästa gravplats" size="8" />
         <label class="enter-nasta-label"><input type="checkbox" id="enter-ga-nasta" /> Enter → nästa gravplats</label>
