@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hantera kyrkogårdar – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .kg-sida { max-width: 36rem; margin: 2rem auto; padding: 2rem; }
+    .kg-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    .kg-sida a { color: var(--accent, #2563eb); }
+    .kg-lista { list-style: none; padding: 0; margin: 1rem 0; }
+    .kg-lista li { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; }
+    .kg-lista li span { flex: 1; }
+    .kg-lista .kg-namn { min-width: 8rem; }
+    .kg-lista .kg-knappar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .kg-lista button { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
+    .kg-lista button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .kg-sida label { display: block; margin-top: 0.75rem; font-weight: 500; }
+    .kg-sida input { padding: 0.4rem 0.5rem; margin-top: 0.25rem; width: 100%; max-width: 16rem; box-sizing: border-box; }
+    .kg-sida form button { margin-top: 0.5rem; padding: 0.4rem 0.75rem; cursor: pointer; }
+    .kg-fel { color: #b91c1c; font-size: 0.9rem; margin-top: 0.5rem; }
+    .kg-ok { color: #16a34a; font-size: 0.9rem; margin-top: 0.5rem; }
+    .kg-brodtext { font-size: 0.9rem; color: #555; margin: -0.5rem 0 0.75rem 0; }
+    .kg-tillbaka { margin-bottom: 1rem; }
+    .kg-tillbaka a { color: var(--accent); text-decoration: none; }
+    .kg-tillbaka a:hover { text-decoration: underline; }
+    .kg-ingen { color: #64748b; }
+  </style>
+</head>
+<body>
+  <main class="kg-sida">
+    <h1>Hantera kyrkogårdar</h1>
+    <p class="kg-tillbaka"><a href="/grunddata">← Tillbaka till grunddatahantering</a></p>
+    <p id="kg-ingen" class="kg-ingen">Endast administratörer kan hantera kyrkogårdar.</p>
+    <section id="kg-innehall" hidden>
+      <p class="kg-brodtext">Kyrkogårdarna används i grunddatahantering (listvy). De som har gravplatser kopplade kan inte tas bort.</p>
+      <form id="kg-form">
+        <label>Kod <input type="text" id="kg-kod" placeholder="t.ex. HKG" required /></label>
+        <button type="submit">Lägg till</button>
+        <p id="kg-fel" class="kg-fel" hidden></p>
+        <p id="kg-ok" class="kg-ok" hidden></p>
+      </form>
+      <ul id="kg-lista" class="kg-lista"></ul>
+    </section>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function() {
+  const innehall = document.getElementById('kg-innehall');
+  const ingen = document.getElementById('kg-ingen');
+  const listEl = document.getElementById('kg-lista');
+
+  function visaKyrkogardar() {
+    if (!listEl) return;
+    fetch('/api/admin/kyrkogardar', { credentials: 'include' })
+      .then(function(r) {
+        if (r.status === 401) {
+          window.location.href = '/login?redirect=' + encodeURIComponent('/grunddata/kyrkogardar');
+          return null;
+        }
+        if (r.status === 403) {
+          ingen.hidden = false;
+          innehall.hidden = true;
+          return null;
+        }
+        if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte hämta kyrkogårdar'); });
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        ingen.hidden = true;
+        innehall.hidden = false;
+        listEl.innerHTML = '';
+        (data.kyrkogardar || []).forEach(function(item) {
+          const li = document.createElement('li');
+          const kod = (item.kod != null ? item.kod : item).toString();
+          const kanTaBort = item.kan_ta_bort !== false;
+          li.innerHTML = '<span class="kg-namn">' + kod.replace(/</g, '&lt;') + '</span>' +
+            '<span class="kg-knappar">' +
+            '<button type="button" class="kg-ta-bort" data-kod="' + kod.replace(/"/g, '&quot;') + '"' +
+            (kanTaBort ? '' : ' disabled title="Det finns gravplatser kopplade till denna kyrkogård"') + '>Ta bort</button>' +
+            '</span>';
+          listEl.appendChild(li);
+        });
+        listEl.querySelectorAll('.kg-ta-bort:not([disabled])').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const kod = (btn.dataset.kod || '').trim();
+            if (!kod || !confirm('Ta bort kyrkogården "' + kod + '"?')) return;
+            fetch('/api/admin/kyrkogardar/' + encodeURIComponent(kod), {
+              method: 'DELETE',
+              credentials: 'include'
+            }).then(function(r) {
+              if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte ta bort'); });
+              visaKyrkogardar();
+            }).catch(function(e) {
+              alert('Fel: ' + (e.message || 'nätverksfel'));
+            });
+          });
+        });
+      })
+      .catch(function(e) {
+        ingen.textContent = e.message || 'Kunde inte ladda kyrkogårdar.';
+        ingen.hidden = false;
+      });
+  }
+
+  gpEnsureAuth().then(function(ok) {
+    if (!ok) return;
+    visaKyrkogardar();
+  });
+
+  document.getElementById('kg-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const felEl = document.getElementById('kg-fel');
+    const okEl = document.getElementById('kg-ok');
+    felEl.hidden = true;
+    okEl.hidden = true;
+    const kod = document.getElementById('kg-kod').value.trim();
+    if (!kod) {
+      felEl.textContent = 'Ange en kod för kyrkogården.';
+      felEl.hidden = false;
+      return;
+    }
+    fetch('/api/admin/kyrkogardar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kod: kod }),
+      credentials: 'include'
+    }).then(function(r) {
+      return r.json().then(function(d) {
+        if (!r.ok) throw new Error(d.detail || 'Kunde inte lägga till');
+        okEl.textContent = 'Kyrkogården "' + (d.kod || kod) + '" tillagd.';
+        okEl.hidden = false;
+        document.getElementById('kg-kod').value = '';
+        visaKyrkogardar();
+      });
+    }).catch(function(e) {
+      felEl.textContent = e.message || 'Nätverksfel';
+      felEl.hidden = false;
+    });
+  });
+})();
+  </script>
+</body>
+</html>

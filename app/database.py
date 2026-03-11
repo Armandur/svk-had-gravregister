@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy import ForeignKey, UniqueConstraint, create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
-from app.config import DATABASE_PATH
+from app.config import DATABASE_PATH, KYRKOGARDAR
 
 # SQLite-fil – sätts via config (default gravregister.db i PROJECT_ROOT, eller DATABASE_PATH)
 DB_PATH = DATABASE_PATH
@@ -22,6 +22,14 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True, index=True)
     password_hash: Mapped[str] = mapped_column()
     is_admin: Mapped[bool] = mapped_column(default=False)
+
+
+class Kyrkogard(Base):
+    """Kyrkogårdar som visas i grunddatahantering (listvy). Användaren kan lägga till/ta bort via admin."""
+    __tablename__ = "kyrkogard"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    kod: Mapped[str] = mapped_column(unique=True, index=True)  # t.ex. HKG, HKN
 
 
 class MappConfig(Base):
@@ -251,6 +259,20 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 def init_db():
     """Skapa tabeller om de inte finns. Lägger till nya kolumner på gravplats vid behov."""
     Base.metadata.create_all(bind=engine)
+
+    # Seed kyrkogårdar från config om tabellen är tom (behåll befintliga i databasen)
+    with SessionLocal() as db:
+        try:
+            existing = {r.kod for r in db.query(Kyrkogard).all()}
+            for kod in KYRKOGARDAR:
+                k = (kod or "").strip()
+                if k and k not in existing:
+                    db.add(Kyrkogard(kod=k))
+                    existing.add(k)
+            db.commit()
+        except Exception:
+            db.rollback()
+
     # Migration: lägg till halva-kopplingskolumner om de saknas (befintliga databaser)
     with engine.connect() as conn:
         r = conn.execute(text("PRAGMA table_info(gravplats)"))

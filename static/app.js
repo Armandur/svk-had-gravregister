@@ -21,6 +21,44 @@ let cacheBust = 0;
 /** Startposition för serie gravplatsnummer (1-baserat start_sida), null om ej satt. */
 let seriesStartSida = null;
 
+/** Lista kyrkogårdar från konfiguration (fylls vid laddning). */
+let kyrkogardarLista = [];
+
+async function laddaKyrkogardar() {
+  try {
+    const res = await fetch(`${API}/kyrkogardar`, { credentials: 'include' });
+    const data = await res.json();
+    kyrkogardarLista = data.kyrkogardar || [];
+    fyllKyrkogardSelect();
+  } catch (e) {
+    console.warn('Kunde inte ladda kyrkogårdar:', e);
+    kyrkogardarLista = [];
+    fyllKyrkogardSelect();
+  }
+}
+
+function fyllKyrkogardSelect() {
+  const select = document.getElementById('kyrkogard');
+  if (!select) return;
+  const befintligVal = select.value;
+  select.innerHTML = '<option value="">–</option>';
+  kyrkogardarLista.forEach((k) => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = k;
+    select.appendChild(opt);
+  });
+  if (befintligVal) {
+    if (!kyrkogardarLista.includes(befintligVal)) {
+      const opt = document.createElement('option');
+      opt.value = befintligVal;
+      opt.textContent = befintligVal;
+      select.appendChild(opt);
+    }
+    select.value = befintligVal;
+  }
+}
+
 async function laddaMappar() {
   const select = document.getElementById('mapp');
   select.disabled = true;
@@ -84,7 +122,16 @@ async function valjMapp(mappNamn) {
     const gravkvarterEl = document.getElementById('gravkvarter');
     const layoutEl = document.getElementById('mapp-layout-typ');
     const delaEl = document.getElementById('mapp-dela-sidor');
-    if (kyrkogardEl) kyrkogardEl.value = configData.kyrkogard || '';
+    if (kyrkogardEl) {
+      const kg = configData.kyrkogard || '';
+      if (kg && !kyrkogardarLista.includes(kg)) {
+        const opt = document.createElement('option');
+        opt.value = kg;
+        opt.textContent = kg;
+        kyrkogardEl.appendChild(opt);
+      }
+      kyrkogardEl.value = kg;
+    }
     if (gravkvarterEl) gravkvarterEl.value = configData.gravkvarter || '';
     if (layoutEl) layoutEl.value = window.mappLayoutTyp;
     if (delaEl) delaEl.value = window.mappDelaSidor;
@@ -283,6 +330,21 @@ function getDisplayStartSida() {
   return idx >= 0 ? idx + 1 : startSida;
 }
 
+/** Sätter rutorubriker dynamiskt utifrån layout_typ. */
+function uppdateraRutaRubriker(layout) {
+  const titles = layout === '1_sida_per_grav'
+    ? ['Gravplats', '', '']
+    : layout === '2_gravar_per_sida'
+      ? ['Grav 1 (övre)', 'Grav 2 (nedre)', '']
+      : ['Sida 1 – Gravrätt', 'Sida 2 – Gravsatta 1–5', 'Sida 3 – Gravsatta 6–10'];
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('ruta-rubrik-' + i);
+    const halvaEl = document.getElementById('halva-rubrik-' + i);
+    if (el && titles[i - 1]) el.textContent = titles[i - 1];
+    if (halvaEl && titles[i - 1]) halvaEl.textContent = titles[i - 1];
+  }
+}
+
 function uppdateraPdfBilder() {
   const effectiveFiler = getEffectiveFiler();
   const excludeQ = urklipp.length ? '&exclude=' + encodeURIComponent(urklipp.join(',')) : '';
@@ -402,6 +464,17 @@ function uppdateraPdfBilder() {
   if (registreratEl) {
     registreratEl.textContent = g && g.fullstandigt ? 'Registrerat: ' + g.fullstandigt : '';
   }
+  const alla = allaGravplatsBlock();
+  const currentIdx = alla.findIndex((b) => b.start_sida === startSida && (b.segment_index || 0) === seg);
+  const gravplatsIndikatorEl = document.getElementById('gravplats-indikator');
+  if (gravplatsIndikatorEl && alla.length > 0) {
+    const num = currentIdx >= 0 ? currentIdx + 1 : 0;
+    gravplatsIndikatorEl.textContent = num > 0 ? 'Gravplats ' + num + ' av ' + alla.length : '';
+  }
+  uppdateraRutaRubriker(layout);
+  const enterHint = document.getElementById('enter-hint');
+  const enterGaNasta = document.getElementById('enter-ga-nasta');
+  if (enterHint && enterGaNasta) enterHint.hidden = !enterGaNasta.checked;
   const cb3 = document.getElementById('sida3-ovre-nasta');
   if (cb3) cb3.checked = !!(g && g.sida3_ovre_tillhor_nasta);
   const halvaKopplingEl = document.getElementById('halva-koppling');
@@ -435,8 +508,22 @@ function uppdateraPdfBilder() {
 function uppdateraSerieVisning() {
   const startVisa = document.getElementById('serie-start-visa');
   const slutVisa = document.getElementById('serie-slut-visa');
+  const antalVisa = document.getElementById('serie-antal-visa');
   if (startVisa) startVisa.textContent = seriesStartSida != null ? 'Start: sida ' + seriesStartSida : 'Start: –';
   if (slutVisa) slutVisa.textContent = 'Slut: sida ' + startSida;
+  if (antalVisa && seriesStartSida != null) {
+    const layout = window.mappLayoutTyp || 'standard_3_sidor';
+    const seg = window.listvySegmentIndex ?? 0;
+    let antal = 0;
+    if (layout === '2_gravar_per_sida' && startSida >= seriesStartSida) {
+      antal = (startSida - seriesStartSida) * 2 + seg + 1;
+    } else if ((layout === 'standard_3_sidor' || layout === '1_sida_per_grav') && startSida >= seriesStartSida && (layout === '1_sida_per_grav' || (startSida - seriesStartSida) % 2 === 0)) {
+      antal = layout === '1_sida_per_grav' ? (startSida - seriesStartSida + 1) : (startSida - seriesStartSida) / 2 + 1;
+    }
+    antalVisa.textContent = antal > 0 ? 'Antal i serien: ' + antal : '';
+  } else if (document.getElementById('serie-antal-visa')) {
+    document.getElementById('serie-antal-visa').textContent = '';
+  }
 }
 
 let listvyLightboxIndex = 0;
@@ -912,6 +999,31 @@ document.getElementById('split-pos-1')?.addEventListener('blur', sparaMappConfig
 document.getElementById('split-pos-2')?.addEventListener('blur', sparaMappConfig);
 document.getElementById('split-pos-3')?.addEventListener('blur', sparaMappConfig);
 
+document.getElementById('split-pos-standard')?.addEventListener('click', () => {
+  const inp1 = document.getElementById('split-pos-1');
+  const inp2 = document.getElementById('split-pos-2');
+  const inp3 = document.getElementById('split-pos-3');
+  if (inp1) inp1.value = '';
+  if (inp2) inp2.value = '';
+  if (inp3) inp3.value = '';
+  sparaMappConfig();
+});
+
+document.getElementById('mappinställningar-toggle')?.addEventListener('click', () => {
+  const btn = document.getElementById('mappinställningar-toggle');
+  const innehall = document.getElementById('mappinställningar-innehall');
+  if (!btn || !innehall) return;
+  const expanded = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', expanded);
+  innehall.hidden = !expanded;
+});
+
+document.getElementById('enter-ga-nasta')?.addEventListener('change', () => {
+  const enterHint = document.getElementById('enter-hint');
+  const enterGaNasta = document.getElementById('enter-ga-nasta');
+  if (enterHint && enterGaNasta) enterHint.hidden = !enterGaNasta.checked;
+});
+
 document.getElementById('gravplatsnummer')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && document.getElementById('enter-ga-nasta')?.checked) {
     e.preventDefault();
@@ -995,6 +1107,7 @@ async function sparaGravplats() {
   if (!gravplatsnummer && g && g.gravplatsnummer && String(g.gravplatsnummer).trim()) gravplatsnummer = g.gravplatsnummer.trim();
   const sida3OvreNasta = document.getElementById('sida3-ovre-nasta')?.checked ?? false;
   const seg = window.listvySegmentIndex ?? 0;
+  const statusEl = document.getElementById('spara-status');
   try {
     await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, {
       method: 'POST',
@@ -1012,9 +1125,15 @@ async function sparaGravplats() {
     const res = await fetch(`${API}/mappar/${encodeURIComponent(valdMapp)}/gravplats`, { credentials: 'include' });
     const data = await res.json();
     window.gravplatser = data.gravplatser || [];
+    if (statusEl) {
+      statusEl.textContent = gravplatsnummer ? 'Sparat för gravplats ' + gravplatsnummer : 'Sparat';
+      clearTimeout(sparaGravplats._tid);
+      sparaGravplats._tid = setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+    }
     uppdateraPdfBilder();
   } catch (e) {
     console.warn('Kunde inte spara gravplats:', e);
+    if (statusEl) statusEl.textContent = 'Kunde inte spara';
   }
 }
 
@@ -1247,18 +1366,5 @@ async function visaExtramaterialMapp() {
 }
 document.getElementById('em-visa-mapp')?.addEventListener('click', visaExtramaterialMapp);
 
-document.getElementById('dev-meny-toggle')?.addEventListener('click', () => {
-  const innehall = document.getElementById('dev-meny-innehall');
-  if (innehall) innehall.hidden = !innehall.hidden;
-});
-document.getElementById('dev-nolla-cache')?.addEventListener('click', () => {
-  ogiltigförklaraBildcache();
-  if (valdMapp && document.getElementById('visning') && !document.getElementById('visning').hidden) {
-    uppdateraPdfBilder();
-  }
-});
-document.getElementById('dev-stang-av')?.addEventListener('click', () => {
-  fetch(`${API}/dev/shutdown`, { method: 'POST', credentials: 'include' }).catch(() => {});
-});
-
 laddaMappar();
+laddaKyrkogardar();

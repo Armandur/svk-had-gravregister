@@ -8,7 +8,7 @@
 </head>
 <body>
   <header class="topbar">
-    <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Meny</a> Gravregister</h1>
+    <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Tillbaka till menyn</a> Gravregister</h1>
     <span id="inloggad-anvandare" class="topbar-inloggad" aria-live="polite"></span>
     <div class="topbar-falt">
       <label for="mapp">Mapp:</label>
@@ -32,7 +32,7 @@
         <div class="pdf-rutor">
           <div class="ruta">
             <div class="ruta-rubrik">
-              <span>Sida 1 – Gravrätt</span>
+              <span id="ruta-rubrik-1">Sida 1 – Gravrätt</span>
               <div class="ruta-rubrik-hoger">
                 <a id="link-sida-1" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-1">–</span></a>
                 <div class="meny-wrapper">
@@ -52,7 +52,7 @@
           </div>
           <div class="ruta">
             <div class="ruta-rubrik">
-              <span>Sida 2 – Gravsatta 1–5</span>
+              <span id="ruta-rubrik-2">Sida 2 – Gravsatta 1–5</span>
               <div class="ruta-rubrik-hoger">
                 <a id="link-sida-2" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-2">–</span></a>
                 <div class="meny-wrapper">
@@ -72,7 +72,7 @@
           </div>
           <div class="ruta">
             <div class="ruta-rubrik">
-              <span>Sida 3 – Gravsatta 6–10</span>
+              <span id="ruta-rubrik-3">Sida 3 – Gravsatta 6–10</span>
               <div class="ruta-rubrik-hoger">
                 <a id="link-sida-3" href="#" target="_blank" rel="noopener"><span id="filnamn-sida-3">–</span></a>
                 <div class="meny-wrapper">
@@ -100,7 +100,7 @@
           <div class="halvor-stack">
           <div class="halva-ruta">
             <div class="halva-rubrik">
-              <span>Gravrätt</span>
+              <span id="halva-rubrik-1">Gravrätt</span>
               <div class="ruta-rubrik-hoger">
                 <a id="halva-link-1" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-1">–</span></a>
                 <div class="meny-wrapper">
@@ -120,7 +120,7 @@
           </div>
           <div class="halva-ruta">
             <div class="halva-rubrik">
-              <span>Gravsatta 1–5</span>
+              <span id="halva-rubrik-2">Gravsatta 1–5</span>
               <div class="ruta-rubrik-hoger">
                 <a id="halva-link-2" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-2">–</span></a>
                 <div class="meny-wrapper">
@@ -140,7 +140,7 @@
           </div>
           <div class="halva-ruta">
             <div class="halva-rubrik">
-              <span>Gravsatta 6–10</span>
+              <span id="halva-rubrik-3">Gravsatta 6–10</span>
               <div class="ruta-rubrik-hoger">
                 <a id="halva-link-3" href="#" target="_blank" rel="noopener"><span id="halva-filnamn-3">–</span></a>
                 <div class="meny-wrapper">
@@ -165,45 +165,62 @@
         </div>
       </div>
       <div class="inmatning-under-rutor">
-        <label>Kyrkogård:</label>
-        <select id="kyrkogard">
-          <option value="">–</option>
-          <option value="HKG">HKG</option>
-          <option value="HKN">HKN</option>
-        </select>
-        <label>Kvarter:</label>
-        <input type="text" id="gravkvarter" placeholder="t.ex. Allm, 1, U" title="Behålls mellan sidbyten tills du byter" />
-        <label title="Grunddataformat för denna mapp">Layout:</label>
-        <select id="mapp-layout-typ" title="Standard = 3 sidor per gravplats; 1 sida = en sida per grav; 2 per sida = två gravar per PDF-sida">
-          <option value="standard_3_sidor">Standard (3 sidor/grav)</option>
-          <option value="1_sida_per_grav">1 sida per grav</option>
-          <option value="2_gravar_per_sida">2 gravar per sida</option>
-        </select>
-        <label title="Dela varje sida i delar (höjd/bredd) eller visa hela">Dela sidor:</label>
-        <select id="mapp-dela-sidor">
-          <option value="ingen">Ingen</option>
-          <option value="hojdled">Höjdled</option>
-          <option value="breddled">Breddled</option>
-        </select>
-        <span class="split-pos-wrap" id="split-pos-wrap" title="Var splitlinjen ska gå (0–1). Tomt = klassiska värden.">
-          <label>Split pos 1:</label><input type="number" id="split-pos-1" min="0" max="1" step="0.001" placeholder="0.455" size="6" />
-          <label>Split pos 2:</label><input type="number" id="split-pos-2" min="0" max="1" step="0.001" placeholder="0.545" size="6" />
-          <label>Split pos 3:</label><input type="number" id="split-pos-3" min="0" max="1" step="0.001" placeholder="0.455" size="6" />
-        </span>
-        <label>Gravplatsnr:</label>
-        <input type="text" id="gravplatsnummer" placeholder="t.ex. 1+2" title="Från handlingen; sparas när du går till nästa gravplats" size="8" />
-        <label class="enter-nasta-label"><input type="checkbox" id="enter-ga-nasta" /> Enter → nästa gravplats</label>
-        <a href="/gravplatser" class="lank-gravplatsvy">Gravplatsvy</a>
+        <section class="mappinställningar-panel" aria-labelledby="mappinställningar-rubrik">
+          <button type="button" class="mappinställningar-utfällbar" id="mappinställningar-toggle" aria-expanded="true" aria-controls="mappinställningar-innehall">
+            <span class="mappinställningar-ikon" aria-hidden="true">▼</span>
+            <span id="mappinställningar-rubrik">Mappinställningar</span>
+          </button>
+          <div class="mappinställningar-innehall" id="mappinställningar-innehall">
+            <label title="Grunddataformat för denna mapp">Layout:</label>
+            <select id="mapp-layout-typ" title="Standard = 3 sidor per gravplats; 1 sida = en sida per grav; 2 per sida = två gravar per PDF-sida">
+              <option value="standard_3_sidor">Standard (3 sidor/grav)</option>
+              <option value="1_sida_per_grav">1 sida per grav</option>
+              <option value="2_gravar_per_sida">2 gravar per sida</option>
+            </select>
+            <label title="Dela varje sida i delar (höjd/bredd) eller visa hela">Dela sidor:</label>
+            <select id="mapp-dela-sidor">
+              <option value="ingen">Ingen</option>
+              <option value="hojdled">Höjdled</option>
+              <option value="breddled">Breddled</option>
+            </select>
+            <span class="split-pos-wrap" id="split-pos-wrap" title="Andel av sidhöjden där split går (0–1). Tomt = rekommenderat standardvärde.">
+              <label for="split-pos-1">Split sida 1 (gravrätt):</label><input type="number" id="split-pos-1" min="0" max="1" step="0.001" placeholder="0.455" size="6" aria-describedby="split-pos-beskrivning" />
+              <label for="split-pos-2">Split sida 2 (gravsatta 1–5):</label><input type="number" id="split-pos-2" min="0" max="1" step="0.001" placeholder="0.545" size="6" />
+              <label for="split-pos-3">Split sida 3 (gravsatta 6–10):</label><input type="number" id="split-pos-3" min="0" max="1" step="0.001" placeholder="0.455" size="6" />
+              <button type="button" id="split-pos-standard" class="split-pos-standard-knapp" title="Töm fälten så att rekommenderade standardvärden används">Använd standard</button>
+            </span>
+            <span id="split-pos-beskrivning" class="visually-hidden">Andel av sidhöjden där split går (0–1). Tomt = rekommenderat standardvärde.</span>
+          </div>
+        </section>
+        <section class="denna-gravplats-block" aria-labelledby="denna-gravplats-rubrik">
+          <h3 id="denna-gravplats-rubrik" class="denna-gravplats-rubrik">Denna gravplats</h3>
+          <label for="kyrkogard">Kyrkogård:</label>
+          <select id="kyrkogard">
+            <option value="">–</option>
+            <!-- Optioner fylls från API /api/kyrkogardar -->
+          </select>
+          <label for="gravkvarter">Kvarter:</label>
+          <input type="text" id="gravkvarter" placeholder="t.ex. Allm, 1, U" title="Behålls mellan sidbyten tills du byter" />
+          <label for="gravplatsnummer">Gravplatsnr:</label>
+          <input type="text" id="gravplatsnummer" placeholder="t.ex. 1+2" title="Från handlingen; sparas när du går till nästa gravplats" size="8" />
+          <span class="enter-hint" id="enter-hint" hidden aria-hidden="true">Enter = nästa</span>
+          <label class="enter-nasta-label"><input type="checkbox" id="enter-ga-nasta" /> Enter → nästa gravplats</label>
+          <a href="/gravplatser" class="lank-gravplatsvy">Gravplatsvy</a>
+        </section>
       </div>
       <div class="visning-meny-under">
         <div class="navigering">
+          <span id="gravplats-indikator" class="gravplats-indikator" aria-live="polite"></span>
           <span id="gravplats-registrerat" class="gravplats-registrerat" aria-live="polite"></span>
+          <span id="spara-status" class="spara-status" role="status" aria-live="polite" aria-atomic="true"></span>
           <div class="halva-koppling" id="halva-koppling">
             <label title="Sida 3 övre halva (gravsatta 6–10) tillhör nästa grav"><input type="checkbox" id="sida3-ovre-nasta" /> Sida 3 övre → nästa grav</label>
           </div>
-          <button type="button" id="btn-föregående">← Föregående</button>
-          <button type="button" id="btn-spara-gravplats">Spara</button>
-          <button type="button" id="btn-nästa">Nästa gravplats →</button>
+          <div class="navigering-primär">
+            <button type="button" id="btn-föregående" aria-label="Föregående gravplats">← Föregående</button>
+            <button type="button" id="btn-spara-gravplats" aria-label="Spara aktuell gravplats">Spara</button>
+            <button type="button" id="btn-nästa" aria-label="Nästa gravplats">Nästa gravplats →</button>
+          </div>
           <span class="hoppa-saknad-wrap">
             <span class="hoppa-saknad-label">Hoppa till gravplats som saknar:</span>
             <span class="saknad-item">
@@ -225,10 +242,12 @@
         </div>
         <div class="serie-gravplats-rad" id="serie-gravplats-rad">
           <span class="serie-label">Serie gravplatsnummer:</span>
+          <p class="serie-instruktion" id="serie-instruktion">1) Sätt start vid första graven. 2) Gå till sista gravplatsen i serien. 3) Fyll i startnummer och klicka Verkställ.</p>
           <button type="button" id="btn-serie-start" title="Använd aktuell position som start">Sätt start</button>
           <span id="serie-start-visa">Start: –</span>
           <label>Startgravplatsnr: <input type="text" id="serie-start-nr" placeholder="t.ex. 1" size="6" title="Första numret i serien" /></label>
           <span id="serie-slut-visa">Slut: aktuell position</span>
+          <span id="serie-antal-visa" class="serie-antal-visa" aria-live="polite"></span>
           <button type="button" id="btn-serie-verkstall" title="Fyll gravplatsnummer i nummerföljd från start till aktuell position">Verkställ serie</button>
           <span id="serie-tooltip" class="hoppa-saknad-tooltip" role="status" aria-live="polite"></span>
         </div>
@@ -240,7 +259,8 @@
         </button>
         <div class="extramaterial-innehall" id="em-innehall">
           <div class="em-gravplats-block">
-            <h4>För denna gravplats (startSida <span id="em-current-start">1</span>)</h4>
+            <h4>För denna gravplats</h4>
+            <p class="em-position-text" id="em-position-text">Position: sida <span id="em-current-start">1</span></p>
             <div id="extramaterial-lista" class="extramaterial-lista"></div>
           </div>
           <div class="em-urklipp-block">
@@ -267,14 +287,6 @@
     <button type="button" class="listvy-lightbox-prev" id="listvy-lightbox-prev" aria-label="Föregående">←</button>
     <img class="listvy-lightbox-img" id="listvy-lightbox-img" alt="" />
     <button type="button" class="listvy-lightbox-next" id="listvy-lightbox-next" aria-label="Nästa">→</button>
-  </div>
-
-  <div class="dev-meny" id="dev-meny">
-    <button type="button" class="dev-meny-toggle" id="dev-meny-toggle" title="Dev-menyn">Dev</button>
-    <div class="dev-meny-innehall" id="dev-meny-innehall" hidden>
-      <button type="button" id="dev-nolla-cache">Nolla cachning</button>
-      <button type="button" id="dev-stang-av">Stäng av appen</button>
-    </div>
   </div>
 
   <script src="/static/auth.js"></script>
