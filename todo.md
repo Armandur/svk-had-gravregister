@@ -28,12 +28,12 @@ På samma sätt som knapparna **EF** och **FE** (Efternamn/Förnamn) fungerar f�
   - Gravsatta: `gs_gatuadress_${idx}`, `gs_postnummer_${idx}`, `gs_postort_${idx}`
 
 ## Uppgifter (för implementering)
-- [ ] Avgör om adress-knappen visas vid fokus på något av de tre fälten (Gatuadress, Postnummer, Postort) eller bara Gatuadress; skapa `arAdressFaltForOcr()` och ev. `getAdressTrioFalt(element)` (returnerar { gatuadress, postnummer, postort }).
-- [ ] Visa "Adress"-knapp (eller ikon) vid adressfält, samma plats som EF/FE vid namnfält – antingen återanvänd `gp-ocr-falt-wrap` / `gp-ocr-falt-ikon-grupp` eller lägg till en separat knapp för adress.
-- [ ] När användaren klickar "Adress" → sätt t.ex. `ocrAdressLage = true` (eller eget läge) och `ocrVantarPaBild = true`; vid OCR-klar, anropa ny funktion typ `showOcrModalAdressSplit(text)`.
-- [ ] Implementera `showOcrModalAdressSplit(text)`: samma UI som namn-split (text med klickbara positioner mellan tecken). Vid klick på position `i`: gatuadress = `text.slice(0, i).trim()`, rest = `text.slice(i)`; parsera rest till postnummer + postort (normalisera NNNNN → NNN NN, postort = resten).
-- [ ] Fyll de tre fälten i aktuell rad (innehavare/närstående/gravsatt) utifrån `ocrTargetElement`; använd `getAdressTrioFalt(ocrTargetElement)` för att hitta DOM-elementen.
-- [ ] Hantera Escape/Avbryt och återställ modal till vanligt läge; återställ `ocrAdressLage` etc. vid stängning.
+- [x] Avgör om adress-knappen visas vid fokus på något av de tre fälten (Gatuadress, Postnummer, Postort) eller bara Gatuadress; skapa `arAdressFaltForOcr()` och ev. `getAdressTrioFalt(element)` (returnerar { gatuadress, postnummer, postort }).
+- [x] Visa "Adress"-knapp (eller ikon) vid adressfält, samma plats som EF/FE vid namnfält – antingen återanvänd `gp-ocr-falt-wrap` / `gp-ocr-falt-ikon-grupp` eller lägg till en separat knapp för adress.
+- [x] När användaren klickar "Adress" → sätt t.ex. `ocrAdressLage = true` (eller eget läge) och `ocrVantarPaBild = true`; vid OCR-klar, anropa ny funktion typ `showOcrModalAdressSplit(text)`.
+- [x] Implementera `showOcrModalAdressSplit(text)`: samma UI som namn-split (text med klickbara positioner mellan tecken). Vid klick på position `i`: gatuadress = `text.slice(0, i).trim()`, rest = `text.slice(i)`; parsera rest till postnummer + postort (normalisera NNNNN → NNN NN, postort = resten).
+- [x] Fyll de tre fälten i aktuell rad (innehavare/närstående/gravsatt) utifrån `ocrTargetElement`; använd `getAdressTrioFalt(ocrTargetElement)` för att hitta DOM-elementen.
+- [x] Hantera Escape/Avbryt och återställ modal till vanligt läge; återställ `ocrAdressLage` etc. vid stängning.
 
 ## Antaganden
 - En adressrad på bilden är typiskt en rad text (gatuadress, eventuellt postnummer och postort på samma rad).

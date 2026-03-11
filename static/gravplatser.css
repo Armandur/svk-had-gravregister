@@ -933,11 +933,20 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 }
 .gp-ocr-falt-ikon.gp-ocr-falt-ikon-ef,
 .gp-ocr-falt-ikon.gp-ocr-falt-ikon-fe,
-.gp-ocr-falt-ikon.gp-ocr-falt-ikon-f {
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-f,
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-adress {
   width: 1.5rem;
   height: 1.5rem;
   font-size: 0.7rem;
   font-weight: 600;
+}
+.gp-ocr-falt-wrap.gp-ocr-falt-wrap-adress {
+  padding-right: 4.2rem;
+}
+.gp-ocr-falt-ikon.gp-ocr-falt-ikon-adress {
+  min-width: 2.5rem;
+  width: auto;
+  font-size: 0.65rem;
 }
 
 .gp-ocr-falt-wrap input,
