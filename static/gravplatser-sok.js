@@ -403,6 +403,17 @@ function formatDatumArManadDag(ar, manad, dag) {
   return '';
 }
 
+/** Visningsformat för Utfärdat den: YYYY-00-00 → YYYY, YYYY-MM-00 → YYYY-MM (samma som gravsatta-datum). */
+function formatUtfordatDenForDisplay(s) {
+  if (s == null || typeof s !== 'string') return '';
+  const t = s.trim();
+  if (!t) return '';
+  if (/^(\d{4})-00-00$/.test(t)) return t.slice(0, 4);
+  const m = /^(\d{4})-(\d{1,2})-00$/.exec(t);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}`;
+  return t;
+}
+
 function cellValue(row, colId, typ) {
   if (typ !== 'gravplatser') {
     if (colId === 'fullstandigt') return (row.fullstandigt || '').trim() || '–';
@@ -428,7 +439,7 @@ function cellValue(row, colId, typ) {
     case 'antal_gravsatta':
       return gp.antal_gravsatta != null ? String(gp.antal_gravsatta) : '0';
     case 'utfordat_den':
-      return (gp.utfordat_den || '').trim() || '–';
+      return formatUtfordatDenForDisplay((gp.utfordat_den || '').trim()) || '–';
     case 'har_extramaterial':
       return gp.har_extramaterial ? 'Ja' : 'Nej';
     case 'antal_extramaterial':

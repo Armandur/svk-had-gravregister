@@ -2093,7 +2093,7 @@ function buildRapportInmatningHtml(d, rubrik, skissDataUrlsParam) {
   const raderGp = radOmFyllt('Underhåll inbetalt för all framtid den', d.underhall_text) +
     (d.underhall_overstruket ? '<div class="gp-las-rad"><span class="gp-las-label"></span><span class="gp-las-varde">"För all framtid" överstruket</span></div>' : '') +
     radOmFyllt('Gravrättstid', d.gravrattstid) + radOmFyllt('Monument', d.monument) + radOmFyllt('Gravens utformning', d.gravens_utformning);
-  const ovrigt = radOmFyllt('Utfärdat den', d.utfordat_den) + radOmFyllt('Kommentar', d.kommentar) + radOmFyllt('Karta nr', d.karta_nr) + radOmFyllt('Gravbrev nr', d.gravbrev_nr);
+  const ovrigt = radOmFyllt('Utfärdat den', formatUtfordatDenForDisplay(d.utfordat_den)) + radOmFyllt('Kommentar', d.kommentar) + radOmFyllt('Karta nr', d.karta_nr) + radOmFyllt('Gravbrev nr', d.gravbrev_nr);
   if (raderGp || ovrigt) {
     html += '<div class="gp-rapport-sektion"><h3>Gravplatsen</h3><div class="gp-inmatning-las">' + raderGp + (ovrigt ? '<h4 class="gp-inmatning-delrubrik">Övrigt</h4>' + ovrigt : '') + '</div></div>';
   }
@@ -2539,6 +2539,27 @@ function markInmatningDirty() {
   uppdateraInmatningSparaKnapp();
 }
 
+/** Returnerar true om sektionen saknar data (i visningsläge ska klick då inte fälla ut). */
+function arSektionTom(sektion) {
+  const d = inmatningData || {};
+  switch (sektion) {
+    case 'innehavare':
+      return (d.innehavare || []).length === 0;
+    case 'narmast_anhoriga':
+      return (d.narmast_anhoriga || []).length === 0;
+    case 'gravplatsen': {
+      const s = (v) => (v != null && String(v).trim() !== '');
+      return !s(d.underhall_text) && !d.underhall_overstruket && !s(d.gravrattstid) && !s(d.monument) && !s(d.gravens_utformning) && !s(d.utfordat_den) && !s(d.kommentar) && !s(d.karta_nr) && !s(d.gravbrev_nr);
+    }
+    case 'skiss':
+      return (d.skisser || []).length === 0 && !(d.storlek != null && String(d.storlek).trim() !== '');
+    case 'gravsatta':
+      return (d.gravsatta || []).length === 0;
+    default:
+      return false;
+  }
+}
+
 function toggleInmatningSektion(sektion) {
   const btn = document.querySelector(`.gp-sektion-rubrik[data-sektion="${sektion}"]`);
   const innehall = document.getElementById(`gp-innehall-${sektion}`);
@@ -2553,6 +2574,11 @@ function toggleInmatningSektion(sektion) {
   ensureInmatningData().then((ok) => {
     if (ok) {
       renderInmatningSektion(sektion);
+      if (!inmatningRedigerar && arSektionTom(sektion)) {
+        btn.setAttribute('aria-expanded', 'false');
+        innehall.hidden = true;
+        return;
+      }
     } else {
       innehall.innerHTML = '<p class="gravplatser-fel">Kunde inte ladda.</p>';
     }
@@ -2915,7 +2941,7 @@ function renderInmatningSektionLäs(sektion) {
       radOmFyllt('Gravrättstid', d.gravrattstid) +
       radOmFyllt('Monument', d.monument) +
       radOmFyllt('Gravens utformning', d.gravens_utformning);
-    const ovrigt = radOmFyllt('Utfärdat den', d.utfordat_den) +
+    const ovrigt = radOmFyllt('Utfärdat den', formatUtfordatDenForDisplay(d.utfordat_den)) +
       radOmFyllt('Kommentar', d.kommentar) +
       radOmFyllt('Karta nr', d.karta_nr) +
       radOmFyllt('Gravbrev nr', d.gravbrev_nr);
@@ -3107,7 +3133,7 @@ function renderInmatningSektion(sektion) {
         </div>
         <div class="gp-gravplatsen-kolumn gp-gravplatsen-ovrigt">
           <h4 class="gp-inmatning-delrubrik">Övrigt</h4>
-          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Ange datum enligt YYYY-MM-DD (år-månad-dag). Endast år eller år och månad går också att ange.">${esc(d.utfordat_den)}</textarea></label>
+          <label>Utfärdat den <textarea name="utfordat_den" class="gp-falt-expanderbar" rows="1" aria-describedby="utfordat_den_fel" title="Ange datum enligt YYYY-MM-DD (år-månad-dag). Endast år eller år och månad går också att ange.">${esc(formatUtfordatDenForDisplay(d.utfordat_den))}</textarea></label>
           <span class="gp-datum-fel" id="utfordat_den_fel" hidden aria-live="polite"></span>
           <label>Karta nr <textarea name="karta_nr" class="gp-falt-expanderbar" rows="1">${esc(d.karta_nr)}</textarea></label>
           <label>Gravbrev nr <textarea name="gravbrev_nr" class="gp-falt-expanderbar" rows="1">${esc(d.gravbrev_nr)}</textarea></label>
@@ -3122,6 +3148,7 @@ function renderInmatningSektion(sektion) {
         const fore = utfordatInp.value;
         normaliseraDatumFalt(utfordatInp);
         if (utfordatInp.value !== fore) markInmatningDirty();
+        utfordatInp.value = formatUtfordatDenForDisplay(utfordatInp.value);
         visaDatumValidering(utfordatInp, utfordatFel);
       });
       utfordatInp.addEventListener('input', () => visaDatumValidering(utfordatInp, utfordatFel));
@@ -3486,6 +3513,29 @@ function valideraDatumRimlighetGravsattBlock(blk) {
   return err;
 }
 
+/** Formatera lagrat Utfärdat den-värde för visning i fältet: YYYY-00-00 → YYYY, YYYY-MM-00 → YYYY-MM. */
+function formatUtfordatDenForDisplay(s) {
+  if (s == null || typeof s !== 'string') return '';
+  const t = s.trim();
+  if (!t) return '';
+  const m = /^(\d{4})-00-00$/.exec(t);
+  if (m) return m[1];
+  const m2 = /^(\d{4})-(\d{1,2})-00$/.exec(t);
+  if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}`;
+  return t;
+}
+
+/** Expandera kort format till lagringsformat vid submit: YYYY → YYYY-00-00, YYYY-MM → YYYY-MM-00. */
+function expandUtfordatDenForSubmit(s) {
+  if (s == null || typeof s !== 'string') return '';
+  const t = s.trim();
+  if (!t) return '';
+  if (/^\d{4}$/.test(t)) return `${t}-00-00`;
+  const ym = /^(\d{4})-(\d{1,2})$/.exec(t);
+  if (ym) return `${ym[1]}-${ym[2].padStart(2, '0')}-00`;
+  return t;
+}
+
 /** Om värdet är exakt 8 siffror (YYYYMMDD), formatera till YYYY-MM-DD. Endast 8 siffror konverteras; YYYY-MM skrivs manuellt.
  * För fältet utfordat_den: först YYYYMMDD→YYYY-MM-DD vid manuell inmatning, sedan övriga format via normaliseraUtfordatDen. */
 function normaliseraDatumFalt(inp) {
@@ -3506,14 +3556,15 @@ function normaliseraDatumFalt(inp) {
   }
 }
 
-/** Validera datumfält: tomt är ok, annars YYYY, YYYY-MM eller YYYY-MM-DD med rimliga tal. Returnerar { valid, message }. */
+/** Validera datumfält: tomt är ok, annars YYYY, YYYY-MM eller YYYY-MM-DD med rimliga tal.
+ * Månad 0 (YYYY-00-00) och dag 0 (YYYY-MM-00) accepteras för ofullständiga datum (t.ex. Utfärdat den). */
 function validDatum(s) {
   const t = (s || '').trim();
   if (!t) return { valid: true };
   const part = t.split('-');
   if (part.length > 3) return { valid: false, message: DATUM_FORMAT_TEXT };
   const num = part.map((x) => parseInt(x, 10));
-  if (num.some((n, i) => isNaN(n) || (i === 0 && (n < 1000 || n > 2100)) || (i === 1 && (n < 1 || n > 12)) || (i === 2 && (n < 1 || n > 31)))) {
+  if (num.some((n, i) => isNaN(n) || (i === 0 && (n < 1000 || n > 2100)) || (i === 1 && (n < 0 || n > 12)) || (i === 2 && (n < 0 || n > 31)))) {
     return { valid: false, message: DATUM_FORMAT_TEXT };
   }
   if (part.length === 1) return { valid: true };
@@ -3725,7 +3776,7 @@ function samlaInmatningData() {
   const gravens_utformning = gravplatsenOppnad ? get('gravens_utformning') : (d.gravens_utformning || '');
   const karta_nr = gravplatsenOppnad ? get('karta_nr') : (d.karta_nr || '');
   const gravbrev_nr = gravplatsenOppnad ? get('gravbrev_nr') : (d.gravbrev_nr || '');
-  const utfordat_den = gravplatsenOppnad ? get('utfordat_den') : (d.utfordat_den || '');
+  const utfordat_den = gravplatsenOppnad ? expandUtfordatDenForSubmit(get('utfordat_den')) : (d.utfordat_den || '');
   const kommentar = gravplatsenOppnad ? (root.querySelector('textarea[name="kommentar"]')?.value ?? '').trim() : (d.kommentar || '');
   const fardigtranskriberad = inmatningData && inmatningData.fardigtranskriberad === true;
 
@@ -3870,10 +3921,11 @@ function toggleRedigeraVy() {
     if (sparaWrap) sparaWrap.hidden = false;
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Sluta redigera gravplats';
+    expandAllInmatningSektioner();
     const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
     sektioner.forEach((s) => {
       const innehall = document.getElementById(`gp-innehall-${s}`);
-      if (innehall && !innehall.hidden) renderInmatningSektion(s);
+      if (innehall) renderInmatningSektion(s);
     });
     if (currentExtramaterial.length > 0 && currentExtramaterialMapp) {
       uppdateraExtramaterialSektion(currentExtramaterial, currentExtramaterialMapp);
@@ -3921,6 +3973,9 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
     visaSparStatus('Sparat.', true);
+    if (inmatningData.fardigtranskriberad) {
+      toggleRedigeraVy();
+    }
   } catch (e) {
     inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
     uppdateraFardigtranskriberadKnapp();
