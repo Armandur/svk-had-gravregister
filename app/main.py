@@ -1186,6 +1186,402 @@ async def get_databasunderhall_skisser(
     return {"skisser": skisser, "antal": len(skisser)}
 
 
+# ---------- Fler datakvalitetsverktyg: datum, postnummer, dubbletter, mellanslag, yrke, beteckning, OCR ----------
+
+def _dbuh_datum_problem(gs: Gravsatt) -> list[dict]:
+    """Returnerar problem med datum (gravsatt): födelse > död, framtida år, ogiltig månad/dag, kort årtal."""
+    problems = []
+    now_year = datetime.now(timezone.utc).year
+    fa, fm, fd = gs.fodelse_ar, gs.fodelse_manad, gs.fodelse_dag
+    da, dm, dd = gs.dods_ar, gs.dods_manad, gs.dods_dag
+
+    if fa is not None and da is not None and fa > da:
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Datum", "varde": f"född {fa}, död {da} (född efter död)"})
+    if fa is not None and fa > now_year:
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelseår", "varde": str(fa) + " (i framtiden)"})
+    if da is not None and da > now_year:
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsår", "varde": str(da) + " (i framtiden)"})
+    if fm is not None and (fm < 1 or fm > 12):
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelsemånad", "varde": str(fm)})
+    if dm is not None and (dm < 1 or dm > 12):
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsmånad", "varde": str(dm)})
+    if fd is not None and (fd < 1 or fd > 31):
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelsedag", "varde": str(fd)})
+    if dd is not None and (dd < 1 or dd > 31):
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsdag", "varde": str(dd)})
+    if fa is not None and 0 < fa < 100:
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelseår", "varde": str(fa) + " (kort årtal, kontrollera)"})
+    if da is not None and 0 < da < 100:
+        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsår", "varde": str(da) + " (kort årtal, kontrollera)"})
+    return problems
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-datum")
+async def get_datakvalitet_datum(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser där gravsatta har datumproblem: födelse efter död, framtida år, ogiltig månad/dag, korta årtal."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gs in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        probs = _dbuh_datum_problem(gs)
+        if probs:
+            all_ids.add(gs.gravplats_id)
+            problem_per_gp.setdefault(gs.gravplats_id, []).extend(probs)
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _dbuh_postnummer_ok(s: str | None) -> bool:
+    """True om postnummer är tomt eller giltigt (5 siffror, ev. med mellanslag)."""
+    if not s or not isinstance(s, str):
+        return True
+    t = s.replace(" ", "").strip()
+    return len(t) == 0 or (len(t) == 5 and t.isdigit())
+
+
+def _dbuh_postnummer_problem_rad(roll: str, postnummer: str | None, postort: str | None) -> list[dict]:
+    """Returnerar problem med postnummer/postort för en rad."""
+    problems = []
+    if postnummer and isinstance(postnummer, str):
+        t = postnummer.replace(" ", "").strip()
+        if t and (len(t) != 5 or not t.isdigit()):
+            problems.append({"roll": roll, "falt": "Postnummer", "varde": postnummer})
+        if re.search(r"[OolI]", postnummer):
+            problems.append({"roll": roll, "falt": "Postnummer (OCR?)", "varde": postnummer + " (kan vara 0/O eller 1/l)"})
+    if postort and isinstance(postort, str) and postort.strip():
+        if re.search(r"\d", postort):
+            problems.append({"roll": roll, "falt": "Postort", "varde": postort + " (innehåller siffror)"})
+    return problems
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-postnummer-adress")
+async def get_datakvalitet_postnummer_adress(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser där postnummer inte är 5 siffror, eller postort innehåller siffror / OCR-misstankar."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        adr = getattr(r, "gatuadress", None) or getattr(r, "adress", None)
+        pnr = getattr(r, "postnummer", None) or ""
+        port = getattr(r, "postort", None) or ""
+        if not pnr and not port:
+            continue
+        probs = _dbuh_postnummer_problem_rad("Innehavare", pnr, port)
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        pnr = getattr(r, "postnummer", None) or ""
+        port = getattr(r, "postort", None) or ""
+        if not pnr and not port:
+            continue
+        probs = _dbuh_postnummer_problem_rad("Närmast anhörig", pnr, port)
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        pnr = getattr(r, "postnummer", None) or ""
+        port = getattr(r, "postort", None) or ""
+        if not pnr and not port:
+            continue
+        probs = _dbuh_postnummer_problem_rad("Gravsatt pos " + str(r.position), pnr, port)
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-dubbletter")
+async def get_datakvalitet_dubbletter(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser som har samma beteckning (kyrkogård + kvarter + gravplatsnummer) som en annan gravplats."""
+    rows = (
+        db.query(Gravplats.id, Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.gravplatsnummer)
+        .filter(Gravplats.kyrkogard.isnot(None), Gravplats.kyrkogard != "")
+        .all()
+    )
+    key_to_ids: dict[tuple[str, str, str], list[int]] = {}
+    for gid, kg, kv, gn in rows:
+        key = ((kg or "").strip(), (kv or "").strip(), (gn or "").strip())
+        if not key[0] and not key[1] and not key[2]:
+            continue
+        key_to_ids.setdefault(key, []).append(gid)
+    dubblett_ids = set()
+    for ids in key_to_ids.values():
+        if len(ids) > 1:
+            dubblett_ids.update(ids)
+    problem_per_gp: dict[int, list[dict]] = {}
+    for key, ids in key_to_ids.items():
+        if len(ids) <= 1:
+            continue
+        andra = [i for i in ids if i != ids[0]]
+        beskrivning = "Dubblett: samma beteckning som gravplats " + ", ".join(str(i) for i in andra)
+        for gid in ids:
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": "Gravplats",
+                "falt": "Beteckning",
+                "varde": beskrivning,
+            })
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(dubblett_ids))
+    for gid in dubblett_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(dubblett_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-innehavare-gravsatta")
+async def get_datakvalitet_innehavare_gravsatta(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser som har gravsatta men ingen innehavare, eller innehavare men inga gravsatta."""
+    has_inv = {r[0] for r in db.query(GravplatsInnehavare.gravplats_id).filter(GravplatsInnehavare.gravplats_id.isnot(None)).distinct().all()}
+    has_gs = {r[0] for r in db.query(Gravsatt.gravplats_id).filter(Gravsatt.gravplats_id.isnot(None)).distinct().all()}
+    all_gp_ids = {r[0] for r in db.query(Gravplats.id).all()}
+    problem_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid in all_gp_ids:
+        inv = gid in has_inv
+        gs = gid in has_gs
+        if gs and not inv:
+            problem_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({"roll": "Gravplats", "falt": "Saknas", "varde": "Har gravsatta men ingen gravrättsinnehavare"})
+        if inv and not gs:
+            problem_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({"roll": "Gravplats", "falt": "Saknas", "varde": "Har innehavare men inga gravsatta"})
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(problem_ids))
+    for gid in problem_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(problem_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _dbuh_namn_mellanslag_problem(fornamn: str | None, efternamn: str | None, namn: str | None, roll: str) -> list[dict]:
+    """Returnerar problem med mellanslag i namnfält."""
+    problems = []
+    for label, val in [("Förnamn", fornamn), ("Efternamn", efternamn), ("Namn", namn)]:
+        if not val or not isinstance(val, str):
+            continue
+        if val != val.strip():
+            problems.append({"roll": roll, "falt": label, "varde": repr(val) + " (inledande/avslutande mellanslag)"})
+        if "  " in val:
+            problems.append({"roll": roll, "falt": label, "varde": repr(val) + " (dubbelmellanslag)"})
+    return problems
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-mellanslag")
+async def get_datakvalitet_mellanslag(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser där namnfält innehåller inledande/avslutande mellanslag eller dubbelmellanslag."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        fn, en = getattr(r, "fornamn", None), getattr(r, "efternamn", None)
+        nm = getattr(r, "namn", None)
+        probs = _dbuh_namn_mellanslag_problem(fn, en, nm, "Innehavare")
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        fn, en = getattr(r, "fornamn", None), getattr(r, "efternamn", None)
+        nm = getattr(r, "namn", None)
+        probs = _dbuh_namn_mellanslag_problem(fn, en, nm, "Närmast anhörig")
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        fn, en = getattr(r, "fornamn", None), getattr(r, "efternamn", None)
+        nm = getattr(r, "namn", None)
+        probs = _dbuh_namn_mellanslag_problem(fn, en, nm, "Gravsatt pos " + str(r.position))
+        if probs:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(probs)
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _dbuh_yrke_endast_siffror(s: str | None) -> bool:
+    if not s or not isinstance(s, str):
+        return False
+    t = s.strip()
+    return len(t) > 0 and t.replace(" ", "").isdigit()
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-yrke-langd")
+async def get_datakvalitet_yrke_langd(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    max_tecken: int = 250,
+):
+    """Gravplatser där yrkesfält bara innehåller siffror, eller fält som är ovanligt långa."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    langd_grans = max(50, min(max_tecken, 2000))
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        yrke = getattr(r, "yrke", None) or ""
+        if _dbuh_yrke_endast_siffror(yrke):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Innehavare", "falt": "Yrke", "varde": (yrke or "")[:80] + ("…" if len(str(yrke)) > 80 else "")})
+            all_ids.add(r.gravplats_id)
+        if len(str(yrke)) > langd_grans:
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Innehavare", "falt": "Yrke (långt)", "varde": str(len(yrke)) + " tecken"})
+            all_ids.add(r.gravplats_id)
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        yrke = getattr(r, "yrke", None) or ""
+        if _dbuh_yrke_endast_siffror(yrke):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Närmast anhörig", "falt": "Yrke", "varde": (yrke or "")[:80] + ("…" if len(str(yrke)) > 80 else "")})
+            all_ids.add(r.gravplats_id)
+        if len(str(yrke)) > langd_grans:
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Närmast anhörig", "falt": "Yrke (långt)", "varde": str(len(yrke)) + " tecken"})
+            all_ids.add(r.gravplats_id)
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        yrke = getattr(r, "yrke", None) or ""
+        if _dbuh_yrke_endast_siffror(yrke):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Gravsatt pos " + str(r.position), "falt": "Yrke", "varde": (yrke or "")[:80] + ("…" if len(str(yrke)) > 80 else "")})
+            all_ids.add(r.gravplats_id)
+        if len(str(yrke)) > langd_grans:
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Gravsatt pos " + str(r.position), "falt": "Yrke (långt)", "varde": str(len(yrke)) + " tecken"})
+            all_ids.add(r.gravplats_id)
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _dbuh_beteckning_problem(g: Gravplats) -> list[dict]:
+    """Saknad eller konstig gravplatsbeteckning."""
+    problems = []
+    kg = (getattr(g, "kyrkogard", None) or "").strip()
+    kv = (getattr(g, "kvarter", None) or "").strip()
+    gn = (getattr(g, "gravplatsnummer", None) or "").strip()
+    if not kg:
+        problems.append({"roll": "Gravplats", "falt": "Kyrkogård", "varde": "Saknas"})
+    if not kv:
+        problems.append({"roll": "Gravplats", "falt": "Kvarter", "varde": "Saknas"})
+    if not gn:
+        problems.append({"roll": "Gravplats", "falt": "Gravplatsnummer", "varde": "Saknas"})
+    if gn and re.search(r"[@#$%\[\]\\|{}<>]", gn):
+        problems.append({"roll": "Gravplats", "falt": "Gravplatsnummer", "varde": gn + " (ovanliga tecken)"})
+    return problems
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-beteckning")
+async def get_datakvalitet_beteckning(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser som saknar kyrkogård, kvarter eller gravplatsnummer, eller har konstiga tecken i nummer."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for g in db.query(Gravplats).all():
+        probs = _dbuh_beteckning_problem(g)
+        if probs:
+            all_ids.add(g.id)
+            problem_per_gp[g.id] = probs
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-ocr")
+async def get_datakvalitet_ocr(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Gravplatser där postnummer eller andra numeriska fält innehåller bokstäver (t.ex. O istället för 0, l istället för 1)."""
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        pnr = (getattr(r, "postnummer", None) or "").strip()
+        if pnr and re.search(r"[OolI]", pnr):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Innehavare", "falt": "Postnummer (OCR?)", "varde": pnr})
+            all_ids.add(r.gravplats_id)
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        pnr = (getattr(r, "postnummer", None) or "").strip()
+        if pnr and re.search(r"[OolI]", pnr):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Närmast anhörig", "falt": "Postnummer (OCR?)", "varde": pnr})
+            all_ids.add(r.gravplats_id)
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        pnr = (getattr(r, "postnummer", None) or "").strip()
+        if pnr and re.search(r"[OolI]", pnr):
+            problem_per_gp.setdefault(r.gravplats_id, []).append({"roll": "Gravsatt pos " + str(r.position), "falt": "Postnummer (OCR?)", "varde": pnr})
+            all_ids.add(r.gravplats_id)
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
 @app.get("/listvy")
 async def listvy_sida(current_user: User = Depends(get_current_user), admin: User = Depends(require_admin)):
     """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser (endast admin)."""
@@ -1262,6 +1658,46 @@ async def databasunderhall_manga_punkter(admin: User = Depends(require_admin)):
 async def databasunderhall_datakvalitet_skisser(admin: User = Depends(require_admin)):
     """Databasunderhåll – datakvalitet bläddra skisser."""
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-skisser.html")
+
+
+@app.get("/databasunderhall/datakvalitet-datum")
+async def databasunderhall_datakvalitet_datum(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-datum.html")
+
+
+@app.get("/databasunderhall/datakvalitet-postnummer-adress")
+async def databasunderhall_datakvalitet_postnummer(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-postnummer-adress.html")
+
+
+@app.get("/databasunderhall/datakvalitet-dubbletter")
+async def databasunderhall_datakvalitet_dubbletter(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-dubbletter.html")
+
+
+@app.get("/databasunderhall/datakvalitet-innehavare-gravsatta")
+async def databasunderhall_datakvalitet_innehavare_gravsatta(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-innehavare-gravsatta.html")
+
+
+@app.get("/databasunderhall/datakvalitet-mellanslag")
+async def databasunderhall_datakvalitet_mellanslag(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-mellanslag.html")
+
+
+@app.get("/databasunderhall/datakvalitet-yrke-langd")
+async def databasunderhall_datakvalitet_yrke_langd(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-yrke-langd.html")
+
+
+@app.get("/databasunderhall/datakvalitet-beteckning")
+async def databasunderhall_datakvalitet_beteckning(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-beteckning.html")
+
+
+@app.get("/databasunderhall/datakvalitet-ocr")
+async def databasunderhall_datakvalitet_ocr(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ocr.html")
 
 
 # ---------- Hjälp / dokumentation (samma .md-filer som i repo) ----------
