@@ -1134,6 +1134,58 @@ async def get_datakvalitet_namn_siffror_komma(
     return {"gravplatser": out, "antal": len(out)}
 
 
+@app.get("/api/admin/databasunderhall/skisser")
+async def get_databasunderhall_skisser(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista alla registrerade skisser (en rad per skiss) med gravplatsinfo.
+    Används av datakvalitetsverktyget för att bläddra igenom skisser.
+    """
+    rows = (
+        db.query(GravplatsSkiss, Gravplats, MappConfig.namn)
+        .join(Gravplats, GravplatsSkiss.gravplats_id == Gravplats.id)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .order_by(
+            Gravplats.kyrkogard,
+            Gravplats.kvarter,
+            Gravplats.gravplatsnummer,
+            Gravplats.start_sida,
+            GravplatsSkiss.sort_order,
+            GravplatsSkiss.id,
+        )
+        .all()
+    )
+    skisser = []
+    for idx, (skiss_row, g, mapp_namn) in enumerate(rows):
+        fullstandigt = _dbuh_format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        slug = quote(fullstandigt, safe="") if fullstandigt else ""
+        skisser.append({
+            "index": idx,
+            "gravplats_id": g.id,
+            "fullstandigt": fullstandigt,
+            "url_slug": slug,
+            "mapp_namn": mapp_namn or "",
+            "kyrkogard": (g.kyrkogard or "").strip(),
+            "kvarter": (g.kvarter or "").strip(),
+            "gravplatsnummer": (g.gravplatsnummer or "").strip(),
+            "skiss": {
+                "id": skiss_row.id,
+                "x": skiss_row.x,
+                "y": skiss_row.y,
+                "width": skiss_row.width,
+                "height": skiss_row.height,
+                "source_type": skiss_row.source_type,
+                "content_sida": skiss_row.content_sida,
+                "segment_index": getattr(skiss_row, "segment_index", None),
+                "halva": skiss_row.halva,
+                "extramaterial_id": skiss_row.extramaterial_id,
+            },
+        })
+    return {"skisser": skisser, "antal": len(skisser)}
+
+
 @app.get("/listvy")
 async def listvy_sida(current_user: User = Depends(get_current_user), admin: User = Depends(require_admin)):
     """Grunddatahantering – välj mapp, bläddra sidor, registrera gravplatser (endast admin)."""
@@ -1174,6 +1226,42 @@ async def loggar_sida():
 async def databasunderhall_sida(admin: User = Depends(require_admin)):
     """Databasunderhåll – meny med underhållsfunktioner (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall.html")
+
+
+@app.get("/databasunderhall/saknar-postnummer-ort")
+async def databasunderhall_saknar_postnummer_ort(admin: User = Depends(require_admin)):
+    """Databasunderhåll – gravplatser utan postnummer/ort."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-saknar-postnummer-ort.html")
+
+
+@app.get("/databasunderhall/datakvalitet-ofodd-f")
+async def databasunderhall_ofodd_f(admin: User = Depends(require_admin)):
+    """Databasunderhåll – datakvalitet 'f' utan punkt."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ofodd-f.html")
+
+
+@app.get("/databasunderhall/datakvalitet-ovanliga-tecken")
+async def databasunderhall_ovanliga_tecken(admin: User = Depends(require_admin)):
+    """Databasunderhåll – datakvalitet ovanliga tecken."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ovanliga-tecken.html")
+
+
+@app.get("/databasunderhall/datakvalitet-namn-siffror-komma")
+async def databasunderhall_namn_siffror_komma(admin: User = Depends(require_admin)):
+    """Databasunderhåll – datakvalitet siffror/kommatecken i namn."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-namn-siffror-komma.html")
+
+
+@app.get("/databasunderhall/datakvalitet-manga-punkter")
+async def databasunderhall_manga_punkter(admin: User = Depends(require_admin)):
+    """Databasunderhåll – datakvalitet många punkter."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-manga-punkter.html")
+
+
+@app.get("/databasunderhall/datakvalitet-skisser")
+async def databasunderhall_datakvalitet_skisser(admin: User = Depends(require_admin)):
+    """Databasunderhåll – datakvalitet bläddra skisser."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-skisser.html")
 
 
 # ---------- Hjälp / dokumentation (samma .md-filer som i repo) ----------
