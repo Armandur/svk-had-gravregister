@@ -1,0 +1,29 @@
+/* Gemensamma stilar för databasunderhåll-verktygssidor */
+.dbuh-sida { max-width: 95rem; margin: 2rem auto; padding: 2rem; }
+.dbuh-sida h1 { font-size: 1.35rem; margin-bottom: 0.5rem; color: var(--accent, #2563eb); }
+.dbuh-sida h2 { font-size: 1.15rem; margin-top: 1rem; }
+.dbuh-tillbaka { margin-bottom: 1rem; }
+.dbuh-tillbaka a { color: var(--accent); text-decoration: none; }
+.dbuh-tillbaka a:hover { text-decoration: underline; }
+.dbuh-innehall { margin-top: 1rem; }
+.dbuh-knapp-rad { margin: 1rem 0; }
+.dbuh-knapp-rad button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; background: var(--accent, #2563eb); color: #fff; border: none; border-radius: 6px; }
+.dbuh-knapp-rad button:hover { opacity: 0.9; }
+.dbuh-knapp-rad button:disabled { opacity: 0.7; cursor: wait; }
+.dbuh-ovanliga-tecken-rad { margin: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.dbuh-ovanliga-tecken-rad input { font-family: Consolas, "Courier New", monospace; padding: 0.35rem 0.5rem; }
+.dbuh-namn-siffror-komma-typ { margin: 0.5rem 0; padding: 0.5rem 1rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+.dbuh-namn-siffror-komma-typ .dbuh-legend { font-size: 0.9rem; padding: 0 0.25rem; }
+.dbuh-namn-siffror-komma-typ label { margin-right: 1rem; font-weight: normal; }
+.dbuh-tabell-wrap { overflow-x: auto; margin-top: 1rem; }
+.dbuh-tabell { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.dbuh-tabell th, .dbuh-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+.dbuh-tabell th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+.dbuh-tabell tbody tr:hover { background: #f8fafc; }
+.dbuh-tabell a { color: var(--accent); text-decoration: none; }
+.dbuh-tabell a:hover { text-decoration: underline; }
+.dbuh-mono { font-family: Consolas, "Courier New", monospace; font-size: 0.9rem; }
+.dbuh-varde { word-break: break-word; max-width: 20rem; }
+.dbuh-tom { color: #64748b; font-style: italic; margin-top: 1rem; }
+.dbuh-fel { color: #b91c1c; margin-top: 0.5rem; }
+.dbuh-info { font-size: 0.9rem; color: #64748b; margin-top: 0.5rem; }

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gravplatser utan postnummer/ort – Databasunderhåll</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/databasunderhall-verktyg.css" />
+</head>
+<body>
+  <main class="dbuh-sida">
+    <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
+    <h1>Gravplatser med gatuadress men utan postnummer/ort</h1>
+    <p class="dbuh-info">Gravplatser där någon gravrättsinnehavare, gravsatt eller närmast anhörig har gatuadress men saknar postnummer och/eller postort. Klicka på gravplatsen för att gå till den och korrigera.</p>
+    <div class="dbuh-knapp-rad">
+      <button type="button" id="dbuh-kor">Kör</button>
+    </div>
+    <div class="dbuh-innehall" id="dbuh-innehall" hidden>
+      <div class="dbuh-tabell-wrap" id="dbuh-tabell-wrap" hidden>
+        <table class="dbuh-tabell" id="dbuh-tabell" role="grid">
+          <thead id="dbuh-thead"></thead>
+          <tbody id="dbuh-tbody"></tbody>
+        </table>
+      </div>
+      <p class="dbuh-tom" id="dbuh-tom" hidden>Inga gravplatser hittades.</p>
+      <p class="dbuh-fel" id="dbuh-fel" hidden></p>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const innehall = document.getElementById('dbuh-innehall');
+  const tabellWrap = document.getElementById('dbuh-tabell-wrap');
+  const thead = document.getElementById('dbuh-thead');
+  const tbody = document.getElementById('dbuh-tbody');
+  const tomEl = document.getElementById('dbuh-tom');
+  const felEl = document.getElementById('dbuh-fel');
+
+  function slugFromFullstandigt(fullstandigt) {
+    const s = (fullstandigt || '').trim();
+    return s ? encodeURIComponent(s) : '';
+  }
+  function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+  function formateraSenastAndrad(isoDatetime) {
+    if (!isoDatetime) return '–';
+    try {
+      var d = new Date(isoDatetime);
+      if (isNaN(d.getTime())) return escapeHtml(isoDatetime);
+      return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) { return escapeHtml(isoDatetime); }
+  }
+  function cellSenastAndrad(gp) {
+    return '<td>' + formateraSenastAndrad(gp.last_edited_at) + '</td><td>' + escapeHtml(gp.last_edited_by_username || '') + '</td>';
+  }
+
+  function buildRow(gp, isHeader) {
+    if (isHeader) {
+      return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Gatuadress</th><th scope="col">Postnummer</th><th scope="col">Postort</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+    }
+    var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+    var gravLink = slug ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>' : escapeHtml(gp.fullstandigt || '–');
+    var base = '<td>' + gravLink + '</td>';
+    var problemRader = gp.problem_rader || [];
+    if (problemRader.length === 0) {
+      return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+    }
+    return problemRader.map(function (rad) {
+      return base + '<td class="dbuh-mono">' + escapeHtml(rad.roll) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(rad.gatuadress || '') + '</td><td class="dbuh-mono">' + escapeHtml(rad.postnummer || '') + '</td><td class="dbuh-mono">' + escapeHtml(rad.postort || '') + '</td>' + cellSenastAndrad(gp);
+    });
+  }
+
+  document.getElementById('dbuh-kor').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    innehall.hidden = false;
+    felEl.hidden = true;
+    tomEl.hidden = true;
+    tabellWrap.hidden = true;
+    fetch(API + '/admin/databasunderhall/gravplatser-saknar-postnummer-ort', { credentials: 'include' })
+      .then(function (res) {
+        if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
+        if (res.status === 403) throw new Error('Endast administratörer kan använda denna funktion.');
+        if (!res.ok) throw new Error('Kunde inte hämta data');
+        return res.json();
+      })
+      .then(function (data) {
+        btn.disabled = false;
+        if (!data) return;
+        var lista = data.gravplatser || [];
+        if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga gravplatser med gatuadress utan postnummer/ort.'; return; }
+        thead.innerHTML = buildRow(lista[0], true);
+        tbody.innerHTML = '';
+        lista.forEach(function (gp) {
+          var rowOrRows = buildRow(gp, false);
+          var rowCells = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+          rowCells.forEach(function (cells) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = cells;
+            tbody.appendChild(tr);
+          });
+        });
+        tabellWrap.hidden = false;
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        felEl.textContent = err.message || 'Ett fel uppstod';
+        felEl.hidden = false;
+      });
+  });
+})();
+  </script>
+</body>
+</html>
