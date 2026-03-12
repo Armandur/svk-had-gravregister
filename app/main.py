@@ -557,6 +557,49 @@ async def get_user_preferences(
     }
 
 
+@app.get("/api/admin/users/{user_id:int}/achievements")
+async def get_user_achievements_admin(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Prestationer/utmärkelser för en användare (endast admin). Samma struktur som /api/me/achievements."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    first_last = (
+        db.query(
+            func.min(GravplatsRedigeringslogg.edited_at).label("first"),
+            func.max(GravplatsRedigeringslogg.edited_at).label("last"),
+        )
+        .filter(GravplatsRedigeringslogg.user_id == user_id)
+        .first()
+    )
+    first_at = first_last.first if first_last else None
+    last_at = first_last.last if first_last else None
+    nivaer = _compute_achievements_niva(db, user_id)
+    antal_registreringar = next((n["current_value"] for n in nivaer if n["achievement_key"] == "registreringar"), 0)
+    antal_fardigtranskriberade = next((n["current_value"] for n in nivaer if n["achievement_key"] == "fardigtranskriberade"), 0)
+    antal_innehavare = next((n["current_value"] for n in nivaer if n["achievement_key"] == "innehavare"), 0)
+    antal_narmast_anhoriga = next((n["current_value"] for n in nivaer if n["achievement_key"] == "narmast_anhoriga"), 0)
+    antal_gravsatta = next((n["current_value"] for n in nivaer if n["achievement_key"] == "gravsatta"), 0)
+    antal_skisser = next((n["current_value"] for n in nivaer if n["achievement_key"] == "skisser"), 0)
+    antal_unika_yrken = next((n["current_value"] for n in nivaer if n["achievement_key"] == "unika_yrken"), 0)
+    return {
+        "username": user.username,
+        "antal_registreringar": antal_registreringar,
+        "antal_fardigtranskriberade": antal_fardigtranskriberade,
+        "antal_innehavare": antal_innehavare,
+        "antal_narmast_anhoriga": antal_narmast_anhoriga,
+        "antal_gravsatta": antal_gravsatta,
+        "antal_skisser": antal_skisser,
+        "antal_unika_yrken": antal_unika_yrken,
+        "forsta_registrering": first_at,
+        "senaste_registrering": last_at,
+        "nivaer": nivaer,
+    }
+
+
 @app.patch("/api/admin/users/{user_id:int}/preferences")
 async def set_user_preferences(
     user_id: int,
@@ -1752,6 +1795,12 @@ async def admin_sida():
 async def admin_achievement_niva_sida():
     """Admin-sida för att justera prestationsnivåer (brons/silver/guld)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "admin-achievement-niva.html")
+
+
+@app.get("/admin/users/{user_id:int}/prestationer")
+async def admin_user_prestationer_sida(user_id: int, admin: User = Depends(require_admin)):
+    """Admin: visa en användares prestationer och utmärkelser."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "admin-user-prestationer.html")
 
 
 @app.get("/loggar")

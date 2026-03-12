@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prestationer – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .prestationer-main { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    .prestationer-main h2 { margin: 1.5rem 0 0.75rem; font-size: 1.1rem; color: var(--accent, #2c5f4a); }
+    .prestationer-main h2:first-of-type { margin-top: 0; }
+    .prestationer-kort {
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .prestationer-rad { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; }
+    .prestationer-rad:last-child { margin-bottom: 0; }
+    .prestationer-varde { font-weight: 600; color: var(--accent, #2563eb); }
+    .prestationer-nivaer { display: grid; gap: 0.75rem; margin-top: 1rem; }
+    .prestationer-niva-kort {
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+    }
+    .prestationer-niva-namn { font-weight: 600; min-width: 10rem; }
+    .prestationer-niva-badges { display: flex; gap: 0.35rem; align-items: center; }
+    .prestationer-badge {
+      padding: 0.2rem 0.45rem; font-size: 0.8rem; border-radius: 4px;
+      background: #e2e8f0; color: #64748b;
+    }
+    .prestationer-badge.earned-bronze { background: #fef3c7; color: #b45309; }
+    .prestationer-badge.earned-silver { background: #f1f5f9; color: #475569; }
+    .prestationer-badge.earned-gold { background: #fef9c3; color: #a16207; }
+    .prestationer-niva-varde { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .prestationer-laddar { color: #64748b; }
+    .prestationer-fel { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar-titel" id="admin-prest-rubrik"><a href="/admin" class="topbar-lank">← Tillbaka till användarhantering</a> <span id="admin-prest-username">Prestationer</span></h1>
+  </header>
+
+  <main class="prestationer-main">
+    <section id="prestationer-sektion" aria-label="Prestationer">
+      <h2>Prestationer</h2>
+      <p id="prestationer-status" class="prestationer-laddar" aria-live="polite">Laddar …</p>
+      <div id="prestationer-kort" class="prestationer-kort" hidden>
+        <div class="prestationer-rad"><span>Antal sparade registreringar</span><span id="prest-antal-reg" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravplatser markerade som färdigtranskriberade</span><span id="prest-antal-fardiga" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravrättsinnehavare (i användarens gravplatser)</span><span id="prest-antal-innehavare" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Närmast anhöriga (i användarens gravplatser)</span><span id="prest-antal-narmast" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravsatta (i användarens gravplatser)</span><span id="prest-antal-gravsatta" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Skisser (i användarens gravplatser)</span><span id="prest-antal-skisser" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Unika yrken (i användarens gravplatser)</span><span id="prest-antal-yrken" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Första registreringen</span><span id="prest-forsta" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Senaste registreringen</span><span id="prest-senaste" class="prestationer-varde">–</span></div>
+      </div>
+      <section id="prestationer-nivaer-sektion" class="prestationer-nivaer" hidden aria-label="Utmärkelser">
+        <h3 style="margin: 1rem 0 0.5rem; font-size: 1rem;">Utmärkelser</h3>
+        <div id="prestationer-nivaer-lista"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const pathMatch = window.location.pathname.match(/^\/admin\/users\/(\d+)\/prestationer\/?$/);
+  const userId = pathMatch ? pathMatch[1] : null;
+
+  if (!userId) {
+    document.getElementById('prestationer-status').textContent = 'Ogiltig adress.';
+    document.getElementById('prestationer-status').className = 'prestationer-fel';
+    document.title = 'Prestationer – Gravregister';
+    return;
+  }
+
+  function formatDatum(iso) {
+    if (!iso || typeof iso !== 'string') return '–';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('sv-SE', { dateStyle: 'short' }) + ' ' + d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  const statusEl = document.getElementById('prestationer-status');
+  const kortEl = document.getElementById('prestationer-kort');
+
+  gpEnsureAuth().then(function (ok) {
+    if (!ok) return;
+    fetch(API + '/admin/users/' + userId + '/achievements', { credentials: 'include' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Kunde inte ladda prestationer');
+        return res.json();
+      })
+      .then(function (data) {
+        const username = (data.username || '').trim() || 'Användare ' + userId;
+        document.getElementById('admin-prest-username').textContent = 'Prestationer – ' + username;
+        document.title = 'Prestationer – ' + username + ' – Gravregister';
+
+        statusEl.hidden = true;
+        kortEl.removeAttribute('hidden');
+        document.getElementById('prest-antal-reg').textContent = String(data.antal_registreringar ?? 0);
+        document.getElementById('prest-antal-fardiga').textContent = String(data.antal_fardigtranskriberade ?? 0);
+        document.getElementById('prest-antal-innehavare').textContent = String(data.antal_innehavare ?? 0);
+        document.getElementById('prest-antal-narmast').textContent = String(data.antal_narmast_anhoriga ?? 0);
+        document.getElementById('prest-antal-gravsatta').textContent = String(data.antal_gravsatta ?? 0);
+        document.getElementById('prest-antal-skisser').textContent = String(data.antal_skisser ?? 0);
+        document.getElementById('prest-antal-yrken').textContent = String(data.antal_unika_yrken ?? 0);
+        document.getElementById('prest-forsta').textContent = formatDatum(data.forsta_registrering);
+        document.getElementById('prest-senaste').textContent = formatDatum(data.senaste_registrering);
+
+        var nivaer = data.nivaer || [];
+        var nivaerSektion = document.getElementById('prestationer-nivaer-sektion');
+        var nivaerLista = document.getElementById('prestationer-nivaer-lista');
+        if (nivaer.length > 0 && nivaerLista) {
+          nivaerLista.innerHTML = nivaer.map(function (n) {
+            var v = n.current_value != null ? n.current_value : 0;
+            var earned = n.earned_level || '';
+            var badges = ['bronze', 'silver', 'gold'].map(function (level) {
+              var t = n[level] && n[level].threshold != null ? n[level].threshold : '–';
+              var cls = 'prestationer-badge';
+              if (level === earned) cls += ' earned-' + level;
+              return '<span class="' + cls + '" title="' + (n[level] && n[level].label ? n[level].label : level + ': ' + t) + '">' + (level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : '🥇') + ' ' + t + '</span>';
+            }).join('');
+            return '<div class="prestationer-niva-kort"><span class="prestationer-niva-namn">' + (n.label || n.achievement_key) + '</span><span class="prestationer-niva-badges">' + badges + '</span><span class="prestationer-niva-varde">' + v + ' st</span></div>';
+          }).join('');
+          nivaerSektion.removeAttribute('hidden');
+        }
+      })
+      .catch(function (err) {
+        statusEl.textContent = 'Kunde inte ladda prestationer: ' + (err.message || 'nätverksfel');
+        statusEl.className = 'prestationer-fel';
+      });
+  });
+})();
+  </script>
+</body>
+</html>
