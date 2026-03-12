@@ -17,6 +17,8 @@
     .admin-lista .admin-knappar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .admin-lista button { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
     .admin-lista button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .admin-lista .admin-prestationer-lank { display: inline-block; margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; text-decoration: none; color: inherit; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 4px; }
+    .admin-lista .admin-prestationer-lank:hover { background: #cbd5e1; }
     .admin-sida label { display: block; margin-top: 0.75rem; font-weight: 500; }
     .admin-sida input { padding: 0.4rem 0.5rem; margin-top: 0.25rem; width: 100%; max-width: 16rem; box-sizing: border-box; }
     .admin-sida #admin-skapa-form button { margin-top: 0.5rem; padding: 0.4rem 0.75rem; cursor: pointer; }
@@ -90,6 +92,7 @@
                 '<span class="admin-knappar">' +
                 '<button type="button" class="admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
                 '<button type="button" class="admin-byta-namn" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '">Byt namn</button>' +
+                '<a href="/admin/users/' + u.id + '/prestationer" class="admin-prestationer-lank">Prestationer</a>' +
                 '<button type="button" class="admin-roliga-saker" data-id="' + u.id + '">Roliga saker</button>' +
                 '<button type="button" class="admin-ta-bort" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
                 '</span>' +

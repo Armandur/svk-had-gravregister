@@ -1981,28 +1981,28 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   font-size: 1rem;
 }
 
-.gp-rapport-utskrift .gp-rapport-halvor {
+.gp-rapport-utskrift .gp-rapport-sektioner {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 0.75rem;
 }
 
-.gp-rapport-utskrift .gp-rapport-halvor figure {
+.gp-rapport-utskrift .gp-rapport-sektioner figure {
   margin: 0;
   flex: 0 0 auto;
   width: 100%;
   page-break-inside: avoid;
 }
 
-.gp-rapport-utskrift .gp-rapport-halvor figure img {
+.gp-rapport-utskrift .gp-rapport-sektioner figure img {
   max-width: 100%;
   height: auto;
   display: block;
 }
 
-.gp-rapport-utskrift .gp-rapport-sida-halvor h3,
-.gp-rapport-utskrift .gp-rapport-sida-halvor .gp-rapport-sektion-rubrik {
+.gp-rapport-utskrift .gp-rapport-sida-sektioner h3,
+.gp-rapport-utskrift .gp-rapport-sida-sektioner .gp-rapport-sektion-rubrik {
   margin: 0 0 0.5rem 0;
   padding: 0 0.75rem;
   font-size: 1rem;
@@ -2102,18 +2102,18 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
     page-break-before: avoid !important;
   }
 
-  /* Halvor: ny sida, hela sektionen flyttas om den inte får plats */
-  .gp-rapport-sida-halvor {
+  /* Sektioner: ny sida, hela sektionen flyttas om den inte får plats */
+  .gp-rapport-sida-sektioner {
     page-break-before: always;
     page-break-inside: avoid;
   }
 
-  .gp-rapport-utskrift .gp-rapport-halvor figure {
+  .gp-rapport-utskrift .gp-rapport-sektioner figure {
     max-height: 120mm;
     page-break-inside: avoid;
   }
 
-  .gp-rapport-utskrift .gp-rapport-halvor figure img {
+  .gp-rapport-utskrift .gp-rapport-sektioner figure img {
     max-height: 120mm;
     object-fit: contain;
   }

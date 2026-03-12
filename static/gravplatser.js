@@ -2192,7 +2192,7 @@ async function skapaRapportUtskrift() {
   const modal = document.getElementById('gp-rapport-modal');
   const container = document.getElementById('gp-rapport-utskrift');
   if (!modal || !container) return;
-  const medHalvor = document.getElementById('gp-rapport-halvor')?.checked === true;
+  const medSektioner = document.getElementById('gp-rapport-sektioner')?.checked === true;
   const medHela = document.getElementById('gp-rapport-hela')?.checked === true;
   const medDolda = document.getElementById('gp-rapport-dolda')?.checked === true;
   const medExtramaterial = document.getElementById('gp-rapport-extramaterial')?.checked === true;
@@ -2234,6 +2234,8 @@ async function skapaRapportUtskrift() {
   const halvor = halvorData.halvor || [];
   const extramaterial = halvorData.extramaterial || [];
   const dolda = halvorData.dolda || [];
+  const config = halvorData.config || {};
+  const delaSidor = config.dela_sidor || 'hojdled';
   const cacheQ = `_v=${cacheBust}`;
   const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
   const split1och3 = (727 / 1597).toFixed(4);
@@ -2246,10 +2248,19 @@ async function skapaRapportUtskrift() {
       halvaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
       helaUrl = halvaUrl;
     } else {
-      const pos = h.content_sida - (startSida || 0);
-      const split = pos === 1 ? split2 : split1och3;
-      halvaUrl = `${base}/${h.content_sida}/halva?offset=0&halva=${h.halva}&split=${split}&${cacheQ}`;
       helaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${h.content_sida}?${cacheQ}`;
+      if (delaSidor === 'ingen') {
+        halvaUrl = helaUrl;
+      } else if (h.segment_index != null) {
+        halvaUrl = `${base}/${h.content_sida}/halva?offset=0&segment=${h.segment_index}&${cacheQ}`;
+        if (h.position != null && h.position >= 1 && h.position <= 3) {
+          halvaUrl += `&position=${h.position}`;
+        }
+      } else {
+        const pos = h.content_sida - (startSida || 0);
+        const split = pos === 1 ? split2 : split1och3;
+        halvaUrl = `${base}/${h.content_sida}/halva?offset=0&halva=${h.halva}&split=${split}&${cacheQ}`;
+      }
     }
     return { halvaUrl, helaUrl };
   });
@@ -2258,8 +2269,8 @@ async function skapaRapportUtskrift() {
   const headerRubrik = esc(rubrik);
   html += '<div class="gp-rapport-sida-1"><div class="gp-rapport-print-header" aria-hidden="true">' + headerRubrik + '</div>' + buildRapportInmatningHtml(inmatningData, rubrik, skissDataUrls) + '</div>';
 
-  if (medHalvor && halvorMedUrl.length > 0) {
-    html += '<div class="gp-rapport-sida-halvor"><h3 class="gp-rapport-sektion-rubrik">Gravregisterkort</h3><div class="gp-rapport-halvor">';
+  if (medSektioner && halvorMedUrl.length > 0) {
+    html += '<div class="gp-rapport-sida-sektioner"><h3 class="gp-rapport-sektion-rubrik">Gravplatsbilder (sektioner)</h3><div class="gp-rapport-sektioner">';
     halvorMedUrl.forEach((x) => {
       html += `<figure><img src="${esc(x.halvaUrl)}" alt="" /></figure>`;
     });
@@ -2287,10 +2298,19 @@ async function skapaRapportUtskrift() {
     html += '<div class="gp-rapport-dolda gp-rapport-bilder-section"><h3>Dolda bilder</h3><div class="gp-rapport-bilder-grid">';
     dolda.forEach((item) => {
       let bildUrl;
-      if (item.type === 'halva' && item.content_sida != null && item.halva != null) {
-        const pos = startSida != null ? item.content_sida - startSida : 0;
-        const split = pos === 1 ? split2 : split1och3;
-        bildUrl = `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`;
+      if (item.type === 'halva' && item.content_sida != null) {
+        if (item.segment_index != null) {
+          bildUrl = `${base}/${item.content_sida}/halva?offset=0&segment=${item.segment_index}&${cacheQ}`;
+          if (item.position != null && item.position >= 1 && item.position <= 3) {
+            bildUrl += `&position=${item.position}`;
+          }
+        } else if (item.halva != null) {
+          const pos = startSida != null ? item.content_sida - startSida : 0;
+          const split = pos === 1 ? split2 : split1och3;
+          bildUrl = `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`;
+        } else {
+          bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${item.content_sida}?${cacheQ}`;
+        }
       } else {
         bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(item.filnamn)}/bild?${cacheQ}`;
       }
