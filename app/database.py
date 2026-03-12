@@ -22,6 +22,8 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True, index=True)
     password_hash: Mapped[str] = mapped_column()
     is_admin: Mapped[bool] = mapped_column(default=False)
+    # JSON: t.ex. {"fun_enabled": true, "toast_on_new_yrke": true, "sound_on_new_yrke": true}
+    preferences: Mapped[str | None] = mapped_column(nullable=True)
 
 
 class Kyrkogard(Base):
@@ -252,6 +254,18 @@ class Gravsatt(Base):
     kommentar: Mapped[str] = mapped_column(default="")
 
 
+class AchievementNiva(Base):
+    """Gränsvärden för prestationsnivåer (brons/silver/guld). Admin kan justera."""
+    __tablename__ = "achievement_niva"
+    __table_args__ = (UniqueConstraint("achievement_key", "level", name="uq_achievement_niva_key_level"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    achievement_key: Mapped[str] = mapped_column(index=True)  # t.ex. registreringar, innehavare, gravsatta
+    level: Mapped[str] = mapped_column()  # bronze, silver, gold
+    threshold: Mapped[int] = mapped_column()  # min antal för denna nivå
+    label: Mapped[str | None] = mapped_column(nullable=True)  # valfri beskrivning t.ex. "10 st"
+
+
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -270,6 +284,57 @@ def init_db():
                     db.add(Kyrkogard(kod=k))
                     existing.add(k)
             db.commit()
+        except Exception:
+            db.rollback()
+
+    # Seed achievement-nivåer om tabellen är tom (grundvärden baserade på typisk databasstorlek)
+    with SessionLocal() as db:
+        try:
+            if db.query(AchievementNiva).count() == 0:
+                defaults = [
+                    ("registreringar", "bronze", 10, "10 sparade"),
+                    ("registreringar", "silver", 100, "100 sparade"),
+                    ("registreringar", "gold", 500, "500 sparade"),
+                    ("fardigtranskriberade", "bronze", 10, "10 färdiga"),
+                    ("fardigtranskriberade", "silver", 100, "100 färdiga"),
+                    ("fardigtranskriberade", "gold", 400, "400 färdiga"),
+                    ("innehavare", "bronze", 10, "10 innehavare"),
+                    ("innehavare", "silver", 100, "100 innehavare"),
+                    ("innehavare", "gold", 400, "400 innehavare"),
+                    ("narmast_anhoriga", "bronze", 5, "5 närmast anhöriga"),
+                    ("narmast_anhoriga", "silver", 25, "25 närmast anhöriga"),
+                    ("narmast_anhoriga", "gold", 75, "75 närmast anhöriga"),
+                    ("gravsatta", "bronze", 25, "25 gravsatta"),
+                    ("gravsatta", "silver", 200, "200 gravsatta"),
+                    ("gravsatta", "gold", 500, "500 gravsatta"),
+                    ("skisser", "bronze", 5, "5 skisser"),
+                    ("skisser", "silver", 50, "50 skisser"),
+                    ("skisser", "gold", 150, "150 skisser"),
+                    ("unika_yrken", "bronze", 5, "5 unika yrken"),
+                    ("unika_yrken", "silver", 50, "50 unika yrken"),
+                    ("unika_yrken", "gold", 150, "150 unika yrken"),
+                    ("storgravar", "bronze", 1, "1 storgrav"),
+                    ("storgravar", "silver", 10, "10 storgravar"),
+                    ("storgravar", "gold", 50, "50 storgravar"),
+                ]
+                for key, level, threshold, label in defaults:
+                    db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: lägg till Storgravar-nivåer om de saknas (befintliga databaser)
+    with SessionLocal() as db:
+        try:
+            has_storgravar = db.query(AchievementNiva).filter(AchievementNiva.achievement_key == "storgravar").first() is not None
+            if not has_storgravar:
+                for key, level, threshold, label in [
+                    ("storgravar", "bronze", 1, "1 storgrav"),
+                    ("storgravar", "silver", 10, "10 storgravar"),
+                    ("storgravar", "gold", 50, "50 storgravar"),
+                ]:
+                    db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
         except Exception:
             db.rollback()
 
@@ -335,6 +400,15 @@ def init_db():
                 conn.commit()
             if "last_edited_at" not in cols_inm:
                 conn.execute(text("ALTER TABLE gravplats_inmatning ADD COLUMN last_edited_at TEXT"))
+                conn.commit()
+        except Exception:
+            pass
+        # Migration: user preferences (achievements/fun)
+        try:
+            r = conn.execute(text("PRAGMA table_info(user)"))
+            user_cols = [row[1] for row in r]
+            if "preferences" not in user_cols:
+                conn.execute(text("ALTER TABLE user ADD COLUMN preferences TEXT"))
                 conn.commit()
         except Exception:
             pass

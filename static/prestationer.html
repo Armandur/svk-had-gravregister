@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mina prestationer – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .prestationer-main { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    .prestationer-main h2 { margin: 1.5rem 0 0.75rem; font-size: 1.1rem; color: var(--accent, #2c5f4a); }
+    .prestationer-main h2:first-of-type { margin-top: 0; }
+    .prestationer-kort {
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .prestationer-rad { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; }
+    .prestationer-rad:last-child { margin-bottom: 0; }
+    .prestationer-varde { font-weight: 600; color: var(--accent, #2563eb); }
+    .prestationer-nivaer { display: grid; gap: 0.75rem; margin-top: 1rem; }
+    .prestationer-niva-kort {
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+    }
+    .prestationer-niva-namn { font-weight: 600; min-width: 10rem; }
+    .prestationer-niva-badges { display: flex; gap: 0.35rem; align-items: center; }
+    .prestationer-badge {
+      padding: 0.2rem 0.45rem; font-size: 0.8rem; border-radius: 4px;
+      background: #e2e8f0; color: #64748b;
+    }
+    .prestationer-badge.earned-bronze { background: #fef3c7; color: #b45309; }
+    .prestationer-badge.earned-silver { background: #f1f5f9; color: #475569; }
+    .prestationer-badge.earned-gold { background: #fef9c3; color: #a16207; }
+    .prestationer-niva-varde { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .prestationer-inställningar label { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
+    .prestationer-inställningar input[type="checkbox"] { margin: 0; }
+    .prestationer-sparad { font-size: 0.85rem; color: #16a34a; margin-top: 0.5rem; }
+    .prestationer-laddar { color: #64748b; }
+    .prestationer-fel { color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="topbar-titel"><a href="/" class="topbar-lank">← Tillbaka till menyn</a> Mina prestationer</h1>
+    <span id="inloggad-anvandare" class="topbar-inloggad" aria-live="polite"></span>
+  </header>
+
+  <main class="prestationer-main">
+    <section id="prestationer-sektion" aria-label="Prestationer">
+      <h2>Prestationer</h2>
+      <p id="prestationer-status" class="prestationer-laddar" aria-live="polite">Laddar …</p>
+      <div id="prestationer-kort" class="prestationer-kort" hidden>
+        <div class="prestationer-rad"><span>Antal sparade registreringar</span><span id="prest-antal-reg" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravplatser du markerat som färdigtranskriberade</span><span id="prest-antal-fardiga" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravrättsinnehavare (i dina gravplatser)</span><span id="prest-antal-innehavare" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Närmast anhöriga (i dina gravplatser)</span><span id="prest-antal-narmast" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Gravsatta (i dina gravplatser)</span><span id="prest-antal-gravsatta" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Skisser (i dina gravplatser)</span><span id="prest-antal-skisser" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Unika yrken (i dina gravplatser)</span><span id="prest-antal-yrken" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Första registreringen</span><span id="prest-forsta" class="prestationer-varde">–</span></div>
+        <div class="prestationer-rad"><span>Senaste registreringen</span><span id="prest-senaste" class="prestationer-varde">–</span></div>
+      </div>
+      <section id="prestationer-nivaer-sektion" class="prestationer-nivaer" hidden aria-label="Utmärkelser">
+        <h3 style="margin: 1rem 0 0.5rem; font-size: 1rem;">Utmärkelser</h3>
+        <div id="prestationer-nivaer-lista"></div>
+      </section>
+    </section>
+    <section id="prestationer-inställningar-sektion" aria-label="Inställningar för roliga saker">
+      <h2>Roliga saker</h2>
+      <p class="prestationer-inställningar-brodtext" style="margin: 0 0 0.75rem; font-size: 0.9rem; color: #555;">Toast och ljud vid nytt unikt yrke samt när du får en utmärkelse (brons/silver/guld).</p>
+      <div class="prestationer-kort prestationer-inställningar">
+        <label><input type="checkbox" id="pref-fun-enabled" /> Aktivera roliga saker (toast och ljud)</label>
+        <label><input type="checkbox" id="pref-toast-on-new-yrke" /> Visa toast (nytt yrke och utmärkelser)</label>
+        <label><input type="checkbox" id="pref-sound-on-new-yrke" /> Spela ljud (nytt yrke och utmärkelser)</label>
+        <p id="prestationer-sparad" class="prestationer-sparad" hidden aria-live="polite">Inställningar sparade.</p>
+      </div>
+    </section>
+    <p style="margin-top: 1rem;"><a href="/yrken">Se alla unika yrken i systemet →</a></p>
+    <p id="prestationer-admin-lank-wrap" style="margin-top: 0.5rem;" hidden><a href="/admin/achievement-niva">Justera prestationsgränser (admin)</a></p>
+  </main>
+
+  <script src="/static/auth.js"></script>
+  <script>gpEnsureAuth();</script>
+  <script>
+(function () {
+  const API = '/api';
+  (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function (me) {
+    const el = document.getElementById('inloggad-anvandare');
+    if (el && me) {
+      const username = (me.username || '').trim();
+      const safe = username.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      el.innerHTML = 'Inloggad som: <a href="/prestationer">' + safe + '</a>';
+    }
+  });
+
+  function formatDatum(iso) {
+    if (!iso || typeof iso !== 'string') return '–';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString('sv-SE', { dateStyle: 'short' }) + ' ' + d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  const statusEl = document.getElementById('prestationer-status');
+  const kortEl = document.getElementById('prestationer-kort');
+
+  fetch(API + '/me/achievements', { credentials: 'include' })
+    .then(function (res) {
+      if (!res.ok) throw new Error('Kunde inte ladda prestationer');
+      return res.json();
+    })
+    .then(function (data) {
+      statusEl.hidden = true;
+      kortEl.removeAttribute('hidden');
+      document.getElementById('prest-antal-reg').textContent = String(data.antal_registreringar ?? 0);
+      document.getElementById('prest-antal-fardiga').textContent = String(data.antal_fardigtranskriberade ?? 0);
+      document.getElementById('prest-antal-innehavare').textContent = String(data.antal_innehavare ?? 0);
+      document.getElementById('prest-antal-narmast').textContent = String(data.antal_narmast_anhoriga ?? 0);
+      document.getElementById('prest-antal-gravsatta').textContent = String(data.antal_gravsatta ?? 0);
+      document.getElementById('prest-antal-skisser').textContent = String(data.antal_skisser ?? 0);
+      document.getElementById('prest-antal-yrken').textContent = String(data.antal_unika_yrken ?? 0);
+      document.getElementById('prest-forsta').textContent = formatDatum(data.forsta_registrering);
+      document.getElementById('prest-senaste').textContent = formatDatum(data.senaste_registrering);
+
+      var nivaer = data.nivaer || [];
+      var nivaerSektion = document.getElementById('prestationer-nivaer-sektion');
+      var nivaerLista = document.getElementById('prestationer-nivaer-lista');
+      if (nivaer.length > 0 && nivaerLista) {
+        nivaerLista.innerHTML = nivaer.map(function (n) {
+          var v = n.current_value != null ? n.current_value : 0;
+          var earned = n.earned_level || '';
+          var badges = ['bronze', 'silver', 'gold'].map(function (level) {
+            var t = n[level] && n[level].threshold != null ? n[level].threshold : '–';
+            var cls = 'prestationer-badge';
+            if (level === earned) cls += ' earned-' + level;
+            return '<span class="' + cls + '" title="' + (n[level] && n[level].label ? n[level].label : level + ': ' + t) + '">' + (level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : '🥇') + ' ' + t + '</span>';
+          }).join('');
+          return '<div class="prestationer-niva-kort"><span class="prestationer-niva-namn">' + (n.label || n.achievement_key) + '</span><span class="prestationer-niva-badges">' + badges + '</span><span class="prestationer-niva-varde">' + v + ' st</span></div>';
+        }).join('');
+        nivaerSektion.removeAttribute('hidden');
+      }
+    })
+    .catch(function (err) {
+      statusEl.textContent = 'Kunde inte ladda prestationer: ' + (err.message || 'nätverksfel');
+      statusEl.className = 'prestationer-fel';
+    });
+
+  function laddaPreferenser() {
+    return fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; });
+  }
+
+  function sparaPreferenser() {
+    const fun = document.getElementById('pref-fun-enabled').checked;
+    const toast = document.getElementById('pref-toast-on-new-yrke').checked;
+    const sound = document.getElementById('pref-sound-on-new-yrke').checked;
+    return fetch(API + '/me/preferences', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound }),
+      credentials: 'include'
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Kunde inte spara');
+      const sparadEl = document.getElementById('prestationer-sparad');
+      sparadEl.hidden = false;
+      sparadEl.textContent = 'Inställningar sparade.';
+      setTimeout(function () { sparadEl.hidden = true; }, 2500);
+    });
+  }
+
+  laddaPreferenser().then(function (me) {
+    if (!me || !me.preferences) return;
+    const p = me.preferences;
+    document.getElementById('pref-fun-enabled').checked = p.fun_enabled !== false;
+    document.getElementById('pref-toast-on-new-yrke').checked = p.toast_on_new_yrke !== false;
+    document.getElementById('pref-sound-on-new-yrke').checked = p.sound_on_new_yrke !== false;
+    if (me.is_admin) {
+      var wrap = document.getElementById('prestationer-admin-lank-wrap');
+      if (wrap) wrap.hidden = false;
+    }
+  });
+
+  document.getElementById('pref-fun-enabled').addEventListener('change', sparaPreferenser);
+  document.getElementById('pref-toast-on-new-yrke').addEventListener('change', sparaPreferenser);
+  document.getElementById('pref-sound-on-new-yrke').addEventListener('change', sparaPreferenser);
+})();
+  </script>
+</body>
+</html>
