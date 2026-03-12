@@ -3,20 +3,24 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Datakvalitet: Siffror/kommatecken i namn – Databasunderhåll</title>
+  <title>Generell kontroll: Endast siffror – Databasunderhåll</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/databasunderhall-verktyg.css" />
+  <style>
+    .dbuh-falt-val { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; background: #fafafa; }
+    .dbuh-falt-tabell { margin: 0.5rem 0; }
+    .dbuh-falt-tabell label { display: inline-block; margin-right: 1rem; margin-bottom: 0.25rem; font-weight: normal; }
+    .dbuh-falt-tabell .dbuh-falt-tabell-rubrik { font-weight: 600; margin-top: 0.75rem; color: #475569; }
+  </style>
 </head>
 <body>
   <main class="dbuh-sida">
     <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
-    <h1>Datakvalitet: Siffror eller kommatecken i namnfält</h1>
-    <p class="dbuh-info">Gravplatser där namnfält innehåller siffror och/eller kommatecken. Välj med radioknapparna om du vill visa endast kommatecken, endast siffror eller båda. Klicka på gravplatsen för att korrigera.</p>
-    <fieldset class="dbuh-namn-siffror-komma-typ" aria-label="Visa resultat med">
-      <legend class="dbuh-legend">Visa resultat med:</legend>
-      <label><input type="radio" name="dbuh-namn-typ" value="bada" checked /> Båda (siffror och kommatecken)</label>
-      <label><input type="radio" name="dbuh-namn-typ" value="komma" /> Endast kommatecken</label>
-      <label><input type="radio" name="dbuh-namn-typ" value="siffror" /> Endast siffror</label>
+    <h1>Generell kontroll: Fält som endast innehåller siffror</h1>
+    <p class="dbuh-info">Välj fält att kontrollera. Hittar fält som bara innehåller siffror (och ev. mellanslag) – t.ex. yrke som misstänkt felaktigt fyllts med siffror.</p>
+    <fieldset class="dbuh-falt-val" id="dbuh-falt-val">
+      <legend>Välj fält att kontrollera</legend>
+      <div id="dbuh-falt-checkboxes"></div>
     </fieldset>
     <div class="dbuh-knapp-rad">
       <button type="button" id="dbuh-kor">Kör</button>
@@ -36,21 +40,20 @@
   <script>
 (function () {
   const API = '/api';
+  const container = document.getElementById('dbuh-falt-checkboxes');
   const innehall = document.getElementById('dbuh-innehall');
   const tabellWrap = document.getElementById('dbuh-tabell-wrap');
   const thead = document.getElementById('dbuh-thead');
   const tbody = document.getElementById('dbuh-tbody');
   const tomEl = document.getElementById('dbuh-tom');
   const felEl = document.getElementById('dbuh-fel');
-
-  function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function escapeHtml(s) { var div = document.createElement('div'); div.textContent = s == null ? '' : String(s); return div.innerHTML; }
+  function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function formateraSenastAndrad(isoDatetime) {
     if (!isoDatetime) return '–';
     try { var d = new Date(isoDatetime); if (isNaN(d.getTime())) return escapeHtml(isoDatetime); return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return escapeHtml(isoDatetime); }
   }
   function cellSenastAndrad(gp) { return '<td>' + formateraSenastAndrad(gp.last_edited_at) + '</td><td>' + escapeHtml(gp.last_edited_by_username || '') + '</td>'; }
-
   function buildRow(gp, isHeader) {
     if (isHeader) return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Fält</th><th scope="col">Värde</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
     var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
@@ -62,21 +65,51 @@
       return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
     });
   }
-
+  function getValdaFalt() {
+    var val = [];
+    container.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) { if (cb.value) val.push(cb.value); });
+    return val.join(',');
+  }
+  fetch(API + '/admin/databasunderhall/falt-alla', { credentials: 'include' })
+    .then(function (r) {
+      if (r.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
+      return r.ok ? r.json() : null;
+    })
+    .then(function (data) {
+      if (!data || !data.tabeller) return;
+      data.tabeller.forEach(function (tab) {
+        var rubrik = document.createElement('div');
+        rubrik.className = 'dbuh-falt-tabell-rubrik';
+        rubrik.textContent = tab.table_label;
+        container.appendChild(rubrik);
+        var wrap = document.createElement('div');
+        wrap.className = 'dbuh-falt-tabell';
+        tab.fields.forEach(function (f) {
+          var label = document.createElement('label');
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = tab.table + ':' + f.field;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(' ' + f.label));
+          wrap.appendChild(label);
+        });
+        container.appendChild(wrap);
+      });
+    });
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
-    var typRadios = document.querySelectorAll('input[name="dbuh-namn-typ"]:checked');
-    var typ = (typRadios.length && typRadios[0].value) ? typRadios[0].value : 'bada';
-    var endpoint = '/admin/databasunderhall/datakvalitet-namn-siffror-komma?typ=' + encodeURIComponent(typ);
+    var falt = getValdaFalt();
+    if (!falt) { alert('Välj minst ett fält.'); return; }
+    var url = API + '/admin/databasunderhall/datakvalitet-generell-endast-siffror?falt=' + encodeURIComponent(falt);
     btn.disabled = true;
     innehall.hidden = false;
     felEl.hidden = true;
     tomEl.hidden = true;
     tabellWrap.hidden = true;
-    fetch(API + endpoint, { credentials: 'include' })
+    fetch(url, { credentials: 'include' })
       .then(function (res) {
         if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
-        if (res.status === 403) throw new Error('Endast administratörer kan använda denna funktion.');
+        if (res.status === 403) throw new Error('Endast administratörer.');
         if (!res.ok) throw new Error('Kunde inte hämta data');
         return res.json();
       })
@@ -84,7 +117,7 @@
         btn.disabled = false;
         if (!data) return;
         var lista = data.gravplatser || [];
-        if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga gravplatser med valt filter hittades.'; return; }
+        if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga träffar.'; return; }
         thead.innerHTML = buildRow(lista[0], true);
         tbody.innerHTML = '';
         lista.forEach(function (gp) {

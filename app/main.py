@@ -790,6 +790,326 @@ def _dbuh_last_edited_map(db, gravplats_ids: list[int]) -> dict[int, dict]:
     return result
 
 
+# ---------- Generella fältkontroller: användaren väljer tabell + fält ----------
+
+# Tabell: (key, label, model, gravplats_id_attr, roll_fn(row), list of field keys)
+# gravplats_id_attr = "gravplats_id" eller "id" (för Gravplats)
+_DBUH_FALT_LABELS = {
+    "fornamn": "Förnamn", "efternamn": "Efternamn", "namn": "Namn", "yrke": "Yrke",
+    "gatuadress": "Gatuadress", "adress": "Gatuadress", "postnummer": "Postnummer", "postort": "Postort",
+    "kommentar": "Kommentar", "telefon": "Telefon",
+    "kyrkogard": "Kyrkogård", "kvarter": "Kvarter", "gravplatsnummer": "Gravplatsnummer",
+    "storlek": "Storlek", "underhall_text": "Underhåll", "gravrattstid": "Gravrättstid",
+    "monument": "Monument", "gravens_utformning": "Gravens utformning", "karta_nr": "Karta nr",
+    "gravbrev_nr": "Gravbrev nr", "utfordat_den": "Utfärdat den",
+}
+
+
+def _dbuh_falt_alla_config():
+    """Returnerar konfiguration för generella fältverktyg: tabeller och fält med etiketter."""
+    return [
+        {"table": "innehavare", "table_label": "Innehavare", "fields": [
+            {"field": "fornamn", "label": _DBUH_FALT_LABELS["fornamn"]}, {"field": "efternamn", "label": _DBUH_FALT_LABELS["efternamn"]},
+            {"field": "namn", "label": _DBUH_FALT_LABELS["namn"]}, {"field": "yrke", "label": _DBUH_FALT_LABELS["yrke"]},
+            {"field": "gatuadress", "label": _DBUH_FALT_LABELS["gatuadress"]}, {"field": "postnummer", "label": _DBUH_FALT_LABELS["postnummer"]},
+            {"field": "postort", "label": _DBUH_FALT_LABELS["postort"]}, {"field": "kommentar", "label": _DBUH_FALT_LABELS["kommentar"]},
+        ]},
+        {"table": "narmast_anhorig", "table_label": "Närmast anhörig", "fields": [
+            {"field": "fornamn", "label": _DBUH_FALT_LABELS["fornamn"]}, {"field": "efternamn", "label": _DBUH_FALT_LABELS["efternamn"]},
+            {"field": "namn", "label": _DBUH_FALT_LABELS["namn"]}, {"field": "yrke", "label": _DBUH_FALT_LABELS["yrke"]},
+            {"field": "adress", "label": _DBUH_FALT_LABELS["adress"]}, {"field": "postnummer", "label": _DBUH_FALT_LABELS["postnummer"]},
+            {"field": "postort", "label": _DBUH_FALT_LABELS["postort"]}, {"field": "telefon", "label": _DBUH_FALT_LABELS["telefon"]},
+            {"field": "kommentar", "label": _DBUH_FALT_LABELS["kommentar"]},
+        ]},
+        {"table": "gravsatt", "table_label": "Gravsatt", "fields": [
+            {"field": "fornamn", "label": _DBUH_FALT_LABELS["fornamn"]}, {"field": "efternamn", "label": _DBUH_FALT_LABELS["efternamn"]},
+            {"field": "namn", "label": _DBUH_FALT_LABELS["namn"]}, {"field": "yrke", "label": _DBUH_FALT_LABELS["yrke"]},
+            {"field": "gatuadress", "label": _DBUH_FALT_LABELS["gatuadress"]}, {"field": "postnummer", "label": _DBUH_FALT_LABELS["postnummer"]},
+            {"field": "postort", "label": _DBUH_FALT_LABELS["postort"]}, {"field": "kommentar", "label": _DBUH_FALT_LABELS["kommentar"]},
+        ]},
+        {"table": "gravplats", "table_label": "Gravplats", "fields": [
+            {"field": "kyrkogard", "label": _DBUH_FALT_LABELS["kyrkogard"]}, {"field": "kvarter", "label": _DBUH_FALT_LABELS["kvarter"]},
+            {"field": "gravplatsnummer", "label": _DBUH_FALT_LABELS["gravplatsnummer"]},
+        ]},
+        {"table": "inmatning", "table_label": "Inmatning", "fields": [
+            {"field": "storlek", "label": _DBUH_FALT_LABELS["storlek"]}, {"field": "underhall_text", "label": _DBUH_FALT_LABELS["underhall_text"]},
+            {"field": "gravrattstid", "label": _DBUH_FALT_LABELS["gravrattstid"]}, {"field": "monument", "label": _DBUH_FALT_LABELS["monument"]},
+            {"field": "gravens_utformning", "label": _DBUH_FALT_LABELS["gravens_utformning"]}, {"field": "karta_nr", "label": _DBUH_FALT_LABELS["karta_nr"]},
+            {"field": "gravbrev_nr", "label": _DBUH_FALT_LABELS["gravbrev_nr"]}, {"field": "utfordat_den", "label": _DBUH_FALT_LABELS["utfordat_den"]},
+            {"field": "kommentar", "label": _DBUH_FALT_LABELS["kommentar"]},
+        ]},
+    ]
+
+
+def _dbuh_parse_falt(falt_param: str) -> list[tuple[str, str]]:
+    """Parsar 'falt'-param (table:field,table:field) till lista (table, field)."""
+    if not falt_param or not falt_param.strip():
+        return []
+    out = []
+    for part in falt_param.strip().split(","):
+        part = part.strip()
+        if ":" in part:
+            t, f = part.split(":", 1)
+            t, f = t.strip(), f.strip()
+            if t and f:
+                out.append((t, f))
+    return out
+
+
+def _dbuh_get_roll_label(table: str, row) -> str:
+    if table == "innehavare":
+        return "Innehavare"
+    if table == "narmast_anhorig":
+        return "Närmast anhörig"
+    if table == "gravsatt":
+        return "Gravsatt pos " + str(getattr(row, "position", ""))
+    if table == "gravplats":
+        return "Gravplats"
+    if table == "inmatning":
+        return "Inmatning"
+    return table
+
+
+def _dbuh_iter_falt(db: Session, falt_list: list[tuple[str, str]]):
+    """Generator: (gravplats_id, roll, field_key, field_label, value) för varje valt (table, field) och varje rad."""
+    tables_models = {
+        "innehavare": (GravplatsInnehavare, "gravplats_id"),
+        "narmast_anhorig": (GravplatsNarmastAnhorig, "gravplats_id"),
+        "gravsatt": (Gravsatt, "gravplats_id"),
+        "gravplats": (Gravplats, "id"),
+        "inmatning": (GravplatsInmatning, "gravplats_id"),
+    }
+    for table, field in falt_list:
+        if table not in tables_models or field not in _DBUH_FALT_LABELS:
+            continue
+        model, gid_attr = tables_models[table]
+        field_label = _DBUH_FALT_LABELS.get(field, field)
+        if not hasattr(model, field):
+            continue
+        rows = db.query(model).all()
+        for row in rows:
+            gid = getattr(row, gid_attr, None)
+            if gid is None:
+                continue
+            val = getattr(row, field, None)
+            if val is None:
+                val = ""
+            if not isinstance(val, str):
+                val = str(val) if val is not None else ""
+            roll = _dbuh_get_roll_label(table, row)
+            yield (gid, roll, field, field_label, val)
+
+
+@app.get("/api/admin/databasunderhall/falt-alla")
+async def get_databasunderhall_falt_alla(admin: User = Depends(require_admin)):
+    """Lista tillgängliga tabeller och fält för generella fältkontroller."""
+    return {"tabeller": _dbuh_falt_alla_config()}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-generell-tecken")
+async def get_datakvalitet_generell_tecken(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    falt: str = "",
+    tecken: str = "",
+    regex: str = "",
+):
+    """
+    Sök efter tecken eller regex-mönster i valda fält.
+    falt = table:field,table:field (t.ex. innehavare:postnummer,gravsatt:postort).
+    Ange antingen tecken (t.ex. =£$%& eller Ol) eller regex.
+    """
+    falt_list = _dbuh_parse_falt(falt)
+    if not falt_list:
+        return {"gravplatser": [], "antal": 0}
+    use_regex = bool(regex and regex.strip())
+    if not use_regex and not (tecken and tecken.strip()):
+        return {"gravplatser": [], "antal": 0}
+    pattern = re.compile(regex) if use_regex else re.compile("[" + re.escape(tecken.strip()) + "]")
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid, roll, field_key, field_label, val in _dbuh_iter_falt(db, falt_list):
+        if not val:
+            continue
+        if pattern.search(val):
+            all_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": roll, "falt": field_label, "varde": (val[:200] + "…") if len(val) > 200 else val,
+            })
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _dbuh_matchar_siffror_komma(s: str, typ: str) -> bool:
+    if not s or not isinstance(s, str):
+        return False
+    t = s.strip()
+    if not t:
+        return False
+    if typ == "siffror":
+        return any(c.isdigit() for c in t)
+    if typ == "komma":
+        return "," in t
+    return any(c.isdigit() for c in t) or "," in t
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-generell-siffror-komma")
+async def get_datakvalitet_generell_siffror_komma(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    falt: str = "",
+    typ: str = "bada",
+):
+    """Sök siffror och/eller kommatecken i valda fält. typ = bada | siffror | komma."""
+    if typ not in ("bada", "siffror", "komma"):
+        typ = "bada"
+    falt_list = _dbuh_parse_falt(falt)
+    if not falt_list:
+        return {"gravplatser": [], "antal": 0}
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid, roll, field_key, field_label, val in _dbuh_iter_falt(db, falt_list):
+        if _dbuh_matchar_siffror_komma(val, typ):
+            all_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({"roll": roll, "falt": field_label, "varde": (val[:200] + "…") if len(val) > 200 else val})
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-generell-langd")
+async def get_datakvalitet_generell_langd(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    falt: str = "",
+    min_punkter: int | None = None,
+    max_tecken: int | None = None,
+):
+    """Fält med minst N punkter och/eller längre än N tecken. Ange min_punkter och/eller max_tecken (tröskel för 'för långt')."""
+    falt_list = _dbuh_parse_falt(falt)
+    if not falt_list:
+        return {"gravplatser": [], "antal": 0}
+    use_punkter = min_punkter is not None and min_punkter >= 1
+    use_tecken = max_tecken is not None and max_tecken >= 1
+    if not use_punkter and not use_tecken:
+        return {"gravplatser": [], "antal": 0}
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid, roll, field_key, field_label, val in _dbuh_iter_falt(db, falt_list):
+        if not val:
+            continue
+        problems = []
+        if use_punkter and val.count(".") >= min_punkter:
+            problems.append(field_label + ": " + str(val.count(".")) + " punkter")
+        if use_tecken and len(val) > max_tecken:
+            problems.append(field_label + ": " + str(len(val)) + " tecken")
+        if problems:
+            all_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": roll, "falt": "Längd/punkter", "varde": "; ".join(problems) + " – " + ((val[:80] + "…") if len(val) > 80 else val),
+            })
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-generell-mellanslag")
+async def get_datakvalitet_generell_mellanslag(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    falt: str = "",
+):
+    """Fält med inledande/avslutande mellanslag eller dubbelmellanslag."""
+    falt_list = _dbuh_parse_falt(falt)
+    if not falt_list:
+        return {"gravplatser": [], "antal": 0}
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid, roll, field_key, field_label, val in _dbuh_iter_falt(db, falt_list):
+        if not val or not isinstance(val, str):
+            continue
+        issues = []
+        if val != val.strip():
+            issues.append("inledande/avslutande mellanslag")
+        if "  " in val:
+            issues.append("dubbelmellanslag")
+        if issues:
+            all_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": roll, "falt": field_label, "varde": ", ".join(issues) + " – " + repr(val[:100]),
+            })
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-generell-endast-siffror")
+async def get_datakvalitet_generell_endast_siffror(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    falt: str = "",
+):
+    """Fält som endast innehåller siffror (och ev. mellanslag) – t.ex. yrke som misstänkt felaktigt."""
+    falt_list = _dbuh_parse_falt(falt)
+    if not falt_list:
+        return {"gravplatser": [], "antal": 0}
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+    for gid, roll, field_key, field_label, val in _dbuh_iter_falt(db, falt_list):
+        t = (val or "").strip()
+        if t and t.replace(" ", "").isdigit():
+            all_ids.add(gid)
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": roll, "falt": field_label, "varde": (t[:200] + "…") if len(t) > 200 else t,
+            })
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+# ---------- Övriga datakvalitetsverktyg (datum, postnummer, dubbletter, m.m.) ----------
+
 # "f" som ord utan punkt (t.ex. "Eriksson f Larsson") – ska vara "f." för ofödd
 _RE_OFODD_F_UTAN_PUNKT = re.compile(r"(^|\s)f(?!\.)(\s|$)")
 
@@ -1636,24 +1956,6 @@ async def databasunderhall_ofodd_f(admin: User = Depends(require_admin)):
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ofodd-f.html")
 
 
-@app.get("/databasunderhall/datakvalitet-ovanliga-tecken")
-async def databasunderhall_ovanliga_tecken(admin: User = Depends(require_admin)):
-    """Databasunderhåll – datakvalitet ovanliga tecken."""
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ovanliga-tecken.html")
-
-
-@app.get("/databasunderhall/datakvalitet-namn-siffror-komma")
-async def databasunderhall_namn_siffror_komma(admin: User = Depends(require_admin)):
-    """Databasunderhåll – datakvalitet siffror/kommatecken i namn."""
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-namn-siffror-komma.html")
-
-
-@app.get("/databasunderhall/datakvalitet-manga-punkter")
-async def databasunderhall_manga_punkter(admin: User = Depends(require_admin)):
-    """Databasunderhåll – datakvalitet många punkter."""
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-manga-punkter.html")
-
-
 @app.get("/databasunderhall/datakvalitet-skisser")
 async def databasunderhall_datakvalitet_skisser(admin: User = Depends(require_admin)):
     """Databasunderhåll – datakvalitet bläddra skisser."""
@@ -1680,24 +1982,34 @@ async def databasunderhall_datakvalitet_innehavare_gravsatta(admin: User = Depen
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-innehavare-gravsatta.html")
 
 
-@app.get("/databasunderhall/datakvalitet-mellanslag")
-async def databasunderhall_datakvalitet_mellanslag(admin: User = Depends(require_admin)):
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-mellanslag.html")
-
-
-@app.get("/databasunderhall/datakvalitet-yrke-langd")
-async def databasunderhall_datakvalitet_yrke_langd(admin: User = Depends(require_admin)):
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-yrke-langd.html")
-
-
 @app.get("/databasunderhall/datakvalitet-beteckning")
 async def databasunderhall_datakvalitet_beteckning(admin: User = Depends(require_admin)):
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-beteckning.html")
 
 
-@app.get("/databasunderhall/datakvalitet-ocr")
-async def databasunderhall_datakvalitet_ocr(admin: User = Depends(require_admin)):
-    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-ocr.html")
+@app.get("/databasunderhall/generell-tecken")
+async def databasunderhall_generell_tecken(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-generell-tecken.html")
+
+
+@app.get("/databasunderhall/generell-siffror-komma")
+async def databasunderhall_generell_siffror_komma(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-generell-siffror-komma.html")
+
+
+@app.get("/databasunderhall/generell-langd")
+async def databasunderhall_generell_langd(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-generell-langd.html")
+
+
+@app.get("/databasunderhall/generell-mellanslag")
+async def databasunderhall_generell_mellanslag(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-generell-mellanslag.html")
+
+
+@app.get("/databasunderhall/generell-endast-siffror")
+async def databasunderhall_generell_endast_siffror(admin: User = Depends(require_admin)):
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-generell-endast-siffror.html")
 
 
 # ---------- Hjälp / dokumentation (samma .md-filer som i repo) ----------

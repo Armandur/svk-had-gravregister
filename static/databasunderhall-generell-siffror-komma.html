@@ -3,15 +3,33 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Datakvalitet: OCR-misstankar – Databasunderhåll</title>
+  <title>Generell kontroll: Siffror eller kommatecken – Databasunderhåll</title>
   <link rel="stylesheet" href="/static/style.css" />
   <link rel="stylesheet" href="/static/databasunderhall-verktyg.css" />
+  <style>
+    .dbuh-falt-val { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #e2e8f0); border-radius: 8px; background: #fafafa; }
+    .dbuh-falt-tabell { margin: 0.5rem 0; }
+    .dbuh-falt-tabell label { display: inline-block; margin-right: 1rem; margin-bottom: 0.25rem; font-weight: normal; }
+    .dbuh-falt-tabell .dbuh-falt-tabell-rubrik { font-weight: 600; margin-top: 0.75rem; color: #475569; }
+    .dbuh-namn-siffror-komma-typ { margin: 0.5rem 0; padding: 0.5rem 1rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+    .dbuh-namn-siffror-komma-typ label { margin-right: 1rem; font-weight: normal; }
+  </style>
 </head>
 <body>
   <main class="dbuh-sida">
     <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
-    <h1>Datakvalitet: OCR-misstankar</h1>
-    <p class="dbuh-info">Gravplatser där postnummer innehåller bokstäver som kan vara OCR-fel: O istället för 0, l eller I istället för 1. Klicka på gravplatsen för att korrigera.</p>
+    <h1>Generell kontroll: Siffror eller kommatecken i fält</h1>
+    <p class="dbuh-info">Välj fält att kontrollera. Hittar fält som innehåller siffror och/eller kommatecken (t.ex. namnfält där det misstänkt har hamnat siffror).</p>
+    <fieldset class="dbuh-falt-val" id="dbuh-falt-val">
+      <legend>Välj fält att kontrollera</legend>
+      <div id="dbuh-falt-checkboxes"></div>
+    </fieldset>
+    <fieldset class="dbuh-namn-siffror-komma-typ">
+      <legend>Visa träffar med</legend>
+      <label><input type="radio" name="dbuh-typ" value="bada" checked /> Båda (siffror och kommatecken)</label>
+      <label><input type="radio" name="dbuh-typ" value="komma" /> Endast kommatecken</label>
+      <label><input type="radio" name="dbuh-typ" value="siffror" /> Endast siffror</label>
+    </fieldset>
     <div class="dbuh-knapp-rad">
       <button type="button" id="dbuh-kor">Kör</button>
     </div>
@@ -30,14 +48,15 @@
   <script>
 (function () {
   const API = '/api';
+  const container = document.getElementById('dbuh-falt-checkboxes');
   const innehall = document.getElementById('dbuh-innehall');
   const tabellWrap = document.getElementById('dbuh-tabell-wrap');
   const thead = document.getElementById('dbuh-thead');
   const tbody = document.getElementById('dbuh-tbody');
   const tomEl = document.getElementById('dbuh-tom');
   const felEl = document.getElementById('dbuh-fel');
-  function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function escapeHtml(s) { var div = document.createElement('div'); div.textContent = s == null ? '' : String(s); return div.innerHTML; }
+  function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function formateraSenastAndrad(isoDatetime) {
     if (!isoDatetime) return '–';
     try { var d = new Date(isoDatetime); if (isNaN(d.getTime())) return escapeHtml(isoDatetime); return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return escapeHtml(isoDatetime); }
@@ -54,17 +73,52 @@
       return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
     });
   }
+  function getValdaFalt() {
+    var val = [];
+    container.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) { if (cb.value) val.push(cb.value); });
+    return val.join(',');
+  }
+  fetch(API + '/admin/databasunderhall/falt-alla', { credentials: 'include' })
+    .then(function (r) {
+      if (r.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
+      return r.ok ? r.json() : null;
+    })
+    .then(function (data) {
+      if (!data || !data.tabeller) return;
+      data.tabeller.forEach(function (tab) {
+        var rubrik = document.createElement('div');
+        rubrik.className = 'dbuh-falt-tabell-rubrik';
+        rubrik.textContent = tab.table_label;
+        container.appendChild(rubrik);
+        var wrap = document.createElement('div');
+        wrap.className = 'dbuh-falt-tabell';
+        tab.fields.forEach(function (f) {
+          var label = document.createElement('label');
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.value = tab.table + ':' + f.field;
+          label.appendChild(cb);
+          label.appendChild(document.createTextNode(' ' + f.label));
+          wrap.appendChild(label);
+        });
+        container.appendChild(wrap);
+      });
+    });
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
+    var falt = getValdaFalt();
+    if (!falt) { alert('Välj minst ett fält.'); return; }
+    var typ = (document.querySelector('input[name="dbuh-typ"]:checked') || {}).value || 'bada';
+    var url = API + '/admin/databasunderhall/datakvalitet-generell-siffror-komma?falt=' + encodeURIComponent(falt) + '&typ=' + encodeURIComponent(typ);
     btn.disabled = true;
     innehall.hidden = false;
     felEl.hidden = true;
     tomEl.hidden = true;
     tabellWrap.hidden = true;
-    fetch(API + '/admin/databasunderhall/datakvalitet-ocr', { credentials: 'include' })
+    fetch(url, { credentials: 'include' })
       .then(function (res) {
         if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
-        if (res.status === 403) throw new Error('Endast administratörer kan använda denna funktion.');
+        if (res.status === 403) throw new Error('Endast administratörer.');
         if (!res.ok) throw new Error('Kunde inte hämta data');
         return res.json();
       })
@@ -72,7 +126,7 @@
         btn.disabled = false;
         if (!data) return;
         var lista = data.gravplatser || [];
-        if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga gravplatser med OCR-misstänkta postnummer hittades.'; return; }
+        if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga träffar.'; return; }
         thead.innerHTML = buildRow(lista[0], true);
         tbody.innerHTML = '';
         lista.forEach(function (gp) {
