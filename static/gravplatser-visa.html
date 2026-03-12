@@ -26,6 +26,7 @@
         <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Horisontell vy</button>
         <button type="button" id="gp-btn-rapport" class="gravplatser-btn-rapport" title="Skapa rapportutskrift med transkriberad info och bilder">Rapportutskrift</button>
       </div>
+      <p id="gp-granska-anvandare-info" class="gp-granska-anvandare-info" hidden aria-live="polite"></p>
       <div id="gp-innehall-body" class="gp-innehall-body">
         <div id="gp-innehall-vanster" class="gp-innehall-vanster">
           <div class="gravplatser-halvor-wrap">
@@ -90,8 +91,8 @@
       <p class="gp-rapport-modal-hint">Välj vad som ska ingå i rapporten.</p>
       <div class="gp-rapport-options">
         <fieldset class="gp-rapport-fieldset">
-          <legend>Gravplatsbilder (sida 2)</legend>
-          <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-halvor" /> Ta med halvor (beskärna delar)</label>
+          <legend>Gravplatsbilder (sektioner)</legend>
+          <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-sektioner" /> Ta med sektioner (beskurna delar)</label>
           <label class="gp-rapport-check"><input type="checkbox" id="gp-rapport-hela" /> Ta med fullständiga sidor (PDF-bilder)</label>
           <p class="gp-rapport-fieldset-hint">Välj en, båda eller inga.</p>
         </fieldset>

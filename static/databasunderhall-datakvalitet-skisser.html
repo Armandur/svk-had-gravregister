@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Datakvalitet: Bläddra skisser – Databasunderhåll</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/databasunderhall-verktyg.css" />
+  <style>
+    .dbuh-skiss-rubrik { font-size: 1.1rem; margin: 0.5rem 0; }
+    .dbuh-skiss-nav { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+    .dbuh-skiss-nav button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      cursor: pointer;
+      background: var(--accent, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+    }
+    .dbuh-skiss-nav button:hover:not(:disabled) { opacity: 0.9; }
+    .dbuh-skiss-nav button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dbuh-skiss-räknare { color: #64748b; font-size: 0.95rem; }
+    .dbuh-skiss-bild-wrap {
+      margin: 1rem 0;
+      padding: 1rem;
+      background: #f8fafc;
+      border-radius: 8px;
+      border: 1px solid var(--border, #e2e8f0);
+      display: inline-block;
+      max-width: 100%;
+    }
+    .dbuh-skiss-bild-wrap canvas { max-width: 100%; height: auto; display: block; }
+    .dbuh-skiss-ladda { color: #64748b; font-style: italic; }
+    .dbuh-skiss-fel { color: #b91c1c; margin-top: 0.5rem; }
+    .dbuh-skiss-lank { margin-top: 0.5rem; }
+    .dbuh-skiss-lank a { color: var(--accent); text-decoration: none; }
+    .dbuh-skiss-lank a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <main class="dbuh-sida">
+    <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
+    <h1>Datakvalitet: Bläddra skisser</h1>
+    <p class="dbuh-info">Granska att skissmarkeringar är rimligt placerade. En skiss visas i taget. Använd pil vänster och pil höger för att bläddra.</p>
+    <div id="dbuh-skiss-tom" class="dbuh-tom" hidden>Inga skisser registrerade.</div>
+    <div id="dbuh-skiss-fel" class="dbuh-fel" hidden></div>
+    <div id="dbuh-skiss-innehall" hidden>
+      <p class="dbuh-skiss-rubrik" id="dbuh-skiss-gravplats"></p>
+      <p class="dbuh-skiss-räknare" id="dbuh-skiss-raknare"></p>
+      <div class="dbuh-skiss-nav">
+        <button type="button" id="dbuh-skiss-pil-vanster" aria-label="Föregående skiss">← Föregående</button>
+        <button type="button" id="dbuh-skiss-pil-hoger" aria-label="Nästa skiss">Nästa →</button>
+      </div>
+      <div class="dbuh-skiss-bild-wrap" id="dbuh-skiss-bild-wrap">
+        <p class="dbuh-skiss-ladda" id="dbuh-skiss-ladda">Laddar …</p>
+        <canvas id="dbuh-skiss-canvas" hidden></canvas>
+        <p class="dbuh-skiss-fel" id="dbuh-skiss-bild-fel" hidden></p>
+      </div>
+      <p class="dbuh-skiss-lank"><a id="dbuh-skiss-gravplats-lank" href="#">Öppna gravplatsen</a></p>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const cacheBust = Date.now();
+  let skisserLista = [];
+  let currentIndex = 0;
+  let halvorCache = {}; // gravplats_id -> { halvor, extramaterial }
+
+  const tomEl = document.getElementById('dbuh-skiss-tom');
+  const felEl = document.getElementById('dbuh-skiss-fel');
+  const innehallEl = document.getElementById('dbuh-skiss-innehall');
+  const gravplatsEl = document.getElementById('dbuh-skiss-gravplats');
+  const raknareEl = document.getElementById('dbuh-skiss-raknare');
+  const laddaEl = document.getElementById('dbuh-skiss-ladda');
+  const canvasEl = document.getElementById('dbuh-skiss-canvas');
+  const bildFelEl = document.getElementById('dbuh-skiss-bild-fel');
+  const gravplatsLankEl = document.getElementById('dbuh-skiss-gravplats-lank');
+  const pilVansterBtn = document.getElementById('dbuh-skiss-pil-vanster');
+  const pilHogerBtn = document.getElementById('dbuh-skiss-pil-hoger');
+
+  function getSkissKallaUrl(item, halvorData) {
+    if (!item || !halvorData) return null;
+    var s = item.skiss;
+    var mapp = item.mapp_namn;
+    if (!mapp) return null;
+    if (s.source_type === 'halva' && s.content_sida != null && s.halva) {
+      var base = API + '/mappar/' + encodeURIComponent(mapp) + '/sida';
+      var halvor = halvorData.halvor || [];
+      var seg = s.segment_index != null ? s.segment_index : (s.halva === 'ovre' ? 0 : 1);
+      var match = halvor.find(function (h) {
+        return h.content_sida === s.content_sida && (h.segment_index != null ? h.segment_index === seg : h.halva === s.halva);
+      });
+      if (match) {
+        var url = base + '/' + s.content_sida + '/halva?offset=0&segment=' + (match.segment_index != null ? match.segment_index : seg) + '&_v=' + cacheBust;
+        if (match.position != null && match.position >= 1 && match.position <= 3) url += '&position=' + match.position;
+        return url;
+      }
+      var split = s.content_sida === 1 ? (870 / 1595).toFixed(4) : (727 / 1597).toFixed(4);
+      return base + '/' + s.content_sida + '/halva?offset=0&halva=' + encodeURIComponent(s.halva) + '&split=' + split + '&_v=' + cacheBust;
+    }
+    if (s.source_type === 'extramaterial' && s.extramaterial_id != null) {
+      var emList = halvorData.extramaterial || [];
+      var em = emList.find(function (e) { return e.id === s.extramaterial_id; });
+      if (em && em.filnamn) return API + '/mappar/' + encodeURIComponent(mapp) + '/fil/' + encodeURIComponent(em.filnamn) + '/bild?_v=' + cacheBust;
+    }
+    return null;
+  }
+
+  function fetchHalvorForGravplats(item) {
+    var gid = item.gravplats_id;
+    if (halvorCache[gid]) return Promise.resolve(halvorCache[gid]);
+    var mapp = item.mapp_namn;
+    var params = new URLSearchParams({
+      kyrkogard: item.kyrkogard || '',
+      kvarter: item.kvarter || '',
+      gravplatsnummer: item.gravplatsnummer || ''
+    });
+    return fetch(API + '/mappar/' + encodeURIComponent(mapp) + '/gravplats/halvor?' + params.toString(), { credentials: 'include' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Kunde inte hämta halvor');
+        return res.json();
+      })
+      .then(function (data) {
+        halvorCache[gid] = data;
+        return data;
+      });
+  }
+
+  function ritaSkissCrop(item, halvorData) {
+    laddaEl.hidden = false;
+    canvasEl.hidden = true;
+    bildFelEl.hidden = true;
+    var url = getSkissKallaUrl(item, halvorData);
+    if (!url) {
+      laddaEl.textContent = 'Kunde inte bygga bild-URL för denna skiss.';
+      bildFelEl.textContent = 'Källbild saknas eller skissen refererar till ogiltig halva/extramaterial.';
+      bildFelEl.hidden = false;
+      return;
+    }
+    laddaEl.textContent = 'Laddar bild …';
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    var s = item.skiss;
+    img.onload = function () {
+      laddaEl.hidden = true;
+      var w = img.naturalWidth;
+      var h = img.naturalHeight;
+      var x = (s.x ?? 0) * w;
+      var y = (s.y ?? 0) * h;
+      var sw = Math.max(1, (s.width ?? 0) * w);
+      var sh = Math.max(1, (s.height ?? 0) * h);
+      var maxDim = 800;
+      var scale = Math.min(1, maxDim / Math.max(sw, sh));
+      var cw = Math.round(sw * scale);
+      var ch = Math.round(sh * scale);
+      canvasEl.width = cw;
+      canvasEl.height = ch;
+      var ctx = canvasEl.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, x, y, sw, sh, 0, 0, cw, ch);
+      }
+      canvasEl.hidden = false;
+    };
+    img.onerror = function () {
+      laddaEl.hidden = true;
+      bildFelEl.textContent = 'Kunde inte ladda bild.';
+      bildFelEl.hidden = false;
+    };
+    img.src = url;
+  }
+
+  function visaSkiss() {
+    if (skisserLista.length === 0) return;
+    var item = skisserLista[currentIndex];
+    gravplatsEl.textContent = item.fullstandigt || 'Gravplats ' + item.gravplats_id;
+    raknareEl.textContent = 'Skiss ' + (currentIndex + 1) + ' av ' + skisserLista.length;
+    pilVansterBtn.disabled = currentIndex <= 0;
+    pilHogerBtn.disabled = currentIndex >= skisserLista.length - 1;
+    var slug = item.url_slug;
+    gravplatsLankEl.href = slug ? '/gravplatser/' + slug : '#';
+    gravplatsLankEl.textContent = slug ? 'Öppna gravplatsen' : 'Gravplats';
+    gravplatsLankEl.style.display = slug ? '' : 'none';
+
+    fetchHalvorForGravplats(item).then(
+      function (halvorData) { ritaSkissCrop(item, halvorData); },
+      function () {
+        laddaEl.hidden = true;
+        bildFelEl.textContent = 'Kunde inte hämta halvor för gravplatsen.';
+        bildFelEl.hidden = false;
+      }
+    );
+  }
+
+  function onKeyDown(e) {
+    if (skisserLista.length === 0) return;
+    if (e.key === 'ArrowLeft' && currentIndex > 0) {
+      currentIndex--;
+      visaSkiss();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight' && currentIndex < skisserLista.length - 1) {
+      currentIndex++;
+      visaSkiss();
+      e.preventDefault();
+    }
+  }
+
+  pilVansterBtn.addEventListener('click', function () {
+    if (currentIndex > 0) { currentIndex--; visaSkiss(); }
+  });
+  pilHogerBtn.addEventListener('click', function () {
+    if (currentIndex < skisserLista.length - 1) { currentIndex++; visaSkiss(); }
+  });
+  document.addEventListener('keydown', onKeyDown);
+
+  fetch(API + '/admin/databasunderhall/skisser', { credentials: 'include' })
+    .then(function (res) {
+      if (res.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent('/databasunderhall/datakvalitet-skisser');
+        return null;
+      }
+      if (res.status === 403) throw new Error('Endast administratörer kan använda denna funktion.');
+      if (!res.ok) throw new Error('Kunde inte hämta skisser');
+      return res.json();
+    })
+    .then(function (data) {
+      if (!data) return;
+      skisserLista = data.skisser || [];
+      if (skisserLista.length === 0) {
+        tomEl.hidden = false;
+        return;
+      }
+      innehallEl.hidden = false;
+      currentIndex = 0;
+      visaSkiss();
+    })
+    .catch(function (err) {
+      felEl.textContent = err.message || 'Ett fel uppstod';
+      felEl.hidden = false;
+    });
+})();
+  </script>
+</body>
+</html>

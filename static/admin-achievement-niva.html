@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Prestationsgränser – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .admin-ach-sida { max-width: 44rem; margin: 2rem auto; padding: 2rem; }
+    .admin-ach-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    .admin-ach-sida a { color: var(--accent, #2563eb); }
+    .admin-ach-tabell { width: 100%; border-collapse: collapse; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; overflow: hidden; }
+    .admin-ach-tabell th, .admin-ach-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
+    .admin-ach-tabell th { background: #f1f5f9; font-weight: 600; }
+    .admin-ach-tabell tr:last-child td { border-bottom: none; }
+    .admin-ach-tabell input[type="number"] { width: 5rem; padding: 0.3rem 0.4rem; }
+    .admin-ach-tabell .niva-brons { color: #b45309; }
+    .admin-ach-tabell .niva-silver { color: #64748b; }
+    .admin-ach-tabell .niva-gold { color: #b8860b; }
+    .admin-ach-fel { color: #b91c1c; margin-top: 0.5rem; }
+    .admin-ach-ok { color: #16a34a; margin-top: 0.5rem; }
+    .admin-ach-laddar { color: #64748b; }
+  </style>
+</head>
+<body>
+  <main class="admin-ach-sida">
+    <h1>Prestationsgränser</h1>
+    <p><a href="/admin">← Tillbaka till användarhantering</a></p>
+    <p id="admin-ach-ingen" class="admin-ach-fel" hidden>Endast administratörer kan justera gränserna.</p>
+    <p id="admin-ach-status" class="admin-ach-laddar" aria-live="polite">Laddar …</p>
+    <div id="admin-ach-innehall" hidden>
+      <p class="admin-ach-brodtext" style="font-size: 0.9rem; color: #555; margin-bottom: 1rem;">Justera gränsvärdena för brons-, silver- och guldmedaljer. Ändringarna gäller för alla användare.</p>
+      <table class="admin-ach-tabell" aria-label="Prestationsnivåer">
+        <thead>
+          <tr>
+            <th scope="col">Prestation</th>
+            <th scope="col">Nivå</th>
+            <th scope="col">Gränsvärde (min antal)</th>
+            <th scope="col">Beskrivning</th>
+          </tr>
+        </thead>
+        <tbody id="admin-ach-tbody"></tbody>
+      </table>
+      <p style="margin-top: 1rem;">
+        <button type="button" id="admin-ach-spara">Spara alla ändringar</button>
+        <span id="admin-ach-sparad" class="admin-ach-ok" hidden aria-live="polite">Sparat.</span>
+      </p>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const innehall = document.getElementById('admin-ach-innehall');
+  const ingen = document.getElementById('admin-ach-ingen');
+  const statusEl = document.getElementById('admin-ach-status');
+  const tbody = document.getElementById('admin-ach-tbody');
+  const sparaBtn = document.getElementById('admin-ach-spara');
+  const sparadEl = document.getElementById('admin-ach-sparad');
+
+  const labelByKey = {
+    registreringar: 'Sparade registreringar',
+    fardigtranskriberade: 'Färdigtranskriberade gravplatser',
+    innehavare: 'Gravrättsinnehavare',
+    narmast_anhoriga: 'Närmast anhöriga',
+    gravsatta: 'Gravsatta',
+    skisser: 'Skisser',
+    unika_yrken: 'Unika yrken',
+    storgravar: 'Storgravar (>3 gravsatta)',
+  };
+
+  function levelClass(l) {
+    if (l === 'bronze') return 'niva-brons';
+    if (l === 'silver') return 'niva-silver';
+    if (l === 'gold') return 'niva-gold';
+    return '';
+  }
+
+  function levelLabel(l) {
+    if (l === 'bronze') return 'Brons';
+    if (l === 'silver') return 'Silver';
+    if (l === 'gold') return 'Guld';
+    return l;
+  }
+
+  Promise.all([
+    fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; }),
+    fetch(API + '/admin/achievement-niva', { credentials: 'include' })
+  ]).then(function ([me, res]) {
+    if (!me || !me.is_admin) {
+      ingen.hidden = false;
+      statusEl.hidden = true;
+      return null;
+    }
+    if (res.status === 401) {
+      window.location.href = '/login?redirect=' + encodeURIComponent('/admin/achievement-niva');
+      return null;
+    }
+    if (res.status === 403) {
+      ingen.hidden = false;
+      statusEl.hidden = true;
+      return null;
+    }
+    if (!res.ok) throw new Error('Kunde inte ladda nivåer');
+    return res.json();
+  })
+  .then(function (data) {
+    if (!data) return;
+    ingen.hidden = true;
+    statusEl.hidden = true;
+    innehall.hidden = false;
+    tbody.innerHTML = '';
+    (data.nivaer || []).forEach(function (n) {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + (labelByKey[n.achievement_key] || n.achievement_key) + '</td>' +
+        '<td><span class="' + levelClass(n.level) + '">' + levelLabel(n.level) + '</span></td>' +
+        '<td><input type="number" min="0" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.threshold != null ? n.threshold : 0) + '" /></td>' +
+        '<td><input type="text" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.label || '') + '" placeholder="t.ex. 10 st" style="width:8rem;padding:0.3rem 0.4rem;" /></td>';
+      tbody.appendChild(tr);
+    });
+  })
+  .catch(function (e) {
+    statusEl.textContent = 'Fel: ' + (e.message || 'nätverksfel');
+    statusEl.className = 'admin-ach-fel';
+  });
+
+  sparaBtn.addEventListener('click', function () {
+    const rows = tbody.querySelectorAll('tr');
+    const updates = [];
+    rows.forEach(function (tr) {
+      const numInp = tr.querySelector('input[type="number"]');
+      const textInp = tr.querySelector('input[type="text"]');
+      if (!numInp || !textInp) return;
+      updates.push({
+        achievement_key: numInp.dataset.key,
+        level: numInp.dataset.level,
+        threshold: parseInt(numInp.value, 10) || 0,
+        label: (textInp.value || '').trim() || null,
+      });
+    });
+    sparaBtn.disabled = true;
+    Promise.all(updates.map(function (u) {
+      return fetch(API + '/admin/achievement-niva', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(u),
+        credentials: 'include',
+      });
+    }))
+    .then(function (responses) {
+      const failed = responses.some(function (r) { return !r.ok; });
+      if (failed) throw new Error('Kunde inte spara alla');
+      sparadEl.hidden = false;
+      sparadEl.textContent = 'Sparat.';
+      setTimeout(function () { sparadEl.hidden = true; }, 3000);
+    })
+    .catch(function (e) {
+      alert('Kunde inte spara: ' + (e.message || 'nätverksfel'));
+    })
+    .finally(function () {
+      sparaBtn.disabled = false;
+    });
+  });
+})();
+  </script>
+</body>
+</html>

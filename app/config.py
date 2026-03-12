@@ -31,3 +31,6 @@ ADMIN_INITIAL_PASSWORD = os.environ.get("ADMIN_INITIAL_PASSWORD", "")
 _kyrkogardar_str = os.environ.get("KYRKOGARDAR", "HKG,HKN")
 KYRKOGARDAR = [k.strip() for k in _kyrkogardar_str.split(",") if k.strip()]
 
+# Mapp för databas-säkerhetskopior (skapas vid behov; filer serveras via API för nedladdning)
+BACKUP_DIR = PROJECT_ROOT / "säkerhetskopior"
+

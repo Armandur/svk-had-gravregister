@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Granska användares registreringar – Databasunderhåll</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/databasunderhall-verktyg.css" />
+  <style>
+    .dbuh-anvandare-rad { display: flex; align-items: center; gap: 1rem; margin: 1rem 0; flex-wrap: wrap; }
+    .dbuh-anvandare-rad label { font-weight: 500; }
+    .dbuh-anvandare-rad select { min-width: 14rem; padding: 0.5rem; font-size: 1rem; }
+    .dbuh-anvandare-info { color: #64748b; font-size: 0.95rem; margin-left: 0.5rem; }
+    .dbuh-anvandare-btn {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      background: var(--accent, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+    }
+    .dbuh-anvandare-btn:hover:not(:disabled) { opacity: 0.9; }
+    .dbuh-anvandare-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dbuh-anvandare-fel { color: #b91c1c; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="dbuh-sida">
+    <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
+    <h1>Granska användares registreringar</h1>
+    <p class="dbuh-info">Välj en användare för att bläddra bland dennes registreringar i kronologisk ordning (senast först) i samma vy som vanlig gravplatsredigering, inklusive källdata (gravplatsbilder).</p>
+    <div id="dbuh-anvandare-tom" class="dbuh-tom" hidden>Inga användare med registreringar.</div>
+    <div id="dbuh-anvandare-fel" class="dbuh-anvandare-fel" hidden></div>
+    <div id="dbuh-anvandare-innehall" hidden>
+      <div class="dbuh-anvandare-rad">
+        <label for="dbuh-anvandare-select">Användare:</label>
+        <select id="dbuh-anvandare-select" aria-label="Välj användare"></select>
+        <span id="dbuh-anvandare-info" class="dbuh-anvandare-info"></span>
+      </div>
+      <div class="dbuh-anvandare-rad">
+        <button type="button" id="dbuh-anvandare-oppna" class="dbuh-anvandare-btn">Öppna granskningsvy</button>
+      </div>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function () {
+  const API = '/api';
+  const tomEl = document.getElementById('dbuh-anvandare-tom');
+  const felEl = document.getElementById('dbuh-anvandare-fel');
+  const innehallEl = document.getElementById('dbuh-anvandare-innehall');
+  const selectEl = document.getElementById('dbuh-anvandare-select');
+  const infoEl = document.getElementById('dbuh-anvandare-info');
+  const oppnaBtn = document.getElementById('dbuh-anvandare-oppna');
+
+  function hideFel() {
+    felEl.hidden = true;
+    felEl.textContent = '';
+  }
+  function visaFel(msg) {
+    felEl.textContent = msg;
+    felEl.hidden = false;
+  }
+
+  async function laddaAnvandare() {
+    hideFel();
+    try {
+      const res = await fetch(API + '/admin/databasunderhall/anvandare-med-registreringar', { credentials: 'include' });
+      if (!res.ok) throw new Error('Kunde inte hämta användare');
+      const data = await res.json();
+      const anvandare = data.anvandare || [];
+      selectEl.innerHTML = '';
+      if (anvandare.length === 0) {
+        tomEl.hidden = false;
+        innehallEl.hidden = true;
+        return;
+      }
+      tomEl.hidden = true;
+      innehallEl.hidden = false;
+      const opt0 = document.createElement('option');
+      opt0.value = '';
+      opt0.textContent = '– Välj användare –';
+      selectEl.appendChild(opt0);
+      anvandare.forEach(function (a) {
+        const opt = document.createElement('option');
+        opt.value = String(a.id);
+        opt.textContent = (a.username || '').trim() || 'Användare ' + a.id;
+        selectEl.appendChild(opt);
+      });
+      uppdateraInfo();
+    } catch (e) {
+      visaFel(e && e.message ? e.message : 'Ett fel uppstod');
+      tomEl.hidden = true;
+      innehallEl.hidden = true;
+    }
+  }
+
+  async function uppdateraInfo() {
+    const userId = selectEl.value;
+    infoEl.textContent = '';
+    oppnaBtn.disabled = !userId;
+    if (!userId) return;
+    try {
+      const res = await fetch(API + '/admin/databasunderhall/anvandare/' + encodeURIComponent(userId) + '/registreringar', { credentials: 'include' });
+      if (!res.ok) throw new Error('Kunde inte hämta registreringar');
+      const data = await res.json();
+      const n = (data.registreringar && data.registreringar.length) || 0;
+      infoEl.textContent = n + ' registreringar (senast först)';
+    } catch (_) {
+      infoEl.textContent = '';
+    }
+  }
+
+  selectEl.addEventListener('change', uppdateraInfo);
+
+  oppnaBtn.addEventListener('click', async function () {
+    const userId = selectEl.value;
+    if (!userId) return;
+    hideFel();
+    oppnaBtn.disabled = true;
+    try {
+      const res = await fetch(API + '/admin/databasunderhall/anvandare/' + encodeURIComponent(userId) + '/registreringar', { credentials: 'include' });
+      if (!res.ok) throw new Error('Kunde inte hämta registreringar');
+      const data = await res.json();
+      const reg = data.registreringar || [];
+      if (reg.length === 0) {
+        visaFel('Användaren har inga registreringar.');
+        oppnaBtn.disabled = false;
+        return;
+      }
+      const first = reg[0];
+      const fullstandigt = (first.fullstandigt || [first.kyrkogard, first.kvarter, first.gravplatsnummer].filter(Boolean).join(' ') || '').trim();
+      const slug = fullstandigt ? encodeURIComponent(fullstandigt) : '';
+      if (!slug) {
+        visaFel('Kunde inte bilda adress till första gravplatsen.');
+        oppnaBtn.disabled = false;
+        return;
+      }
+      window.location.href = '/gravplatser/' + slug + '?granska_anvandare=' + encodeURIComponent(userId);
+    } catch (e) {
+      visaFel(e && e.message ? e.message : 'Ett fel uppstod');
+      oppnaBtn.disabled = false;
+    }
+  });
+
+  laddaAnvandare();
+})();
+  </script>
+</body>
+</html>

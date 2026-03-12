@@ -15,3 +15,6 @@ gravregister.db
 
 # Källdata – PDF-mappar ska inte versioneras (ligger lokalt)
 källdata/
+
+# Säkerhetskopior av databas (skapas via webbgränssnittet)
+säkerhetskopior/

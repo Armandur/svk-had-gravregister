@@ -23,6 +23,9 @@ let currentHalvorUrlList = [];
 let currentGravplatsStartSida = null;
 let visarHelaSidor = false;
 let vertikalVy = true;
+/** true = bläddrar användares registreringar (admin); Föregående/Nästa utan kvarterbyten. */
+let granskaAnvandareMode = false;
+let granskaAnvandareId = null;
 let currentGravplatsId = null;
 let lastInmatningGravplatsId = null;
 let inmatningData = null;
@@ -674,6 +677,10 @@ async function uppdateraVy(behallInmatningState = false) {
   const gp = gravplatserLista[idx];
   currentGravplatsId = gp.id;
   const mappNamn = gp.mapp_namn;
+  if (granskaAnvandareMode) {
+    valdKyrkogard = gp.kyrkogard || null;
+    valdKvarter = gp.kvarter || null;
+  }
 
   rubrikEl.textContent = gp.fullstandigt || [gp.kyrkogard, gp.kvarter, gp.gravplatsnummer].filter(Boolean).join(' ') || '–';
   document.title = rubrikEl.textContent || 'Gravplats';
@@ -684,20 +691,47 @@ async function uppdateraVy(behallInmatningState = false) {
   const paSistaGravplats = idx >= n - 1;
   const paForstaGravplats = idx <= 0;
 
-  if (btnTillbaka) {
-    btnTillbaka.disabled = paForstaGravplats && !foregaendeKv;
-    btnTillbaka.textContent = paForstaGravplats && foregaendeKv ? '← Byt till föregående kvarter' : '← Föregående';
-  }
-  if (btnNasta) {
-    btnNasta.disabled = paSistaGravplats && !nastaKv;
-    btnNasta.textContent = paSistaGravplats && nastaKv ? 'Byt till nästa kvarter →' : 'Nästa →';
+  if (granskaAnvandareMode) {
+    if (btnTillbaka) {
+      btnTillbaka.disabled = paForstaGravplats;
+      btnTillbaka.textContent = '← Föregående';
+    }
+    if (btnNasta) {
+      btnNasta.disabled = paSistaGravplats;
+      btnNasta.textContent = 'Nästa →';
+    }
+  } else {
+    if (btnTillbaka) {
+      btnTillbaka.disabled = paForstaGravplats && !foregaendeKv;
+      btnTillbaka.textContent = paForstaGravplats && foregaendeKv ? '← Byt till föregående kvarter' : '← Föregående';
+    }
+    if (btnNasta) {
+      btnNasta.disabled = paSistaGravplats && !nastaKv;
+      btnNasta.textContent = paSistaGravplats && nastaKv ? 'Byt till nästa kvarter →' : 'Nästa →';
+    }
   }
 
   const slug = slugForGravplats(gp);
   const path = slug ? `/gravplatser/${slug}` : '/gravplatser';
-  const fullUrl = path + (vertikalVy ? '' : '?vy=horisontell');
+  let fullUrl = path;
+  if (granskaAnvandareMode && granskaAnvandareId) {
+    fullUrl += '?granska_anvandare=' + encodeURIComponent(granskaAnvandareId);
+    if (!vertikalVy) fullUrl += '&vy=horisontell';
+  } else if (!vertikalVy) {
+    fullUrl += '?vy=horisontell';
+  }
   if (window.location.pathname + (window.location.search || '') !== fullUrl) {
     history.replaceState(null, '', fullUrl);
+  }
+
+  const granskaInfoEl = document.getElementById('gp-granska-anvandare-info');
+  if (granskaInfoEl) {
+    if (granskaAnvandareMode && n > 0) {
+      granskaInfoEl.innerHTML = 'Granskar användares registreringar (' + (idx + 1) + ' av ' + n + '). <a href="/databasunderhall/granska-anvandare">Avsluta granskning</a>';
+      granskaInfoEl.hidden = false;
+    } else {
+      granskaInfoEl.hidden = true;
+    }
   }
 
     const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
@@ -2040,6 +2074,10 @@ document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', ()
   window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
+  if (granskaAnvandareMode) {
+    tillbaka();
+    return;
+  }
   const foregaendeKv = getForegaendeKvarter();
   if (currentIndex <= 0 && foregaendeKv) {
     bytTillForegaendeKvarter();
@@ -2048,6 +2086,10 @@ document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
   }
 });
 document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
+  if (granskaAnvandareMode) {
+    nasta();
+    return;
+  }
   const nastaKv = getNastaKvarter();
   if (currentIndex >= gravplatserLista.length - 1 && nastaKv) {
     bytTillNastaKvarter();
@@ -2150,7 +2192,7 @@ async function skapaRapportUtskrift() {
   const modal = document.getElementById('gp-rapport-modal');
   const container = document.getElementById('gp-rapport-utskrift');
   if (!modal || !container) return;
-  const medHalvor = document.getElementById('gp-rapport-halvor')?.checked === true;
+  const medSektioner = document.getElementById('gp-rapport-sektioner')?.checked === true;
   const medHela = document.getElementById('gp-rapport-hela')?.checked === true;
   const medDolda = document.getElementById('gp-rapport-dolda')?.checked === true;
   const medExtramaterial = document.getElementById('gp-rapport-extramaterial')?.checked === true;
@@ -2192,6 +2234,8 @@ async function skapaRapportUtskrift() {
   const halvor = halvorData.halvor || [];
   const extramaterial = halvorData.extramaterial || [];
   const dolda = halvorData.dolda || [];
+  const config = halvorData.config || {};
+  const delaSidor = config.dela_sidor || 'hojdled';
   const cacheQ = `_v=${cacheBust}`;
   const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
   const split1och3 = (727 / 1597).toFixed(4);
@@ -2204,10 +2248,19 @@ async function skapaRapportUtskrift() {
       halvaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(h.filnamn)}/bild?${cacheQ}`;
       helaUrl = halvaUrl;
     } else {
-      const pos = h.content_sida - (startSida || 0);
-      const split = pos === 1 ? split2 : split1och3;
-      halvaUrl = `${base}/${h.content_sida}/halva?offset=0&halva=${h.halva}&split=${split}&${cacheQ}`;
       helaUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${h.content_sida}?${cacheQ}`;
+      if (delaSidor === 'ingen') {
+        halvaUrl = helaUrl;
+      } else if (h.segment_index != null) {
+        halvaUrl = `${base}/${h.content_sida}/halva?offset=0&segment=${h.segment_index}&${cacheQ}`;
+        if (h.position != null && h.position >= 1 && h.position <= 3) {
+          halvaUrl += `&position=${h.position}`;
+        }
+      } else {
+        const pos = h.content_sida - (startSida || 0);
+        const split = pos === 1 ? split2 : split1och3;
+        halvaUrl = `${base}/${h.content_sida}/halva?offset=0&halva=${h.halva}&split=${split}&${cacheQ}`;
+      }
     }
     return { halvaUrl, helaUrl };
   });
@@ -2216,8 +2269,8 @@ async function skapaRapportUtskrift() {
   const headerRubrik = esc(rubrik);
   html += '<div class="gp-rapport-sida-1"><div class="gp-rapport-print-header" aria-hidden="true">' + headerRubrik + '</div>' + buildRapportInmatningHtml(inmatningData, rubrik, skissDataUrls) + '</div>';
 
-  if (medHalvor && halvorMedUrl.length > 0) {
-    html += '<div class="gp-rapport-sida-halvor"><h3 class="gp-rapport-sektion-rubrik">Gravregisterkort</h3><div class="gp-rapport-halvor">';
+  if (medSektioner && halvorMedUrl.length > 0) {
+    html += '<div class="gp-rapport-sida-sektioner"><h3 class="gp-rapport-sektion-rubrik">Gravplatsbilder (sektioner)</h3><div class="gp-rapport-sektioner">';
     halvorMedUrl.forEach((x) => {
       html += `<figure><img src="${esc(x.halvaUrl)}" alt="" /></figure>`;
     });
@@ -2245,10 +2298,19 @@ async function skapaRapportUtskrift() {
     html += '<div class="gp-rapport-dolda gp-rapport-bilder-section"><h3>Dolda bilder</h3><div class="gp-rapport-bilder-grid">';
     dolda.forEach((item) => {
       let bildUrl;
-      if (item.type === 'halva' && item.content_sida != null && item.halva != null) {
-        const pos = startSida != null ? item.content_sida - startSida : 0;
-        const split = pos === 1 ? split2 : split1och3;
-        bildUrl = `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`;
+      if (item.type === 'halva' && item.content_sida != null) {
+        if (item.segment_index != null) {
+          bildUrl = `${base}/${item.content_sida}/halva?offset=0&segment=${item.segment_index}&${cacheQ}`;
+          if (item.position != null && item.position >= 1 && item.position <= 3) {
+            bildUrl += `&position=${item.position}`;
+          }
+        } else if (item.halva != null) {
+          const pos = startSida != null ? item.content_sida - startSida : 0;
+          const split = pos === 1 ? split2 : split1och3;
+          bildUrl = `${base}/${item.content_sida}/halva?offset=0&halva=${encodeURIComponent(item.halva)}&split=${split}&${cacheQ}`;
+        } else {
+          bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida/${item.content_sida}?${cacheQ}`;
+        }
       } else {
         bildUrl = `${API}/mappar/${encodeURIComponent(mappNamn)}/fil/${encodeURIComponent(item.filnamn)}/bild?${cacheQ}`;
       }
@@ -3833,6 +3895,11 @@ async function sparaInmatning() {
   if (!valideraAllaDatumFalt()) return;
   const payload = samlaInmatningData();
   if (!payload) return;
+  let achievementsBefore = null;
+  try {
+    const beforeRes = await fetch(`${API}/me/achievements`, { credentials: 'include' });
+    if (beforeRes.ok) achievementsBefore = await beforeRes.json();
+  } catch (_) { /* ignorerar */ }
   try {
     const res = await fetch(`${API}/gravplats/${currentGravplatsId}/inmatning`, {
       method: 'PUT',
@@ -3864,6 +3931,43 @@ async function sparaInmatning() {
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
+    if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
+      fetch(`${API}/me`, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((me) => {
+          const p = (me && me.preferences) || {};
+          if (p.fun_enabled !== false) {
+            if (p.toast_on_new_yrke !== false) {
+              gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
+            }
+            if (p.sound_on_new_yrke !== false) {
+              gpPlayPling();
+            }
+          }
+        })
+        .catch(() => {});
+    }
+    if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
+      const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
+      if (newlyEarned.length > 0) {
+        fetch(`${API}/me`, { credentials: 'include' })
+          .then((r) => r.ok ? r.json() : null)
+          .then((me) => {
+            const p = (me && me.preferences) || {};
+            if (p.fun_enabled !== false) {
+              if (p.toast_on_new_yrke !== false) {
+                newlyEarned.forEach((item) => {
+                  gpShowToast(gpToastTextFörAchievement(item.level, item.label));
+                });
+              }
+              if (p.sound_on_new_yrke !== false) {
+                gpPlayPling();
+              }
+            }
+          })
+          .catch(() => {});
+      }
+    }
   } catch (e) {
     visaSparStatus('Kunde inte spara: ' + e.message, false);
   }
@@ -3880,6 +3984,101 @@ function visaSparStatus(meddelande, ok) {
     el.textContent = '';
     el.hidden = true;
   }, 4000);
+}
+
+function gpAchievementLevelRank(level) {
+  if (!level) return 0;
+  if (level === 'bronze') return 1;
+  if (level === 'silver') return 2;
+  if (level === 'gold') return 3;
+  return 0;
+}
+
+/** Returnerar listan achievement som just uppnåtts (högre nivå än före). */
+function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
+  const beforeByKey = {};
+  (beforeNivaer || []).forEach(function (n) {
+    beforeByKey[n.achievement_key] = n.earned_level;
+  });
+  const result = [];
+  (afterNivaer || []).forEach(function (n) {
+    const afterRank = gpAchievementLevelRank(n.earned_level);
+    const beforeRank = gpAchievementLevelRank(beforeByKey[n.achievement_key]);
+    if (afterRank > beforeRank) {
+      result.push({ level: n.earned_level, label: n.label || n.achievement_key });
+    }
+  });
+  return result;
+}
+
+function gpToastTextFörAchievement(level, label) {
+  const nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : level || '';
+  const formuleringar = [
+    'Grattis! Du fick ' + nivåNamn + ' i ' + label + '!',
+    'Utmärkt – ' + nivåNamn + ' i ' + label + '. Bra jobbat!',
+    '🎉 ' + nivåNamn.charAt(0).toUpperCase() + nivåNamn.slice(1) + ' i ' + label + ' – grattis!',
+  ];
+  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+}
+
+/** Slumpad gratulation när användaren upptäcker ett nytt unikt yrke. */
+function gpToastTextFörNyttYrke(yrkenLista) {
+  const yrken = yrkenLista && yrkenLista.length ? yrkenLista : [];
+  const yrkeText = yrken.length > 1 ? yrken.join(', ') : (yrken[0] || '');
+  const formuleringar = [
+    'Nytt yrke upptäckt: ' + yrkeText + '!',
+    'Du upptäckte yrket ' + yrkeText + '!',
+    'Ett yrke vi inte sett förut: ' + yrkeText + '!',
+    'Upptäckt! ' + yrkeText + ' fanns inte i registret tidigare.',
+    'Pling! Yrket ' + yrkeText + ' har vi inte sett förut!.',
+    'Första gången vi ser ' + yrkeText + ' i arkivet!',
+    'Snyggt - du hittade yrket ' + yrkeText + '!',
+    'Yrket ' + yrkeText + ' dyker upp för första gången.',
+    'Ny upptäckt i registret: ' + yrkeText + '.',
+    'Oj, ' + yrkeText + ' - det hade vi inte sett tidigare!',
+    'Kanon - ett nytt yrke upptäckt: ' + yrkeText + '.',
+    'Rätt coolt - ' + yrkeText + ' syns nu i systemet för första gången!',
+  ];
+  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+}
+
+/** Toast för "roliga saker" (t.ex. nytt unikt yrke). */
+function gpShowToast(text) {
+  const el = document.createElement('div');
+  el.setAttribute('role', 'alert');
+  el.setAttribute('aria-live', 'polite');
+  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;z-index:10000;animation:gp-toast-in 0.2s ease;';
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'gp-toast-out 0.2s ease forwards';
+    setTimeout(() => el.remove(), 220);
+  }, 3500);
+}
+
+/** Kort pling-ljud (spelar Ping-sound.mp3 från static, faller tillbaka till Web Audio om fil saknas). */
+function gpPlayPling() {
+  try {
+    const audio = new Audio('/static/Ping-sound.mp3');
+    audio.volume = 0.6;
+    audio.play().catch(function () { /* ignorerar om autoplay blockeras eller fil saknas */ });
+  } catch (e) {
+    try {
+      const C = typeof AudioContext !== 'undefined' ? AudioContext : (window.webkitAudioContext || window.AudioContext);
+      if (!C) return;
+      const ctx = new C();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e2) { /* ignorerar om ljud inte stöds */ }
+  }
 }
 
 document.querySelectorAll('.gp-sektion-rubrik').forEach((btn) => {
@@ -3994,9 +4193,56 @@ function applyVyFromUrl() {
 
 async function initFromUrl() {
   applyVyFromUrl();
+  const params = new URLSearchParams(window.location.search);
+  const granskaAnv = params.get('granska_anvandare');
   const parsed = parseGravplatsSlugFromPath();
   const tradVy = document.getElementById('gp-trad-vy');
   const innehall = document.getElementById('gp-innehall');
+
+  if (parsed && granskaAnv) {
+    await laddaTrad();
+    valdKyrkogard = parsed.kyrkogard;
+    valdKvarter = parsed.kvarter;
+    if (tradVy) tradVy.hidden = true;
+    if (innehall) innehall.hidden = false;
+    try {
+      const res = await fetch(`${API}/admin/databasunderhall/anvandare/${encodeURIComponent(granskaAnv)}/registreringar`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Kunde inte hämta registreringar');
+      const data = await res.json();
+      gravplatserLista = data.registreringar || [];
+      if (gravplatserLista.length === 0) {
+        if (innehall) {
+          const rubrik = innehall.querySelector('#gp-rubrik');
+          if (rubrik) rubrik.textContent = 'Användaren har inga registreringar.';
+        }
+        document.title = 'Gravplatser';
+        applyVyFromUrl();
+        return;
+      }
+      const pathSlug = window.location.pathname.replace(/^\/gravplatser\/?/, '').replace(/\/$/, '');
+      const currentSlugDecoded = pathSlug ? decodeURIComponent(pathSlug) : '';
+      let idx = gravplatserLista.findIndex(function (g) {
+        const fs = (g.fullstandigt || [g.kyrkogard, g.kvarter, g.gravplatsnummer].filter(Boolean).join(' ')).trim();
+        return fs === currentSlugDecoded;
+      });
+      if (idx < 0) idx = 0;
+      currentIndex = idx;
+      granskaAnvandareMode = true;
+      granskaAnvandareId = granskaAnv;
+      await uppdateraVy();
+      applyVyFromUrl();
+      return;
+    } catch (e) {
+      if (innehall) {
+        const rubrik = innehall.querySelector('#gp-rubrik');
+        if (rubrik) rubrik.textContent = 'Kunde inte ladda användarens registreringar.';
+      }
+      document.title = 'Gravplatser';
+      applyVyFromUrl();
+      return;
+    }
+  }
+
   if (!parsed) {
     if (tradVy) tradVy.hidden = false;
     if (innehall) innehall.hidden = true;
