@@ -3931,43 +3931,7 @@ async function sparaInmatning() {
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
-    if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
-      fetch(`${API}/me`, { credentials: 'include' })
-        .then((r) => r.ok ? r.json() : null)
-        .then((me) => {
-          const p = (me && me.preferences) || {};
-          if (p.fun_enabled !== false) {
-            if (p.toast_on_new_yrke !== false) {
-              gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
-            }
-            if (p.sound_on_new_yrke !== false) {
-              gpPlayPling();
-            }
-          }
-        })
-        .catch(() => {});
-    }
-    if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
-      const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
-      if (newlyEarned.length > 0) {
-        fetch(`${API}/me`, { credentials: 'include' })
-          .then((r) => r.ok ? r.json() : null)
-          .then((me) => {
-            const p = (me && me.preferences) || {};
-            if (p.fun_enabled !== false) {
-              if (p.toast_on_new_yrke !== false) {
-                newlyEarned.forEach((item) => {
-                  gpShowToast(gpToastTextFörAchievement(item.level, item.label));
-                });
-              }
-              if (p.sound_on_new_yrke !== false) {
-                gpPlayPling();
-              }
-            }
-          })
-          .catch(() => {});
-      }
-    }
+    visaSparToasts(achievementsBefore, data);
   } catch (e) {
     visaSparStatus('Kunde inte spara: ' + e.message, false);
   }
@@ -4009,6 +3973,46 @@ function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
     }
   });
   return result;
+}
+
+/** Visar achievement- och yrkes-toasts efter sparning. Anropas från sparaInmatning och fardigtranskriberad-knappen. */
+function visaSparToasts(achievementsBefore, data) {
+  if (!data) return;
+  if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
+    fetch(`${API}/me`, { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((me) => {
+        const p = (me && me.preferences) || {};
+        if (p.fun_enabled !== false) {
+          if (p.toast_on_new_yrke !== false) {
+            gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
+          }
+          if (p.sound_on_new_yrke !== false) {
+            gpPlayPling();
+          }
+        }
+      })
+      .catch(() => {});
+  }
+  if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
+    const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
+    if (newlyEarned.length > 0) {
+      fetch(`${API}/me`, { credentials: 'include' })
+        .then((r) => r.ok ? r.json() : null)
+        .then((me) => {
+          const p = (me && me.preferences) || {};
+          if (p.fun_enabled !== false) {
+            newlyEarned.forEach((item) => {
+              gpShowToast(gpToastTextFörAchievement(item.level, item.label));
+            });
+            if (p.sound_on_new_yrke !== false) {
+              gpPlayPling();
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }
 }
 
 function gpToastTextFörAchievement(level, label) {
@@ -4141,6 +4145,12 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
   inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
   uppdateraFardigtranskriberadKnapp();
 
+  let achievementsBefore = null;
+  try {
+    const beforeRes = await fetch(`${API}/me/achievements`, { credentials: 'include' });
+    if (beforeRes.ok) achievementsBefore = await beforeRes.json();
+  } catch (_) { /* ignorerar */ }
+
   await ensureInmatningData();
   const payload = samlaInmatningData();
   if (!payload) return;
@@ -4172,6 +4182,7 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
     inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
     visaSparStatus('Sparat.', true);
+    visaSparToasts(achievementsBefore, data);
     if (inmatningData.fardigtranskriberad) {
       toggleRedigeraVy();
     }
