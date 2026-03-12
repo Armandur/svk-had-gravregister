@@ -679,95 +679,458 @@ async def get_gravplatser_saknar_postnummer_ort(
     db: Session = Depends(get_db),
 ):
     """
-    Lista gravplatser där minst en gravrättsinnehavare eller gravsatt har Gatuadress
-    men saknar Postnummer och Postort (för enkel korrigering efter adressmigration).
+    Lista gravplatser där minst en innehavare, gravsatt eller närmast anhörig har gatuadress
+    men saknar postnummer och/eller postort. Returnerar en rad per upptäckt fel med roll och adressfält.
     """
-    from sqlalchemy import and_, or_
+    def _post_tom(s):
+        return s is None or (isinstance(s, str) and s.strip() == "")
 
-    def _post_tom(col):
-        return or_(col == "", col.is_(None))
+    def _har_adress_saknar_post(r, gatuadress_attr="gatuadress"):
+        gata = getattr(r, gatuadress_attr, None) or ""
+        if not gata or not str(gata).strip():
+            return False
+        return _post_tom(getattr(r, "postnummer", None)) or _post_tom(getattr(r, "postort", None))
 
-    # Gravplats-ID:n där någon innehavare har gatuadress men inte postnummer/ort
-    inv_ids = [
-        r[0]
-        for r in db.query(GravplatsInnehavare.gravplats_id)
-        .filter(
-            GravplatsInnehavare.gatuadress.isnot(None),
-            GravplatsInnehavare.gatuadress != "",
-            _post_tom(GravplatsInnehavare.postnummer),
-            _post_tom(GravplatsInnehavare.postort),
-        )
-        .distinct()
-        .all()
-    ]
-    # Gravplats-ID:n där någon gravsatt har gatuadress men inte postnummer/ort
-    gs_ids = [
-        r[0]
-        for r in db.query(Gravsatt.gravplats_id)
-        .filter(
-            Gravsatt.gatuadress.isnot(None),
-            Gravsatt.gatuadress != "",
-            _post_tom(Gravsatt.postnummer),
-            _post_tom(Gravsatt.postort),
-        )
-        .distinct()
-        .all()
-    ]
-    all_ids = list(set(inv_ids) | set(gs_ids))
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        if _har_adress_saknar_post(r):
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).append({
+                "roll": "Innehavare",
+                "gatuadress": (r.gatuadress or "").strip(),
+                "postnummer": (r.postnummer or "").strip(),
+                "postort": (r.postort or "").strip(),
+            })
+
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        if _har_adress_saknar_post(r):
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).append({
+                "roll": "Gravsatt",
+                "gatuadress": (r.gatuadress or "").strip(),
+                "postnummer": (r.postnummer or "").strip(),
+                "postort": (r.postort or "").strip(),
+            })
+
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        if _har_adress_saknar_post(r, "adress"):
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).append({
+                "roll": "Närmast anhörig",
+                "gatuadress": (r.adress or "").strip(),
+                "postnummer": (r.postnummer or "").strip(),
+                "postort": (r.postort or "").strip(),
+            })
+
     if not all_ids:
         return {"gravplatser": [], "antal": 0}
 
-    # Antal innehavare/gravsatta som saknar post per gravplats
-    inv_saknar = (
-        db.query(GravplatsInnehavare.gravplats_id, func.count(GravplatsInnehavare.id))
-        .filter(
-            GravplatsInnehavare.gravplats_id.in_(all_ids),
-            GravplatsInnehavare.gatuadress.isnot(None),
-            GravplatsInnehavare.gatuadress != "",
-            _post_tom(GravplatsInnehavare.postnummer),
-            _post_tom(GravplatsInnehavare.postort),
-        )
-        .group_by(GravplatsInnehavare.gravplats_id)
-        .all()
-    )
-    gs_saknar = (
-        db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id))
-        .filter(
-            Gravsatt.gravplats_id.in_(all_ids),
-            Gravsatt.gatuadress.isnot(None),
-            Gravsatt.gatuadress != "",
-            _post_tom(Gravsatt.postnummer),
-            _post_tom(Gravsatt.postort),
-        )
-        .group_by(Gravsatt.gravplats_id)
-        .all()
-    )
-    inv_map = {gid: cnt for gid, cnt in inv_saknar}
-    gs_map = {gid: cnt for gid, cnt in gs_saknar}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    extra = {}
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_rader": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
 
-    def _format_fullstandigt(kyrkogard, kvarter, gravplatsnummer):
-        parts = [p for p in (kyrkogard, (kvarter or "").strip(), (gravplatsnummer or "").strip()) if p]
-        return " ".join(parts) if parts else ""
 
+def _dbuh_format_fullstandigt(kyrkogard, kvarter, gravplatsnummer):
+    """Hjälp för databasunderhåll: fullständig gravplatsbeteckning."""
+    parts = [p for p in (kyrkogard, (kvarter or "").strip(), (gravplatsnummer or "").strip()) if p]
+    return " ".join(parts) if parts else ""
+
+
+def _dbuh_gravplats_lista(db, gravplats_ids, extra=None):
+    """Returnerar lista med gravplatser (id, fullstandigt, mapp_namn, url_slug) + extra nycklar per id."""
+    if not gravplats_ids:
+        return []
     gravplatser = (
         db.query(Gravplats, MappConfig.namn)
         .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
-        .filter(Gravplats.id.in_(all_ids))
+        .filter(Gravplats.id.in_(gravplats_ids))
         .all()
     )
+    extra = extra or {}
     out = []
     for g, mapp_namn in gravplatser:
-        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        fullstandigt = _dbuh_format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
         slug = quote(fullstandigt, safe="") if fullstandigt else ""
-        out.append({
+        row = {
             "id": g.id,
             "fullstandigt": fullstandigt,
             "mapp_namn": mapp_namn or "",
-            "antal_innehavare_saknar": inv_map.get(g.id, 0),
-            "antal_gravsatta_saknar": gs_map.get(g.id, 0),
             "url_slug": slug,
-        })
+        }
+        for k, v in extra.get(g.id, {}).items():
+            row[k] = v
+        out.append(row)
     out.sort(key=lambda x: (x["fullstandigt"] or ""))
+    return out
+
+
+def _dbuh_last_edited_map(db, gravplats_ids: list[int]) -> dict[int, dict]:
+    """Hämtar senast ändrad (tid + användare) per gravplats från GravplatsInmatning + User."""
+    if not gravplats_ids:
+        return {}
+    rows = (
+        db.query(GravplatsInmatning.gravplats_id, GravplatsInmatning.last_edited_at, User.username)
+        .outerjoin(User, GravplatsInmatning.last_edited_by_user_id == User.id)
+        .filter(GravplatsInmatning.gravplats_id.in_(gravplats_ids))
+        .all()
+    )
+    result = {gid: {"last_edited_at": None, "last_edited_by_username": None} for gid in gravplats_ids}
+    for gid, edited_at, username in rows:
+        result[gid] = {"last_edited_at": edited_at, "last_edited_by_username": username}
+    return result
+
+
+# "f" som ord utan punkt (t.ex. "Eriksson f Larsson") – ska vara "f." för ofödd
+_RE_OFODD_F_UTAN_PUNKT = re.compile(r"(^|\s)f(?!\.)(\s|$)")
+
+
+def _namn_har_f_utan_punkt(s: str | None) -> bool:
+    """True om strängen innehåller ordet 'f' utan punkt (t.ex. 'efternamn f efternamn2')."""
+    if not s or not isinstance(s, str):
+        return False
+    return _RE_OFODD_F_UTAN_PUNKT.search(s) is not None
+
+
+_FALT_NAMN = {"fornamn": "Förnamn", "efternamn": "Efternamn", "namn": "Namn"}
+
+
+def _kombinerat_namn(r) -> str:
+    """Kombinerat namn från förnamn + efternamn, eller legacy namn-fält."""
+    fn = (getattr(r, "fornamn", None) or "").strip()
+    en = (getattr(r, "efternamn", None) or "").strip()
+    komb = " ".join(filter(None, [fn, en])).strip()
+    if komb:
+        return komb
+    return (getattr(r, "namn", None) or "").strip()
+
+
+def _samla_f_problem(r, roll: str) -> list[dict]:
+    """Returnerar högst en post per person: {roll, falt: 'Namn', varde: kombinerat namn} om något namnfält innehåller 'f' utan punkt."""
+    for col in _FALT_NAMN:
+        v = getattr(r, col, None)
+        if v and _namn_har_f_utan_punkt(v):
+            return [{"roll": roll, "falt": "Namn", "varde": _kombinerat_namn(r)}]
+    return []
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-ofodd-f")
+async def get_datakvalitet_ofodd_f(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista gravplatser där någon innehavare, gravsatt eller närmast anhörig har förnamn/efternamn
+    som innehåller ordet "f" utan punkt (t.ex. "Eriksson f Larsson") – ska vara "f." för ofödd.
+    Returnerar per gravplats vilka fält som har problem och deras värden.
+    """
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        detaljer = _samla_f_problem(r, "Innehavare")
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        detaljer = _samla_f_problem(r, "Gravsatt")
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        detaljer = _samla_f_problem(r, "Närmast anhörig")
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    if not all_ids:
+        return {"gravplatser": [], "antal": 0}
+
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    extra = {}
+    for gid in all_ids:
+        lista = problem_per_gp.get(gid, [])
+        inv_cnt = sum(1 for p in lista if p["roll"] == "Innehavare")
+        gs_cnt = sum(1 for p in lista if p["roll"] == "Gravsatt")
+        na_cnt = sum(1 for p in lista if p["roll"] == "Närmast anhörig")
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "antal_innehavare_f": inv_cnt,
+            "antal_gravsatta_f": gs_cnt,
+            "antal_narmast_anhorig_f": na_cnt,
+            "problem_falt": lista,
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+# Tecken som ofta tyder på felaktig inmatning (t.ex. skrivfel eller fel teckenuppsättning)
+OVANLIGA_TECKEN_DEFAULT = "=£$%&"
+
+# Fält som söks i ovanliga-tecken-verktyget: kolumn -> svensk etikett
+_OVANLIGA_INNEHAVARE_GRAVSATT = (
+    ("fornamn", "Förnamn"), ("efternamn", "Efternamn"), ("namn", "Namn"), ("yrke", "Yrke"),
+    ("gatuadress", "Gatuadress"), ("adress", "Adress"), ("postnummer", "Postnummer"),
+    ("postort", "Postort"), ("kommentar", "Kommentar"),
+)
+_OVANLIGA_NARMAST_ANHORIG = (
+    ("fornamn", "Förnamn"), ("efternamn", "Efternamn"), ("namn", "Namn"), ("yrke", "Yrke"),
+    ("adress", "Gatuadress"), ("postnummer", "Postnummer"), ("postort", "Postort"),
+    ("telefon", "Telefon"), ("kommentar", "Kommentar"),
+)
+_OVANLIGA_GRAVPLATS_INMATNING = (
+    ("underhall_text", "Underhåll"), ("gravrattstid", "Gravrättstid"), ("monument", "Monument"),
+    ("gravens_utformning", "Gravens utformning"), ("adress", "Adress"), ("kommentar", "Kommentar"),
+    ("gravplats_nr", "Gravplats nr"), ("karta_nr", "Karta nr"), ("gravbrev_nr", "Gravbrev nr"),
+    ("utfordat_den", "Utfärdat den"), ("storlek", "Storlek"),
+)
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-ovanliga-tecken")
+async def get_datakvalitet_ovanliga_tecken(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    tecken: str | None = None,
+):
+    """
+    Lista gravplatser där något textfält innehåller angivna ovanliga tecken.
+    Query-parametern 'tecken' anger vilka tecken som ska sökas (t.ex. =£$%&). Om utelämnad används standardvärde.
+    Returnerar en rad per upptäckt fält med roll, fältnamn och värde.
+    """
+    tecken_set = (tecken or "").strip() or OVANLIGA_TECKEN_DEFAULT
+
+    def har_ovanliga(s):
+        if not s or not isinstance(s, str):
+            return False
+        return any(c in s for c in tecken_set)
+
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_INNEHAVARE_GRAVSATT:
+            v = getattr(r, col, None)
+            if v and har_ovanliga(v):
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Innehavare", "falt": etikett, "varde": (v or "").strip(),
+                })
+
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_INNEHAVARE_GRAVSATT:
+            v = getattr(r, col, None)
+            if v and har_ovanliga(v):
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Gravsatt", "falt": etikett, "varde": (v or "").strip(),
+                })
+
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_NARMAST_ANHORIG:
+            v = getattr(r, col, None)
+            if v and har_ovanliga(v):
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Närmast anhörig", "falt": etikett, "varde": (v or "").strip(),
+                })
+
+    for r in db.query(GravplatsInmatning).all():
+        for col, etikett in _OVANLIGA_GRAVPLATS_INMATNING:
+            v = getattr(r, col, None)
+            if v and har_ovanliga(v):
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Gravplatsinmatning", "falt": etikett, "varde": (v or "").strip(),
+                })
+
+    if not all_ids:
+        return {"gravplatser": [], "antal": 0}
+
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    extra = {}
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _antal_punkter(s: str | None) -> int:
+    if not s or not isinstance(s, str):
+        return 0
+    return s.count(".")
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-manga-punkter")
+async def get_datakvalitet_manga_punkter(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    min_antal: int = 5,
+):
+    """
+    Lista fält som innehåller minst angivet antal punkter (.).
+    OCR tolkar ibland linjer av små prickar som många punkter. Query-parametern min_antal (default 5).
+    """
+    if min_antal < 1:
+        min_antal = 1
+
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_INNEHAVARE_GRAVSATT:
+            v = getattr(r, col, None)
+            n = _antal_punkter(v)
+            if n >= min_antal:
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Innehavare", "falt": etikett, "varde": (v or "").strip(), "antal_punkter": n,
+                })
+
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_INNEHAVARE_GRAVSATT:
+            v = getattr(r, col, None)
+            n = _antal_punkter(v)
+            if n >= min_antal:
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Gravsatt", "falt": etikett, "varde": (v or "").strip(), "antal_punkter": n,
+                })
+
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        for col, etikett in _OVANLIGA_NARMAST_ANHORIG:
+            v = getattr(r, col, None)
+            n = _antal_punkter(v)
+            if n >= min_antal:
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Närmast anhörig", "falt": etikett, "varde": (v or "").strip(), "antal_punkter": n,
+                })
+
+    for r in db.query(GravplatsInmatning).all():
+        for col, etikett in _OVANLIGA_GRAVPLATS_INMATNING:
+            v = getattr(r, col, None)
+            n = _antal_punkter(v)
+            if n >= min_antal:
+                all_ids.add(r.gravplats_id)
+                problem_per_gp.setdefault(r.gravplats_id, []).append({
+                    "roll": "Gravplatsinmatning", "falt": etikett, "varde": (v or "").strip(), "antal_punkter": n,
+                })
+
+    if not all_ids:
+        return {"gravplatser": [], "antal": 0}
+
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    extra = {}
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
+    return {"gravplatser": out, "antal": len(out)}
+
+
+def _namnfalt_har_siffror_eller_komma(s: str | None) -> bool:
+    if not s or not isinstance(s, str):
+        return False
+    return bool(re.search(r"[0-9,]", s))
+
+
+def _namnfalt_har_komma(s: str | None) -> bool:
+    return bool(s and isinstance(s, str) and "," in s)
+
+
+def _namnfalt_har_siffror(s: str | None) -> bool:
+    if not s or not isinstance(s, str):
+        return False
+    return bool(re.search(r"[0-9]", s))
+
+
+def _samla_namnfalt_problem(r, roll: str, typ: str = "bada") -> list[dict]:
+    """Returnerar högst en post per person om namnfält matchar typ: 'komma', 'siffror' eller 'bada'."""
+    def matchar(v):
+        if not v:
+            return False
+        if typ == "komma":
+            return _namnfalt_har_komma(v)
+        if typ == "siffror":
+            return _namnfalt_har_siffror(v)
+        return _namnfalt_har_siffror_eller_komma(v)
+
+    for col in _FALT_NAMN:
+        v = getattr(r, col, None)
+        if v and matchar(v):
+            return [{"roll": roll, "falt": "Namn", "varde": _kombinerat_namn(r)}]
+    return []
+
+
+@app.get("/api/admin/databasunderhall/datakvalitet-namn-siffror-komma")
+async def get_datakvalitet_namn_siffror_komma(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    typ: str | None = None,
+):
+    """
+    Lista gravplatser där namnfält innehåller siffror och/eller kommatecken.
+    Query-parametern 'typ': 'komma' (endast komma), 'siffror' (endast siffror) eller 'bada'. Default 'bada'.
+    """
+    filter_typ = (typ or "bada").strip().lower()
+    if filter_typ not in ("komma", "siffror", "bada"):
+        filter_typ = "bada"
+
+    all_ids = set()
+    problem_per_gp: dict[int, list[dict]] = {}
+
+    for r in db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.isnot(None)).all():
+        detaljer = _samla_namnfalt_problem(r, "Innehavare", filter_typ)
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    for r in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
+        detaljer = _samla_namnfalt_problem(r, "Gravsatt", filter_typ)
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    for r in db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.isnot(None)).all():
+        detaljer = _samla_namnfalt_problem(r, "Närmast anhörig", filter_typ)
+        if detaljer:
+            all_ids.add(r.gravplats_id)
+            problem_per_gp.setdefault(r.gravplats_id, []).extend(detaljer)
+
+    extra = {}
+    last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
+    for gid in all_ids:
+        led = last_edited_map.get(gid, {})
+        extra[gid] = {
+            "problem_falt": problem_per_gp.get(gid, []),
+            "last_edited_at": led.get("last_edited_at"),
+            "last_edited_by_username": led.get("last_edited_by_username"),
+        }
+
+    out = _dbuh_gravplats_lista(db, list(all_ids), extra)
     return {"gravplatser": out, "antal": len(out)}
 
 

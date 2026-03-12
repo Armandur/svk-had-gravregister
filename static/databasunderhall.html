@@ -6,7 +6,7 @@
   <title>Databasunderhåll – Gravregister</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    .dbuh-sida { max-width: 40rem; margin: 2rem auto; padding: 2rem; }
+    .dbuh-sida { max-width: 95rem; margin: 2rem auto; padding: 2rem; }
     .dbuh-sida h1 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--accent, #2563eb); }
     .dbuh-meny { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.25rem; }
     .dbuh-meny a, .dbuh-meny button {
@@ -35,6 +35,11 @@
       outline-offset: 2px;
     }
     .dbuh-meny button:disabled { opacity: 0.7; cursor: wait; }
+    .dbuh-ovanliga-tecken-rad { margin: 0; padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .dbuh-ovanliga-tecken-rad input { font-family: Consolas, "Courier New", monospace; padding: 0.35rem 0.5rem; }
+    .dbuh-namn-siffror-komma-typ { margin: 0.5rem 0; padding: 0.5rem 1rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; }
+    .dbuh-namn-siffror-komma-typ .dbuh-legend { font-size: 0.9rem; padding: 0 0.25rem; }
+    .dbuh-namn-siffror-komma-typ label { margin-right: 1rem; font-weight: normal; }
     .dbuh-tillbaka { margin-bottom: 1rem; }
     .dbuh-tillbaka a { color: var(--accent); text-decoration: none; }
     .dbuh-tillbaka a:hover { text-decoration: underline; }
@@ -46,6 +51,9 @@
     .dbuh-tabell tbody tr:hover { background: #f8fafc; }
     .dbuh-tabell a { color: var(--accent); text-decoration: none; }
     .dbuh-tabell a:hover { text-decoration: underline; }
+    .dbuh-problem-cell { max-width: 28rem; font-size: 0.9rem; line-height: 1.4; }
+    .dbuh-mono { font-family: Consolas, "Courier New", monospace; font-size: 0.9rem; }
+    .dbuh-varde { word-break: break-word; max-width: 20rem; }
     .dbuh-tom { color: #64748b; font-style: italic; margin-top: 1rem; }
     .dbuh-fel { color: #b91c1c; margin-top: 0.5rem; }
     .dbuh-info { font-size: 0.9rem; color: #64748b; margin-top: 0.5rem; }
@@ -59,6 +67,32 @@
       <button type="button" id="dbuh-btn-saknar-postnummer-ort">
         Gravplatser med gatuadress men utan postnummer/ort
       </button>
+      <button type="button" id="dbuh-btn-ofodd-f">
+        Datakvalitet: &quot;f&quot; utan punkt istället för &quot;f.&quot; (ofödd) i namn – innehavare, gravsatta, närmast anhöriga
+      </button>
+      <button type="button" id="dbuh-btn-ovanliga-tecken">
+        Datakvalitet: Ovanliga tecken (= £ $ % &) i fält
+      </button>
+      <p class="dbuh-ovanliga-tecken-rad">
+        <label for="dbuh-input-ovanliga-tecken">Tecken att söka efter:</label>
+        <input type="text" id="dbuh-input-ovanliga-tecken" value="=£$%&" size="20" aria-label="Tecken att söka efter" />
+      </p>
+      <button type="button" id="dbuh-btn-namn-siffror-komma">
+        Datakvalitet: Siffror eller kommatecken i namnfält
+      </button>
+      <fieldset class="dbuh-namn-siffror-komma-typ" aria-label="Visa resultat med">
+        <legend class="dbuh-legend">Visa resultat med:</legend>
+        <label><input type="radio" name="dbuh-namn-typ" value="bada" checked /> Båda (siffror och kommatecken)</label>
+        <label><input type="radio" name="dbuh-namn-typ" value="komma" /> Endast kommatecken</label>
+        <label><input type="radio" name="dbuh-namn-typ" value="siffror" /> Endast siffror</label>
+      </fieldset>
+      <button type="button" id="dbuh-btn-manga-punkter">
+        Datakvalitet: Fält med ovanligt många punkter
+      </button>
+      <p class="dbuh-ovanliga-tecken-rad">
+        <label for="dbuh-input-manga-punkter">Minst antal punkter:</label>
+        <input type="number" id="dbuh-input-manga-punkter" value="5" min="1" max="999" size="4" aria-label="Minst antal punkter" />
+      </p>
     </nav>
     <div class="dbuh-innehall" id="dbuh-innehall" hidden>
       <h2 id="dbuh-innehall-rubrik"></h2>
@@ -112,16 +146,17 @@
     return div.innerHTML;
   }
 
-  document.getElementById('dbuh-btn-saknar-postnummer-ort').addEventListener('click', function () {
-    const btn = this;
-    btn.disabled = true;
+  function fetchDatakvalitet(endpoint, rubrikText, infoText, tomText, buildRow) {
+    var endpointForButton = endpoint.split('?')[0];
+    const btn = document.querySelector('[data-dbuh-endpoint="' + endpointForButton + '"]');
+    if (btn) btn.disabled = true;
     visaInnehall();
-    rubrik.textContent = 'Gravplatser med gatuadress men utan postnummer/ort';
-    info.textContent = 'Gravplatser där någon gravrättsinnehavare eller gravsatt har gatuadress men saknar postnummer och postort. Klicka på gravplatsen för att gå till den och korrigera.';
+    rubrik.textContent = rubrikText;
+    info.textContent = infoText;
     tabellWrap.hidden = true;
     tomEl.hidden = true;
 
-    fetch(API + '/admin/databasunderhall/gravplatser-saknar-postnummer-ort', { credentials: 'include' })
+    fetch(API + endpoint, { credentials: 'include' })
       .then(function (res) {
         if (res.status === 401) {
           window.location.href = '/login?redirect=' + encodeURIComponent('/databasunderhall');
@@ -134,36 +169,204 @@
         return res.json();
       })
       .then(function (data) {
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
         if (!data) return;
         const lista = data.gravplatser || [];
         if (lista.length === 0) {
           tomEl.hidden = false;
-          tomEl.textContent = 'Inga gravplatser med gatuadress utan postnummer/ort.';
+          tomEl.textContent = tomText;
           return;
         }
-        thead.innerHTML = '<tr><th scope="col">Gravplats</th><th scope="col">Mapp</th><th scope="col">Innehavare saknar</th><th scope="col">Gravsatta saknar</th></tr>';
+        var headerHtml = buildRow(lista[0], true);
+        thead.innerHTML = headerHtml;
         tbody.innerHTML = '';
         lista.forEach(function (gp) {
-          const tr = document.createElement('tr');
-          const slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
-          const gravLink = slug
-            ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
-            : escapeHtml(gp.fullstandigt || '–');
-          tr.innerHTML =
-            '<td>' + gravLink + '</td>' +
-            '<td>' + escapeHtml(gp.mapp_namn || '–') + '</td>' +
-            '<td>' + (gp.antal_innehavare_saknar != null ? gp.antal_innehavare_saknar : 0) + '</td>' +
-            '<td>' + (gp.antal_gravsatta_saknar != null ? gp.antal_gravsatta_saknar : 0) + '</td>';
-          tbody.appendChild(tr);
+          var rowOrRows = buildRow(gp, false);
+          var rowCells = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
+          rowCells.forEach(function (cells) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = cells;
+            tbody.appendChild(tr);
+          });
         });
         tabellWrap.hidden = false;
       })
       .catch(function (err) {
-        btn.disabled = false;
+        if (btn) btn.disabled = false;
         felEl.textContent = err.message || 'Ett fel uppstod';
         felEl.hidden = false;
       });
+  }
+
+  document.getElementById('dbuh-btn-saknar-postnummer-ort').addEventListener('click', function () {
+    this.setAttribute('data-dbuh-endpoint', '/admin/databasunderhall/gravplatser-saknar-postnummer-ort');
+    fetchDatakvalitet(
+      '/admin/databasunderhall/gravplatser-saknar-postnummer-ort',
+      'Gravplatser med gatuadress men utan postnummer/ort',
+      'Gravplatser där någon gravrättsinnehavare, gravsatt eller närmast anhörig har gatuadress men saknar postnummer och/eller postort. Klicka på gravplatsen för att gå till den och korrigera.',
+      'Inga gravplatser med gatuadress utan postnummer/ort.',
+      function (gp, isHeader) {
+        if (isHeader) {
+          return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Gatuadress</th><th scope="col">Postnummer</th><th scope="col">Postort</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+        }
+        var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+        var gravLink = slug
+          ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+          : escapeHtml(gp.fullstandigt || '–');
+        var base = '<td>' + gravLink + '</td>';
+        var problemRader = gp.problem_rader || [];
+        if (problemRader.length === 0) {
+          return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+        }
+        return problemRader.map(function (rad) {
+          return base + '<td class="dbuh-mono">' + escapeHtml(rad.roll) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(rad.gatuadress || '') + '</td><td class="dbuh-mono">' + escapeHtml(rad.postnummer || '') + '</td><td class="dbuh-mono">' + escapeHtml(rad.postort || '') + '</td>' + cellSenastAndrad(gp);
+        });
+      }
+    );
+  });
+
+  function formateraProblemFalt(problemFalt) {
+    if (!problemFalt || !Array.isArray(problemFalt) || problemFalt.length === 0) return '–';
+    return problemFalt.map(function (p) {
+      return escapeHtml(p.roll) + ': ' + escapeHtml(p.falt) + ' = «' + escapeHtml(p.varde || '') + '»';
+    }).join('<br>');
+  }
+
+  function formateraSenastAndrad(isoDatetime) {
+    if (!isoDatetime) return '–';
+    try {
+      var d = new Date(isoDatetime);
+      if (isNaN(d.getTime())) return escapeHtml(isoDatetime);
+      return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) {
+      return escapeHtml(isoDatetime);
+    }
+  }
+
+  function cellSenastAndrad(gp) {
+    return '<td>' + formateraSenastAndrad(gp.last_edited_at) + '</td><td>' + escapeHtml(gp.last_edited_by_username || '') + '</td>';
+  }
+
+  document.getElementById('dbuh-btn-ofodd-f').addEventListener('click', function () {
+    this.setAttribute('data-dbuh-endpoint', '/admin/databasunderhall/datakvalitet-ofodd-f');
+    fetchDatakvalitet(
+      '/admin/databasunderhall/datakvalitet-ofodd-f',
+      'Datakvalitet: "f" utan punkt istället för "f." (ofödd)',
+      'Gravplatser där förnamn eller efternamn innehåller ordet "f" utan punkt hos innehavare, gravsatta eller närmast anhörig (t.ex. "Eriksson f Larsson"). Det ska stå "f." för ofödd (t.ex. "Eriksson f. Larsson"). Klicka på gravplatsen för att korrigera.',
+      'Inga gravplatser med "f" utan punkt i namn hittades.',
+      function (gp, isHeader) {
+        if (isHeader) {
+          return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Fält</th><th scope="col">Värde</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+        }
+        var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+        var gravLink = slug
+          ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+          : escapeHtml(gp.fullstandigt || '–');
+        var base = '<td>' + gravLink + '</td>';
+        var problemFalt = gp.problem_falt || [];
+        if (problemFalt.length === 0) {
+          return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+        }
+        return problemFalt.map(function (p) {
+          return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
+        });
+      }
+    );
+  });
+
+  document.getElementById('dbuh-btn-ovanliga-tecken').addEventListener('click', function () {
+    this.setAttribute('data-dbuh-endpoint', '/admin/databasunderhall/datakvalitet-ovanliga-tecken');
+    var teckenInput = document.getElementById('dbuh-input-ovanliga-tecken');
+    var tecken = teckenInput ? teckenInput.value : '=£$%&';
+    var endpoint = '/admin/databasunderhall/datakvalitet-ovanliga-tecken?tecken=' + encodeURIComponent(tecken);
+    fetchDatakvalitet(
+      endpoint,
+      'Datakvalitet: Ovanliga tecken',
+      'Gravplatser där något textfält innehåller de angivna tecknen. Du kan ändra tecken i fältet "Tecken att söka efter" och köra sökningen igen. Klicka på gravplatsen för att granska och korrigera.',
+      'Inga gravplatser med de angivna tecknen hittades.',
+      function (gp, isHeader) {
+        if (isHeader) {
+          return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Fält</th><th scope="col">Värde</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+        }
+        var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+        var gravLink = slug
+          ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+          : escapeHtml(gp.fullstandigt || '–');
+        var base = '<td>' + gravLink + '</td>';
+        var problemFalt = gp.problem_falt || [];
+        if (problemFalt.length === 0) {
+          return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+        }
+        return problemFalt.map(function (p) {
+          return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
+        });
+      }
+    );
+  });
+
+  document.getElementById('dbuh-btn-namn-siffror-komma').addEventListener('click', function () {
+    this.setAttribute('data-dbuh-endpoint', '/admin/databasunderhall/datakvalitet-namn-siffror-komma');
+    var typRadios = document.querySelectorAll('input[name="dbuh-namn-typ"]:checked');
+    var typ = (typRadios.length && typRadios[0].value) ? typRadios[0].value : 'bada';
+    var endpoint = '/admin/databasunderhall/datakvalitet-namn-siffror-komma?typ=' + encodeURIComponent(typ);
+    fetchDatakvalitet(
+      endpoint,
+      'Datakvalitet: Siffror eller kommatecken i namnfält',
+      'Gravplatser där namnfält innehåller siffror och/eller kommatecken. Välj med radioknapparna om du vill visa endast kommatecken, endast siffror eller båda. Klicka på gravplatsen för att korrigera.',
+      'Inga gravplatser med valt filter hittades.',
+      function (gp, isHeader) {
+        if (isHeader) {
+          return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Fält</th><th scope="col">Värde</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+        }
+        var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+        var gravLink = slug
+          ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+          : escapeHtml(gp.fullstandigt || '–');
+        var base = '<td>' + gravLink + '</td>';
+        var problemFalt = gp.problem_falt || [];
+        if (problemFalt.length === 0) {
+          return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+        }
+        return problemFalt.map(function (p) {
+          return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
+        });
+      }
+    );
+  });
+
+  document.getElementById('dbuh-btn-manga-punkter').addEventListener('click', function () {
+    this.setAttribute('data-dbuh-endpoint', '/admin/databasunderhall/datakvalitet-manga-punkter');
+    var inputEl = document.getElementById('dbuh-input-manga-punkter');
+    var minAntal = 5;
+    if (inputEl) {
+      var n = parseInt(inputEl.value, 10);
+      if (!isNaN(n) && n >= 1) minAntal = n;
+    }
+    var endpoint = '/admin/databasunderhall/datakvalitet-manga-punkter?min_antal=' + minAntal;
+    fetchDatakvalitet(
+      endpoint,
+      'Datakvalitet: Fält med ovanligt många punkter',
+      'Fält som innehåller minst ' + minAntal + ' punkt(er). Grunddata har ibland linjer av små prickar som OCR tolkar som många punkter. Justera "Minst antal punkter" och kör igen för att ändra tröskel. Klicka på gravplatsen för att korrigera.',
+      'Inga fält med så många punkter hittades.',
+      function (gp, isHeader) {
+        if (isHeader) {
+          return '<tr><th scope="col">Gravplats</th><th scope="col">Roll</th><th scope="col">Fält</th><th scope="col">Antal punkter</th><th scope="col">Värde</th><th scope="col">Senast ändrad</th><th scope="col">Senast ändrad av</th></tr>';
+        }
+        var slug = gp.url_slug || slugFromFullstandigt(gp.fullstandigt);
+        var gravLink = slug
+          ? '<a href="/gravplatser/' + escapeHtml(slug) + '">' + escapeHtml(gp.fullstandigt || '–') + '</a>'
+          : escapeHtml(gp.fullstandigt || '–');
+        var base = '<td>' + gravLink + '</td>';
+        var problemFalt = gp.problem_falt || [];
+        if (problemFalt.length === 0) {
+          return [ base + '<td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td><td class="dbuh-mono"></td>' + cellSenastAndrad(gp) ];
+        }
+        return problemFalt.map(function (p) {
+          var antalP = p.antal_punkter != null ? p.antal_punkter : '';
+          return base + '<td class="dbuh-mono">' + escapeHtml(p.roll) + '</td><td class="dbuh-mono">' + escapeHtml(p.falt) + '</td><td class="dbuh-mono">' + escapeHtml(antalP) + '</td><td class="dbuh-mono dbuh-varde">' + escapeHtml(p.varde || '') + '</td>' + cellSenastAndrad(gp);
+        });
+      }
+    );
   });
 
   if (tillbakaTillMeny) {
