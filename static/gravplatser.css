@@ -810,6 +810,21 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   white-space: nowrap;
 }
 
+.gp-granska-anvandare-info {
+  margin: 0.35rem 0 0 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.gp-granska-anvandare-info a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.gp-granska-anvandare-info a:hover {
+  text-decoration: underline;
+}
+
 /* Färdigtranskriberad-knapp: grön när klar, gul när påbörjad, röd när ej klar; i läsvy (slutat redigera) är den inte klickbar */
 .gp-inmatning-btn-fardigtranskriberad {
   padding: 0.35rem 0.75rem;

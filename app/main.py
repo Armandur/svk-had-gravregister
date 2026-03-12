@@ -1308,56 +1308,60 @@ async def get_databasunderhall_skisser(
     return {"skisser": skisser, "antal": len(skisser)}
 
 
-@app.get("/api/admin/databasunderhall/skisser")
-async def get_databasunderhall_skisser(
+@app.get("/api/admin/databasunderhall/anvandare-med-registreringar")
+async def get_anvandare_med_registreringar(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Lista användare som har minst en post i redigeringsloggen (för admin-granskning)."""
+    rows = (
+        db.query(User.id, User.username)
+        .join(GravplatsRedigeringslogg, GravplatsRedigeringslogg.user_id == User.id)
+        .distinct()
+        .order_by(User.username)
+        .all()
+    )
+    return {"anvandare": [{"id": r[0], "username": r[1] or ""} for r in rows]}
+
+
+@app.get("/api/admin/databasunderhall/anvandare/{user_id:int}/registreringar")
+async def get_anvandare_registreringar(
+    user_id: int,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """
-    Lista alla registrerade skisser (en rad per skiss) med gravplatsinfo.
-    Används av datakvalitetsverktyget för att bläddra igenom skisser.
+    Lista gravplatser som användaren har redigerat, kronologiskt senast först.
+    Samma struktur som /api/gravplatser för att kunna använda samma vy.
     """
-    rows = (
-        db.query(GravplatsSkiss, Gravplats, MappConfig.namn)
-        .join(Gravplats, GravplatsSkiss.gravplats_id == Gravplats.id)
-        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
-        .order_by(
-            Gravplats.kyrkogard,
-            Gravplats.kvarter,
-            Gravplats.gravplatsnummer,
-            Gravplats.start_sida,
-            GravplatsSkiss.sort_order,
-            GravplatsSkiss.id,
+    subq = (
+        db.query(
+            GravplatsRedigeringslogg.gravplats_id,
+            func.max(GravplatsRedigeringslogg.edited_at).label("last_edited"),
         )
+        .filter(GravplatsRedigeringslogg.user_id == user_id)
+        .group_by(GravplatsRedigeringslogg.gravplats_id)
+    ).subquery()
+    rows = (
+        db.query(Gravplats, MappConfig.namn, subq.c.last_edited)
+        .join(subq, Gravplats.id == subq.c.gravplats_id)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .order_by(subq.c.last_edited.desc())
         .all()
     )
-    skisser = []
-    for idx, (skiss_row, g, mapp_namn) in enumerate(rows):
-        fullstandigt = _dbuh_format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
-        slug = quote(fullstandigt, safe="") if fullstandigt else ""
-        skisser.append({
-            "index": idx,
-            "gravplats_id": g.id,
-            "fullstandigt": fullstandigt,
-            "url_slug": slug,
-            "mapp_namn": mapp_namn or "",
-            "kyrkogard": (g.kyrkogard or "").strip(),
-            "kvarter": (g.kvarter or "").strip(),
-            "gravplatsnummer": (g.gravplatsnummer or "").strip(),
-            "skiss": {
-                "id": skiss_row.id,
-                "x": skiss_row.x,
-                "y": skiss_row.y,
-                "width": skiss_row.width,
-                "height": skiss_row.height,
-                "source_type": skiss_row.source_type,
-                "content_sida": skiss_row.content_sida,
-                "segment_index": getattr(skiss_row, "segment_index", None),
-                "halva": skiss_row.halva,
-                "extramaterial_id": skiss_row.extramaterial_id,
-            },
+    out = []
+    for g, mapp_namn, last_edited in rows:
+        out.append({
+            "id": g.id,
+            "kvarter": g.kvarter,
+            "gravplatsnummer": g.gravplatsnummer,
+            "start_sida": g.start_sida,
+            "kyrkogard": g.kyrkogard,
+            "mapp_namn": mapp_namn,
+            "fullstandigt": _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer),
+            "last_edited_at": last_edited,
         })
-    return {"skisser": skisser, "antal": len(skisser)}
+    return {"registreringar": out, "antal": len(out)}
 
 
 # ---------- Fler datakvalitetsverktyg: datum, postnummer, dubbletter, mellanslag, yrke, beteckning, OCR ----------
@@ -1778,6 +1782,12 @@ async def databasunderhall_ofodd_f(admin: User = Depends(require_admin)):
 async def databasunderhall_datakvalitet_skisser(admin: User = Depends(require_admin)):
     """Databasunderhåll – datakvalitet bläddra skisser."""
     return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-datakvalitet-skisser.html")
+
+
+@app.get("/databasunderhall/granska-anvandare")
+async def databasunderhall_granska_anvandare(admin: User = Depends(require_admin)):
+    """Databasunderhåll – granska en användares registreringar i kronologisk ordning."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "databasunderhall-granska-anvandare.html")
 
 
 @app.get("/databasunderhall/datakvalitet-datum")
