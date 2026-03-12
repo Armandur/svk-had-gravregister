@@ -15,6 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Byggtids-version (commit/branch) – sätt med docker build --build-arg GIT_COMMIT=... --build-arg GIT_BRANCH=...
+ARG GIT_COMMIT=
+ARG GIT_BRANCH=
+RUN echo -n "${GIT_COMMIT}" > /app/.git_commit && echo -n "${GIT_BRANCH}" > /app/.git_branch
+
 COPY app/ ./app/
 COPY static/ ./static/
 COPY docs/ ./docs/

@@ -17,6 +17,12 @@ Byta `<din-org-eller-användare>` mot ditt GitHub-användarnamn eller org (t.ex.
 docker build -t gravregister .
 ```
 
+För att **version (commit/branch)** ska visas på startsidan och i säkerhetskopior i containern, bygg med build-args (git körs på host, inte i imagen):
+
+```bash
+docker build --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) -t gravregister .
+```
+
 ## Volymer
 
 Containern förväntar sig en **data-katalog** (t.ex. `/data`) som innehåller:

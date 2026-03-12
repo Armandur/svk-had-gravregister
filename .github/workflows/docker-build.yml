@@ -33,6 +33,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Git version for image (commit + branch)
+        id: gitver
+        run: |
+          echo "commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
       - name: Image metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -50,5 +56,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT=${{ steps.gitver.outputs.commit }}
+            GIT_BRANCH=${{ steps.gitver.outputs.branch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
