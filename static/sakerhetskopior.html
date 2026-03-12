@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Säkerhetskopior – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .backup-sida { max-width: 42rem; margin: 2rem auto; padding: 2rem; }
+    .backup-sida h1 { font-size: 1.35rem; margin-bottom: 1rem; color: var(--accent, #2563eb); }
+    .backup-tillbaka { margin-bottom: 1rem; }
+    .backup-tillbaka a { color: var(--accent); text-decoration: none; }
+    .backup-tillbaka a:hover { text-decoration: underline; }
+    .backup-skapa { margin: 1.5rem 0; }
+    .backup-skapa button {
+      padding: 0.75rem 1.25rem;
+      font-size: 1rem;
+      background: var(--accent, #2563eb);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .backup-skapa button:hover { opacity: 0.9; }
+    .backup-skapa button:disabled { opacity: 0.6; cursor: wait; }
+    .backup-lista { margin-top: 1rem; }
+    .backup-lista h2 { font-size: 1rem; margin: 0 0 0.5rem; color: #475569; }
+    .backup-lista ul { list-style: none; padding: 0; margin: 0; }
+    .backup-lista li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border, #e2e8f0);
+    }
+    .backup-lista li:last-child { border-bottom: none; }
+    .backup-lista .backup-namn { font-family: monospace; font-size: 0.9rem; word-break: break-all; }
+    .backup-lista .backup-meta { font-size: 0.85rem; color: #64748b; white-space: nowrap; }
+    .backup-lista a {
+      color: var(--accent, #2563eb);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .backup-lista a:hover { text-decoration: underline; }
+    .backup-tom { color: #64748b; font-size: 0.95rem; margin-top: 0.5rem; }
+    .backup-meddelande { margin-top: 0.75rem; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.9rem; }
+    .backup-meddelande.ok { background: #dcfce7; color: #166534; }
+    .backup-meddelande.fel { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <main class="backup-sida">
+    <h1>Säkerhetskopior</h1>
+    <p class="backup-tillbaka"><a href="/">← Tillbaka till menyn</a></p>
+    <p>Skapa en kopia av databasen med namn som innehåller datum, tid och aktuell branch/commit. Filer sparas i mappen <code>säkerhetskopior</code> och kan laddas ner här.</p>
+    <div class="backup-skapa">
+      <button type="button" id="backup-skapa-btn">Skapa säkerhetskopia</button>
+    </div>
+    <div id="backup-meddelande" class="backup-meddelande" hidden aria-live="polite"></div>
+    <div class="backup-lista">
+      <h2>Tillgängliga säkerhetskopior</h2>
+      <ul id="backup-lista-ul"></ul>
+      <p id="backup-tom" class="backup-tom" hidden>Inga säkerhetskopior ännu.</p>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function() {
+  const API = '/api';
+  const listaEl = document.getElementById('backup-lista-ul');
+  const tomEl = document.getElementById('backup-tom');
+  const meddelandeEl = document.getElementById('backup-meddelande');
+  const skapaBtn = document.getElementById('backup-skapa-btn');
+
+  function visaMeddelande(text, ok) {
+    meddelandeEl.textContent = text;
+    meddelandeEl.className = 'backup-meddelande ' + (ok ? 'ok' : 'fel');
+    meddelandeEl.hidden = false;
+  }
+
+  function formateraStorlek(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function formateraDatum(mtime) {
+    var d = new Date(mtime * 1000);
+    return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function laddaLista() {
+    fetch(API + '/backups', { credentials: 'include' })
+      .then(function(r) {
+        if (!r.ok) throw new Error('Kunde inte hämta listan');
+        return r.json();
+      })
+      .then(function(data) {
+        var backups = data.backups || [];
+        listaEl.innerHTML = '';
+        if (backups.length === 0) {
+          tomEl.hidden = false;
+        } else {
+          tomEl.hidden = true;
+          backups.forEach(function(b) {
+            var li = document.createElement('li');
+            var meta = formateraDatum(b.mtime) + ' · ' + formateraStorlek(b.size);
+            li.innerHTML = '<span class="backup-namn">' + escapeHtml(b.name) + '</span>' +
+              '<span class="backup-meta">' + escapeHtml(meta) + '</span>' +
+              '<a href="' + API + '/backups/' + encodeURIComponent(b.name) + '" download="' + escapeHtml(b.name) + '">Ladda ner</a>';
+            listaEl.appendChild(li);
+          });
+        }
+      })
+      .catch(function() {
+        listaEl.innerHTML = '';
+        tomEl.textContent = 'Kunde inte ladda listan. Kontrollera att du är inloggad som admin.';
+        tomEl.hidden = false;
+      });
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  skapaBtn.addEventListener('click', function() {
+    skapaBtn.disabled = true;
+    meddelandeEl.hidden = true;
+    fetch(API + '/backups', { method: 'POST', credentials: 'include' })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(e) { throw new Error(e.detail || 'Kunde inte skapa säkerhetskopia'); });
+        return r.json();
+      })
+      .then(function(data) {
+        visaMeddelande('Säkerhetskopia skapad: ' + data.name, true);
+        laddaLista();
+      })
+      .catch(function(e) {
+        visaMeddelande(e.message || 'Något gick fel.', false);
+      })
+      .finally(function() {
+        skapaBtn.disabled = false;
+      });
+  });
+
+  (window.gpEnsureAuthPromise || (typeof gpEnsureAuth === 'function' && gpEnsureAuth()) || Promise.resolve())
+    .then(function(me) {
+      if (!me || !me.is_admin) {
+        window.location.href = '/';
+        return;
+      }
+      laddaLista();
+    })
+    .catch(function() {
+      window.location.href = '/login';
+    });
+})();
+  </script>
+</body>
+</html>

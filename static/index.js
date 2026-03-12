@@ -12,6 +12,16 @@
   const listEl = document.getElementById('startsida-sok-list');
   if (!inputEl || !listEl) return;
 
+  // Visa version (commit + branch) från API
+  fetch(API + '/version', { credentials: 'include' }).then(function(res) { return res.ok ? res.json() : null; }).then(function(v) {
+    var el = document.getElementById('startsida-version');
+    if (!el || !v) return;
+    var parts = [];
+    if (v.commit) parts.push(v.commit);
+    if (v.branch) parts.push(v.branch);
+    if (parts.length) el.textContent = 'Version: ' + parts.join(' · ');
+  }).catch(function() {});
+
   (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function(me) {
     if (!me) return;
     var el = document.getElementById('inloggad-anvandare');
@@ -39,6 +49,11 @@
     if (dbuhLink) {
       if (me.is_admin) dbuhLink.removeAttribute('hidden');
       else dbuhLink.remove();
+    }
+    var backupLink = document.getElementById('startsida-sakerhetskopior-lank');
+    if (backupLink) {
+      if (me.is_admin) backupLink.removeAttribute('hidden');
+      else backupLink.remove();
     }
   });
 

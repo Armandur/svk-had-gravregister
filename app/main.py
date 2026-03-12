@@ -3,7 +3,9 @@ import base64
 import json
 import os
 import re
+import shutil
 import signal
+import subprocess
 import sys
 import threading
 from collections import Counter
@@ -20,7 +22,7 @@ from sqlalchemy import and_, case, func, or_, tuple_, update
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY
+from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY, BACKUP_DIR, DATABASE_PATH
 from app.database import (
     SessionLocal,
     User,
@@ -60,9 +62,41 @@ app = FastAPI(
 )
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
+# Git-version (commit, branch) läs vid startup för visning på startsidan
+GIT_VERSION: dict = {"commit": None, "branch": None}
+
+
+def _read_git_version() -> None:
+    """Sätt GIT_VERSION från git rev-parse (körs vid startup)."""
+    repo_root = Path(__file__).resolve().parent.parent
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if r.returncode == 0 and r.stdout:
+            GIT_VERSION["commit"] = r.stdout.strip()
+        r2 = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if r2.returncode == 0 and r2.stdout:
+            branch = r2.stdout.strip()
+            if branch and branch != "HEAD":
+                GIT_VERSION["branch"] = branch
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
 
 @app.on_event("startup")
 def startup():
+    _read_git_version()
     init_db()
     db = SessionLocal()
     try:
@@ -114,6 +148,72 @@ def _content_page_to_path(
 async def root():
     """Startsida – meny till programmets delar."""
     return FileResponse(Path(__file__).parent.parent / "static" / "index.html")
+
+
+@app.get("/api/version")
+def api_version():
+    """Aktuellt commit-id och branch för visning som version på startsidan."""
+    return {"commit": GIT_VERSION.get("commit"), "branch": GIT_VERSION.get("branch")}
+
+
+def _sanitize_backup_filename_part(s: str | None) -> str:
+    """Endast alfanumeriskt, bindestreck och understreck (för branch/commit i filnamn)."""
+    if not s or not s.strip():
+        return "unknown"
+    return re.sub(r"[^a-zA-Z0-9_-]", "", s.strip())[:80] or "unknown"
+
+
+@app.get("/api/backups")
+def list_backups(admin: User = Depends(require_admin)):
+    """Lista säkerhetskopior (filnamn, storlek, datum) – endast admin."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    files = []
+    for p in sorted(BACKUP_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+        if p.is_file() and p.suffix == ".db":
+            st = p.stat()
+            files.append({
+                "name": p.name,
+                "size": st.st_size,
+                "mtime": st.st_mtime,
+            })
+    return {"backups": files}
+
+
+@app.post("/api/backups")
+def create_backup(admin: User = Depends(require_admin)):
+    """Skapa säkerhetskopia av databasen. Filnamn: gravregister_YYYY-MM-DD_HH-MM-SS_branch-{branch}_commit-{commit}.db."""
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    datum = now.strftime("%Y-%m-%d")
+    tid = now.strftime("%H-%M-%S")
+    branch = _sanitize_backup_filename_part(GIT_VERSION.get("branch"))
+    commit = _sanitize_backup_filename_part(GIT_VERSION.get("commit"))
+    name = f"gravregister_{datum}_{tid}_branch-{branch}_commit-{commit}.db"
+    dest = BACKUP_DIR / name
+    if not DATABASE_PATH.exists():
+        raise HTTPException(status_code=500, detail="Databasfil saknas")
+    shutil.copy2(DATABASE_PATH, dest)
+    st = dest.stat()
+    return {"name": name, "size": st.st_size, "mtime": st.st_mtime}
+
+
+@app.get("/api/backups/{filename:path}")
+def download_backup(filename: str, admin: User = Depends(require_admin)):
+    """Ladda ner en säkerhetskopia – endast admin. Filnamn måste vara .db och ligga i BACKUP_DIR."""
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Ogiltigt filnamn")
+    if not filename.endswith(".db"):
+        raise HTTPException(status_code=400, detail="Endast .db-filer")
+    path = BACKUP_DIR / filename
+    if not path.is_file() or not path.resolve().is_relative_to(BACKUP_DIR.resolve()):
+        raise HTTPException(status_code=404, detail="Filen finns inte")
+    return FileResponse(path, filename=filename, media_type="application/octet-stream")
+
+
+@app.get("/sakerhetskopior")
+async def sakerhetskopior_sida(admin: User = Depends(require_admin)):
+    """Sida för att skapa och ladda ner säkerhetskopior av databasen."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "sakerhetskopior.html")
 
 
 @app.get("/login")

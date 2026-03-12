@@ -118,6 +118,7 @@
     .startsida-inloggad { font-size: 0.9rem; color: #64748b; margin: -0.5rem 0 1rem 0; }
     .startsida-inloggad a { color: var(--accent, #2563eb); text-decoration: none; }
     .startsida-inloggad a:hover { text-decoration: underline; }
+    .startsida-version { font-size: 0.8rem; color: #94a3b8; margin-top: 1.5rem; }
   </style>
 </head>
 <body>
@@ -148,8 +149,10 @@
       <a href="/admin" id="startsida-admin-lank" hidden>Användarhantering</a>
       <a href="/loggar" id="startsida-loggar-lank" hidden>Loggar</a>
       <a href="/databasunderhall" id="startsida-databasunderhall-lank" hidden>Databasunderhåll</a>
+      <a href="/sakerhetskopior" id="startsida-sakerhetskopior-lank" hidden>Säkerhetskopior</a>
       <a href="#" id="startsida-logga-ut">Logga ut</a>
     </nav>
+    <p id="startsida-version" class="startsida-version" aria-live="polite"></p>
   </main>
   <script src="/static/auth.js"></script>
   <script>window.gpEnsureAuthPromise = gpEnsureAuth();</script>
