@@ -3093,9 +3093,20 @@ function renderInmatningSektionLäs(sektion) {
       } else {
         html += radOmFyllt('Namn', namn);
       }
-      const rader = radOmFyllt('Yrke', g.yrke) + radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') + radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) + radOmFyllt('Födelsedatum', fodelse) +
-        radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) +
-        radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar);
+      const fodelseVarde = fodelse
+        ? (g.fod_nr ? `${fodelse} (Födelsenummer: ${esc(g.fod_nr)})` : fodelse)
+        : (g.fod_nr ? `Födelsenummer: ${esc(g.fod_nr)}` : '');
+      const dodsVarde = dods
+        ? (g.dodsbok_nr ? `${dods} (Db. nummer: ${esc(g.dodsbok_nr)})` : dods)
+        : (g.dodsbok_nr ? `Db. nummer: ${esc(g.dodsbok_nr)}` : '');
+      const rader = radOmFyllt('Yrke', g.yrke) +
+        radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') +
+        radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) +
+        radOmFyllt('Födelsedatum', fodelseVarde || null) +
+        radOmFyllt('Dödsdatum', dodsVarde || null) +
+        radOmFyllt('Gravsatt den', g.gravsatt_den) +
+        radOmFyllt('Urna/Kista', g.urna) +
+        radOmFyllt('Kommentar', g.kommentar);
       html += rader + '</li>';
       return html;
     }).join('') + '</ul></div>';
@@ -3762,24 +3773,18 @@ function blockGravsatt(idx, g) {
           <label>Postort <textarea name="gs_postort_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.postort || '')}</textarea></label>
         </span>
       </div>
-      <div class="gp-gravsatt-rad">
+      <div class="gp-gravsatt-rad gp-gravsatt-rad-datum">
         <label>Födelsedatum <textarea name="gs_fodelse_datum_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_fodelse_datum_fel_${idx}">${esc(fodelseDatum)}</textarea></label>
         <span class="gp-datum-fel" id="gs_fodelse_datum_fel_${idx}" hidden aria-live="polite"></span>
         <label>Födelsenummer <textarea name="gs_fod_nr_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.fod_nr)}</textarea></label>
-      </div>
-      <div class="gp-gravsatt-rad">
         <label>Dödsdatum <textarea name="gs_dods_datum_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_dods_datum_fel_${idx}">${esc(dodsDatum)}</textarea></label>
         <span class="gp-datum-fel" id="gs_dods_datum_fel_${idx}" hidden aria-live="polite"></span>
         <label>Db. nummer <textarea name="gs_dodsbok_nr_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.dodsbok_nr)}</textarea></label>
+        <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
+        <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
       </div>
       <div class="gp-gravsatt-rad gp-gravsatt-rad-gravsatt-urna">
-        <span class="gp-gravsatt-gravsatt-den-wrap">
-          <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
-          <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
-        </span>
         <label class="gp-gravsatt-urna-hoger">Urna/Kista <select name="gs_urna_${idx}">${urnaOptions}</select></label>
-      </div>
-      <div class="gp-gravsatt-rad">
         <label>Kommentar <textarea name="gs_kommentar_${idx}" class="gp-falt-expanderbar" rows="2">${esc(g.kommentar || '')}</textarea></label>
       </div>
       <button type="button" class="gp-gravsatt-ta-bort">Ta bort</button>
