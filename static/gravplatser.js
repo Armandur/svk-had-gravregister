@@ -32,6 +32,8 @@ let inmatningData = null;
 let inmatningDirty = false;
 /** true = visa formulärfält (redigera), false = visa läsvy (layout). */
 let inmatningRedigerar = false;
+/** Ordning på inmatningssektioner för aktuell användare. */
+let inmatningSectionsOrder = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
 
 /** Input/textarea som ska få extraherad text (Alternativ B: sätts vid fokus). */
 let ocrTargetElement = null;
@@ -113,6 +115,34 @@ function getAdressTrioFalt(element) {
   const postort = row.querySelector('[name="inv_postort"], [name="na_postort"], [name^="gs_postort_"]');
   if (!gatuadress || !postnummer || !postort) return null;
   return { gatuadress, postnummer, postort };
+}
+
+function applyInmatningSectionsOrder(order) {
+  const root = document.getElementById('gp-inmatning');
+  if (!root) return;
+  const allowed = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  const unique = [];
+  (order || []).forEach((s) => {
+    if (allowed.indexOf(s) !== -1 && unique.indexOf(s) === -1) unique.push(s);
+  });
+  allowed.forEach((s) => {
+    if (unique.indexOf(s) === -1) unique.push(s);
+  });
+  inmatningSectionsOrder = unique;
+  const sectionsById = {};
+  allowed.forEach((s) => {
+    const btn = root.querySelector('.gp-sektion-rubrik[data-sektion="' + s + '"]');
+    if (btn) {
+      const sektionEl = btn.closest('.gp-inmatning-sektion');
+      if (sektionEl) sectionsById[s] = sektionEl;
+    }
+  });
+  unique.forEach((s) => {
+    const el = sectionsById[s];
+    if (el && el.parentNode === root) {
+      root.appendChild(el);
+    }
+  });
 }
 
 /**
@@ -3063,9 +3093,20 @@ function renderInmatningSektionLäs(sektion) {
       } else {
         html += radOmFyllt('Namn', namn);
       }
-      const rader = radOmFyllt('Yrke', g.yrke) + radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') + radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) + radOmFyllt('Födelsedatum', fodelse) +
-        radOmFyllt('Födelsenummer', g.fod_nr) + radOmFyllt('Dödsdatum', dods) + radOmFyllt('Db. nummer', g.dodsbok_nr) +
-        radOmFyllt('Gravsatt den', g.gravsatt_den) + radOmFyllt('Urna/Kista', g.urna) + radOmFyllt('Kommentar', g.kommentar);
+      const fodelseVarde = fodelse
+        ? (g.fod_nr ? `${fodelse} (Födelsenummer: ${esc(g.fod_nr)})` : fodelse)
+        : (g.fod_nr ? `Födelsenummer: ${esc(g.fod_nr)}` : '');
+      const dodsVarde = dods
+        ? (g.dodsbok_nr ? `${dods} (Db. nummer: ${esc(g.dodsbok_nr)})` : dods)
+        : (g.dodsbok_nr ? `Db. nummer: ${esc(g.dodsbok_nr)}` : '');
+      const rader = radOmFyllt('Yrke', g.yrke) +
+        radOmFyllt('Gatuadress', g.gatuadress || g.adress || '') +
+        radOmFyllt('Postnummer / ort', [g.postnummer, g.postort].filter(Boolean).join(' ').trim() || null) +
+        radOmFyllt('Födelsedatum', fodelseVarde || null) +
+        radOmFyllt('Dödsdatum', dodsVarde || null) +
+        radOmFyllt('Gravsatt den', g.gravsatt_den) +
+        radOmFyllt('Urna/Kista', g.urna) +
+        radOmFyllt('Kommentar', g.kommentar);
       html += rader + '</li>';
       return html;
     }).join('') + '</ul></div>';
@@ -3732,24 +3773,18 @@ function blockGravsatt(idx, g) {
           <label>Postort <textarea name="gs_postort_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.postort || '')}</textarea></label>
         </span>
       </div>
-      <div class="gp-gravsatt-rad">
+      <div class="gp-gravsatt-rad gp-gravsatt-rad-datum">
         <label>Födelsedatum <textarea name="gs_fodelse_datum_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_fodelse_datum_fel_${idx}">${esc(fodelseDatum)}</textarea></label>
         <span class="gp-datum-fel" id="gs_fodelse_datum_fel_${idx}" hidden aria-live="polite"></span>
         <label>Födelsenummer <textarea name="gs_fod_nr_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.fod_nr)}</textarea></label>
-      </div>
-      <div class="gp-gravsatt-rad">
         <label>Dödsdatum <textarea name="gs_dods_datum_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_dods_datum_fel_${idx}">${esc(dodsDatum)}</textarea></label>
         <span class="gp-datum-fel" id="gs_dods_datum_fel_${idx}" hidden aria-live="polite"></span>
         <label>Db. nummer <textarea name="gs_dodsbok_nr_${idx}" class="gp-falt-expanderbar" rows="1">${esc(g.dodsbok_nr)}</textarea></label>
+        <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
+        <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
       </div>
       <div class="gp-gravsatt-rad gp-gravsatt-rad-gravsatt-urna">
-        <span class="gp-gravsatt-gravsatt-den-wrap">
-          <label>Gravsatt den <textarea name="gs_gravsatt_den_${idx}" class="gp-falt-expanderbar" rows="1" aria-describedby="gs_gravsatt_den_fel_${idx}">${esc(g.gravsatt_den)}</textarea></label>
-          <span class="gp-datum-fel" id="gs_gravsatt_den_fel_${idx}" hidden aria-live="polite"></span>
-        </span>
         <label class="gp-gravsatt-urna-hoger">Urna/Kista <select name="gs_urna_${idx}">${urnaOptions}</select></label>
-      </div>
-      <div class="gp-gravsatt-rad">
         <label>Kommentar <textarea name="gs_kommentar_${idx}" class="gp-falt-expanderbar" rows="2">${esc(g.kommentar || '')}</textarea></label>
       </div>
       <button type="button" class="gp-gravsatt-ta-bort">Ta bort</button>
@@ -3969,7 +4004,17 @@ function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
     const afterRank = gpAchievementLevelRank(n.earned_level);
     const beforeRank = gpAchievementLevelRank(beforeByKey[n.achievement_key]);
     if (afterRank > beforeRank) {
-      result.push({ level: n.earned_level, label: n.label || n.achievement_key });
+      const level = n.earned_level;
+      const thresholds = n || {};
+      const levelInfo = level && thresholds[level] ? thresholds[level] : null;
+      const threshold = levelInfo && typeof levelInfo.threshold === 'number' ? levelInfo.threshold : null;
+      result.push({
+        key: n.achievement_key,
+        level,
+        label: n.label || n.achievement_key,
+        threshold,
+        current: typeof n.current_value === 'number' ? n.current_value : null,
+      });
     }
   });
   return result;
@@ -3985,7 +4030,9 @@ function visaSparToasts(achievementsBefore, data) {
         const p = (me && me.preferences) || {};
         if (p.fun_enabled !== false) {
           if (p.toast_on_new_yrke !== false) {
-            gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
+            (data.new_unique_yrken || []).forEach((yrke) => {
+              gpShowToast(gpToastTextFörNyttYrke([yrke]));
+            });
           }
           if (p.sound_on_new_yrke !== false) {
             gpPlayPling();
@@ -4003,7 +4050,7 @@ function visaSparToasts(achievementsBefore, data) {
           const p = (me && me.preferences) || {};
           if (p.fun_enabled !== false) {
             newlyEarned.forEach((item) => {
-              gpShowToast(gpToastTextFörAchievement(item.level, item.label));
+              gpShowToast(gpToastTextFörAchievement(item.key, item.level, item.label, item.threshold, item.current));
             });
             if (p.sound_on_new_yrke !== false) {
               gpPlayPling();
@@ -4015,12 +4062,22 @@ function visaSparToasts(achievementsBefore, data) {
   }
 }
 
-function gpToastTextFörAchievement(level, label) {
-  const nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : level || '';
+function gpToastTextFörAchievement(level, label, threshold, current) {
+  const nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
+  const emoji = level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : level === 'gold' ? '🥇' : '🎉';
+  const labelHtml = label ? `<strong>${esc(label)}</strong>` : '';
+  const countText = typeof current === 'number' ? `${current} st` : null;
+  const thresholdText = typeof threshold === 'number' ? `${threshold} st` : null;
   const formuleringar = [
-    'Grattis! Du fick ' + nivåNamn + ' i ' + label + '!',
-    'Utmärkt – ' + nivåNamn + ' i ' + label + '. Bra jobbat!',
-    '🎉 ' + nivåNamn.charAt(0).toUpperCase() + nivåNamn.slice(1) + ' i ' + label + ' – grattis!',
+    thresholdText && countText
+      ? `${emoji} Du har nått ${nivåNamn} i ${labelHtml} – ${countText}!.`
+      : `${emoji} Du har nått ${nivåNamn} i ${labelHtml}!`,
+    thresholdText && countText
+      ? `${emoji} Ny utmärkelse i ${labelHtml}: ${nivåNamn} (${countText} totalt!`
+      : `${emoji} Ny utmärkelse i ${labelHtml}: nivån ${nivåNamn}.`,
+    thresholdText && countText
+      ? `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml} genom att nå ${countText}!`
+      : `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml}.`,
   ];
   return formuleringar[Math.floor(Math.random() * formuleringar.length)];
 }
@@ -4029,35 +4086,43 @@ function gpToastTextFörAchievement(level, label) {
 function gpToastTextFörNyttYrke(yrkenLista) {
   const yrken = yrkenLista && yrkenLista.length ? yrkenLista : [];
   const yrkeText = yrken.length > 1 ? yrken.join(', ') : (yrken[0] || '');
+  const yrkeHtml = yrkeText ? `<strong>${esc(yrkeText)}</strong>` : '';
   const formuleringar = [
-    'Nytt yrke upptäckt: ' + yrkeText + '!',
-    'Du upptäckte yrket ' + yrkeText + '!',
-    'Ett yrke vi inte sett förut: ' + yrkeText + '!',
-    'Upptäckt! ' + yrkeText + ' fanns inte i registret tidigare.',
-    'Pling! Yrket ' + yrkeText + ' har vi inte sett förut!.',
-    'Första gången vi ser ' + yrkeText + ' i arkivet!',
-    'Snyggt - du hittade yrket ' + yrkeText + '!',
-    'Yrket ' + yrkeText + ' dyker upp för första gången.',
-    'Ny upptäckt i registret: ' + yrkeText + '.',
-    'Oj, ' + yrkeText + ' - det hade vi inte sett tidigare!',
-    'Kanon - ett nytt yrke upptäckt: ' + yrkeText + '.',
-    'Rätt coolt - ' + yrkeText + ' syns nu i systemet för första gången!',
+    'Nytt yrke upptäckt: ' + yrkeHtml + '!',
+    'Du upptäckte yrket ' + yrkeHtml + '!',
+    'Ett yrke vi inte sett förut: ' + yrkeHtml + '!',
+    'Upptäckt! ' + yrkeHtml + ' fanns inte i registret tidigare.',
+    'Pling! Yrket ' + yrkeHtml + ' har vi inte sett förut!.',
+    'Första gången vi ser ' + yrkeHtml + ' i arkivet!',
+    'Snyggt - du hittade yrket ' + yrkeHtml + '!',
+    'Yrket ' + yrkeHtml + ' dyker upp för första gången.',
+    'Ny upptäckt i registret: ' + yrkeHtml + '.',
+    'Oj, ' + yrkeHtml + ' - det hade vi inte sett tidigare!',
+    'Kanon - ett nytt yrke upptäckt: ' + yrkeHtml + '.',
+    'Rätt coolt - ' + yrkeHtml + ' syns nu i systemet för första gången!',
   ];
   return formuleringar[Math.floor(Math.random() * formuleringar.length)];
 }
 
 /** Toast för "roliga saker" (t.ex. nytt unikt yrke). */
 function gpShowToast(text) {
+  let container = document.getElementById('gp-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'gp-toast-container';
+    container.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;z-index:10000;';
+    document.body.appendChild(container);
+  }
   const el = document.createElement('div');
   el.setAttribute('role', 'alert');
   el.setAttribute('aria-live', 'polite');
-  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;z-index:10000;animation:gp-toast-in 0.2s ease;';
-  el.textContent = text;
-  document.body.appendChild(el);
+  el.style.cssText = 'max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;animation:gp-toast-in 0.2s ease;';
+  el.innerHTML = text;
+  container.appendChild(el);
   setTimeout(() => {
     el.style.animation = 'gp-toast-out 0.2s ease forwards';
     setTimeout(() => el.remove(), 220);
-  }, 3500);
+  }, 5500);
 }
 
 /** Kort pling-ljud (spelar Ping-sound.mp3 från static, faller tillbaka till Web Audio om fil saknas). */
@@ -4267,6 +4332,23 @@ async function initFromUrl() {
   if (innehall) innehall.hidden = false;
   await laddaGravplatserForKvarter(parsed.gravplatsnummer);
   applyVyFromUrl();
+}
+
+// Hämta användarpreferenser (inkl. sektionordning) och tillämpa på inmatningssektionerna.
+try {
+  (window.gpEnsureAuthPromise || (typeof gpEnsureAuth === 'function' && gpEnsureAuth()) || Promise.resolve(null))
+    .then((me) => {
+      if (me && me.preferences && Array.isArray(me.preferences.inmatning_sections_order)) {
+        applyInmatningSectionsOrder(me.preferences.inmatning_sections_order);
+      } else {
+        applyInmatningSectionsOrder(inmatningSectionsOrder);
+      }
+    })
+    .catch(() => {
+      applyInmatningSectionsOrder(inmatningSectionsOrder);
+    });
+} catch (_) {
+  applyInmatningSectionsOrder(inmatningSectionsOrder);
 }
 
 initFromUrl();

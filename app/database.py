@@ -266,6 +266,15 @@ class AchievementNiva(Base):
     label: Mapped[str | None] = mapped_column(nullable=True)  # valfri beskrivning t.ex. "10 st"
 
 
+class AchievementYrkesGrupp(Base):
+    """Vilka yrken som räknas in i en viss yrkesbaserad prestationsnyckel."""
+    __tablename__ = "achievement_yrkes_grupp"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    achievement_key: Mapped[str] = mapped_column(index=True)
+    yrke: Mapped[str] = mapped_column(index=True)
+
+
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -316,9 +325,189 @@ def init_db():
                     ("storgravar", "bronze", 1, "1 storgrav"),
                     ("storgravar", "silver", 10, "10 storgravar"),
                     ("storgravar", "gold", 50, "50 storgravar"),
+                    # Yrkesbaserade achievements – grundnivåer
+                    ("yrke_kyrkans_man", "bronze", 5, "5 kyrkliga yrken"),
+                    ("yrke_kyrkans_man", "silver", 10, "10 kyrkliga yrken"),
+                    ("yrke_kyrkans_man", "gold", 20, "20 kyrkliga yrken"),
+                    ("yrke_havets_man", "bronze", 5, "5 sjöfolk/lotser"),
+                    ("yrke_havets_man", "silver", 10, "10 sjöfolk/lotser"),
+                    ("yrke_havets_man", "gold", 20, "20 sjöfolk/lotser"),
+                    ("yrke_handelns_furste", "bronze", 5, "5 handelsyrken"),
+                    ("yrke_handelns_furste", "silver", 10, "10 handelsyrken"),
+                    ("yrke_handelns_furste", "gold", 20, "20 handelsyrken"),
+                    ("yrke_fabrikens_herre", "bronze", 3, "3 bruk/fabrik-yrken"),
+                    ("yrke_fabrikens_herre", "silver", 6, "6 bruk/fabrik-yrken"),
+                    ("yrke_fabrikens_herre", "gold", 10, "10 bruk/fabrik-yrken"),
+                    ("yrke_hantverkets_mastare", "bronze", 5, "5 hantverksyrken"),
+                    ("yrke_hantverkets_mastare", "silver", 10, "10 hantverksyrken"),
+                    ("yrke_hantverkets_mastare", "gold", 20, "20 hantverksyrken"),
+                    ("yrke_lardomens_vaktare", "bronze", 3, "3 lärar-/skolyrken"),
+                    ("yrke_lardomens_vaktare", "silver", 6, "6 lärar-/skolyrken"),
+                    ("yrke_lardomens_vaktare", "gold", 10, "10 lärar-/skolyrken"),
+                    ("yrke_lag_och_ordning", "bronze", 3, "3 lag/ordning-yrken"),
+                    ("yrke_lag_och_ordning", "silver", 6, "6 lag/ordning-yrken"),
+                    ("yrke_lag_och_ordning", "gold", 10, "10 lag/ordning-yrken"),
+                    ("yrke_fruar_mamseller", "bronze", 5, "5 fruar/mamseller"),
+                    ("yrke_fruar_mamseller", "silver", 10, "10 fruar/mamseller"),
+                    ("yrke_fruar_mamseller", "gold", 20, "20 fruar/mamseller"),
+                    ("yrke_jord_och_gard", "bronze", 5, "5 jord/gårds-yrken"),
+                    ("yrke_jord_och_gard", "silver", 10, "10 jord/gårds-yrken"),
+                    ("yrke_jord_och_gard", "gold", 20, "20 jord/gårds-yrken"),
                 ]
                 for key, level, threshold, label in defaults:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # Seed yrkesgrupper för achievements om tabellen är tom
+    with SessionLocal() as db:
+        try:
+            if db.query(AchievementYrkesGrupp).count() == 0:
+                yrkes_defaults: dict[str, list[str]] = {
+                    "yrke_kyrkans_man": [
+                        "Biskop",
+                        "Biskopinnan",
+                        "f. Biskopen",
+                        "Kyrkoherde",
+                        "Komminister",
+                        "Domkyrkoorganist",
+                        "Prosten",
+                        "Konsistorieamanuensen",
+                        "Konsistorienotarie",
+                        "Pastor",
+                        "Hospitalsöfverläkaren",
+                    ],
+                    "yrke_havets_man": [
+                        "Sjökapten",
+                        "Sjökaptenen",
+                        "f. Sjökaptenen",
+                        "f.d. Sjökaptenen",
+                        "Styrman",
+                        "Styrmannen",
+                        "f. Styrmannen",
+                        "fd Styrmannen",
+                        "Ångbåtsbefälhavaren",
+                        "Ångbåtsbefälhavafen",
+                        "Ångbåtskommissionären",
+                        "Kronolotsen",
+                        "Lotsen",
+                        "Överlotsen",
+                        "Skepparen",
+                        "Skeppsbyggaren",
+                        "Skeppsbyggmästaren",
+                        "Skeppsklarerare",
+                        "Skeppsklareraren",
+                    ],
+                    "yrke_handelns_furste": [
+                        "Handlanden",
+                        "Handlaren",
+                        "Handl",
+                        "Handl.",
+                        "Handelsagenten",
+                        "Handelsbiträdet",
+                        "Handelsbokhållaren",
+                        "Handelsidkerskan",
+                        "Handelsresanden",
+                        "grossh.",
+                        "Grosshandl.",
+                        "Grosshandlare",
+                        "Grosshandlare Konsul",
+                        "Grosshandlaren",
+                        "köpman",
+                        "Köpmannen",
+                        "Trävaruhandlare",
+                        "Trävaruhandlaren",
+                        "Tobakshandl.",
+                        "Järnhandlaren",
+                        "Skohandlaren",
+                    ],
+                    "yrke_fabrikens_herre": [
+                        "Brukspatronen",
+                        "f.d. Bruksförvaltaren",
+                        "Fabrikör",
+                        "Fabrikören",
+                        "Verkmästaren",
+                        "f Verkmästeren",
+                        "Maskinist",
+                        "Maskinisten",
+                        "fd Maskinisten",
+                    ],
+                    "yrke_hantverkets_mastare": [
+                        "Bagaren",
+                        "Bagarmästaren",
+                        "Bryggaren",
+                        "Bleckslagaren",
+                        "Garvaren",
+                        "Glasmästaren",
+                        "Kopparslagaren",
+                        "Smed",
+                        "Smeden",
+                        "Smidesmästaren",
+                        "Murarmästaren",
+                        "Målaren",
+                        "Målarmästaren",
+                        "Målaränkan",
+                        "Skomakaren",
+                        "Skomakarmästaren",
+                        "Snickaren",
+                        "Tenngjutaren",
+                        "Tunnbindaren",
+                        "Repslagaren",
+                        "Svarfvaren",
+                        "Järnsvarfaren",
+                        "Sotarmästaren",
+                        "Timmermannen",
+                    ],
+                    "yrke_lardomens_vaktare": [
+                        "Folkskolläraren",
+                        "Gymnastikläraren",
+                        "Lektor",
+                        "Lektoren",
+                        "Lektorskan",
+                        "Sem. adj.",
+                        "Seminareieadj.",
+                        "Seminarieadj.",
+                        "Seminarielärare",
+                        "Seminarierektor",
+                        "Magistern",
+                        "Rektor",
+                    ],
+                    "yrke_lag_och_ordning": [
+                        "Rådman",
+                        "Rådmannen",
+                        "Lagmannen",
+                        "vice Häradshövding",
+                        "Häradsskrivaren",
+                        "Stadsfiskalen",
+                        "Poliskonstapeln",
+                        "Polisöferkonstapen",
+                        "Tullbevakningschef",
+                        "Tullvaktmästaren",
+                    ],
+                    "yrke_fruar_mamseller": [
+                        "Fru",
+                        "Fröken",
+                        "Mamsell",
+                        "Mademamsellerna",
+                        "Änkan",
+                        "Änkefru",
+                        "Jungfru",
+                        "Makan",
+                    ],
+                    "yrke_jord_och_gard": [
+                        "Hemmansägaren",
+                        "fd Hemmansägaren",
+                        "Jordägaren",
+                        "Jordägren",
+                        "Gårdsägaren",
+                        "Passessionaten",
+                        "Lantbrukaren",
+                    ],
+                }
+                for key, yrken in yrkes_defaults.items():
+                    for yrke in yrken:
+                        db.add(AchievementYrkesGrupp(achievement_key=key, yrke=yrke))
                 db.commit()
         except Exception:
             db.rollback()
@@ -334,6 +523,206 @@ def init_db():
                     ("storgravar", "gold", 50, "50 storgravar"),
                 ]:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
+            # Migration: lägg till yrkesgruppstabellens standardvärden om tabellen är tom (befintliga databaser)
+            if db.query(AchievementYrkesGrupp).count() == 0:
+                yrkes_defaults_migration: dict[str, list[str]] = {
+                    "yrke_kyrkans_man": [
+                        "Biskop",
+                        "Biskopinnan",
+                        "f. Biskopen",
+                        "Kyrkoherde",
+                        "Komminister",
+                        "Domkyrkoorganist",
+                        "Prosten",
+                        "Konsistorieamanuensen",
+                        "Konsistorienotarie",
+                        "Pastor",
+                        "Hospitalsöfverläkaren",
+                    ],
+                    "yrke_havets_man": [
+                        "Sjökapten",
+                        "Sjökaptenen",
+                        "f. Sjökaptenen",
+                        "f.d. Sjökaptenen",
+                        "Styrman",
+                        "Styrmannen",
+                        "f. Styrmannen",
+                        "fd Styrmannen",
+                        "Ångbåtsbefälhavaren",
+                        "Ångbåtsbefälhavafen",
+                        "Ångbåtskommissionären",
+                        "Kronolotsen",
+                        "Lotsen",
+                        "Överlotsen",
+                        "Skepparen",
+                        "Skeppsbyggaren",
+                        "Skeppsbyggmästaren",
+                        "Skeppsklarerare",
+                        "Skeppsklareraren",
+                    ],
+                    "yrke_handelns_furste": [
+                        "Handlanden",
+                        "Handlaren",
+                        "Handl",
+                        "Handl.",
+                        "Handelsagenten",
+                        "Handelsbiträdet",
+                        "Handelsbokhållaren",
+                        "Handelsidkerskan",
+                        "Handelsresanden",
+                        "grossh.",
+                        "Grosshandl.",
+                        "Grosshandlare",
+                        "Grosshandlare Konsul",
+                        "Grosshandlaren",
+                        "köpman",
+                        "Köpmannen",
+                        "Trävaruhandlare",
+                        "Trävaruhandlaren",
+                        "Tobakshandl.",
+                        "Järnhandlaren",
+                        "Skohandlaren",
+                    ],
+                    "yrke_fabrikens_herre": [
+                        "Brukspatronen",
+                        "f.d. Bruksförvaltaren",
+                        "Fabrikör",
+                        "Fabrikören",
+                        "Verkmästaren",
+                        "f Verkmästeren",
+                        "Maskinist",
+                        "Maskinisten",
+                        "fd Maskinisten",
+                    ],
+                    "yrke_hantverkets_mastare": [
+                        "Bagaren",
+                        "Bagarmästaren",
+                        "Bryggaren",
+                        "Bleckslagaren",
+                        "Garvaren",
+                        "Glasmästaren",
+                        "Kopparslagaren",
+                        "Smed",
+                        "Smeden",
+                        "Smidesmästaren",
+                        "Murarmästaren",
+                        "Målaren",
+                        "Målarmästaren",
+                        "Målaränkan",
+                        "Skomakaren",
+                        "Skomakarmästaren",
+                        "Snickaren",
+                        "Tenngjutaren",
+                        "Tunnbindaren",
+                        "Repslagaren",
+                        "Svarfvaren",
+                        "Järnsvarfaren",
+                        "Sotarmästaren",
+                        "Timmermannen",
+                    ],
+                    "yrke_lardomens_vaktare": [
+                        "Folkskolläraren",
+                        "Gymnastikläraren",
+                        "Lektor",
+                        "Lektoren",
+                        "Lektorskan",
+                        "Sem. adj.",
+                        "Seminareieadj.",
+                        "Seminarieadj.",
+                        "Seminarielärare",
+                        "Seminarierektor",
+                        "Magistern",
+                        "Rektor",
+                    ],
+                    "yrke_lag_och_ordning": [
+                        "Rådman",
+                        "Rådmannen",
+                        "Lagmannen",
+                        "vice Häradshövding",
+                        "Häradsskrivaren",
+                        "Stadsfiskalen",
+                        "Poliskonstapeln",
+                        "Polisöferkonstapen",
+                        "Tullbevakningschef",
+                        "Tullvaktmästaren",
+                    ],
+                    "yrke_fruar_mamseller": [
+                        "Fru",
+                        "Fröken",
+                        "Mamsell",
+                        "Mademamsellerna",
+                        "Änkan",
+                        "Änkefru",
+                        "Jungfru",
+                        "Makan",
+                    ],
+                    "yrke_jord_och_gard": [
+                        "Hemmansägaren",
+                        "fd Hemmansägaren",
+                        "Jordägaren",
+                        "Jordägren",
+                        "Gårdsägaren",
+                        "Passessionaten",
+                        "Lantbrukaren",
+                    ],
+                }
+                for key, yrken in yrkes_defaults_migration.items():
+                    for yrke in yrken:
+                        db.add(AchievementYrkesGrupp(achievement_key=key, yrke=yrke))
+                db.commit()
+            # Migration: lägg till yrkesbaserade achievements om de saknas (befintliga databaser)
+            yrke_keys = [
+                "yrke_kyrkans_man",
+                "yrke_havets_man",
+                "yrke_handelns_furste",
+                "yrke_fabrikens_herre",
+                "yrke_hantverkets_mastare",
+                "yrke_lardomens_vaktare",
+                "yrke_lag_och_ordning",
+                "yrke_fruar_mamseller",
+                "yrke_jord_och_gard",
+            ]
+            existing_keys = {
+                r.achievement_key
+                for r in db.query(AchievementNiva.achievement_key).filter(
+                    AchievementNiva.achievement_key.in_(yrke_keys)
+                ).distinct()
+            }
+            if existing_keys != set(yrke_keys):
+                # Lägg endast till de som saknas; trösklar som i seeding ovan
+                defaults_extra = [
+                    ("yrke_kyrkans_man", "bronze", 5, "5 kyrkliga yrken"),
+                    ("yrke_kyrkans_man", "silver", 10, "10 kyrkliga yrken"),
+                    ("yrke_kyrkans_man", "gold", 20, "20 kyrkliga yrken"),
+                    ("yrke_havets_man", "bronze", 5, "5 sjöfolk/lotser"),
+                    ("yrke_havets_man", "silver", 10, "10 sjöfolk/lotser"),
+                    ("yrke_havets_man", "gold", 20, "20 sjöfolk/lotser"),
+                    ("yrke_handelns_furste", "bronze", 5, "5 handelsyrken"),
+                    ("yrke_handelns_furste", "silver", 10, "10 handelsyrken"),
+                    ("yrke_handelns_furste", "gold", 20, "20 handelsyrken"),
+                    ("yrke_fabrikens_herre", "bronze", 3, "3 bruk/fabrik-yrken"),
+                    ("yrke_fabrikens_herre", "silver", 6, "6 bruk/fabrik-yrken"),
+                    ("yrke_fabrikens_herre", "gold", 10, "10 bruk/fabrik-yrken"),
+                    ("yrke_hantverkets_mastare", "bronze", 5, "5 hantverksyrken"),
+                    ("yrke_hantverkets_mastare", "silver", 10, "10 hantverksyrken"),
+                    ("yrke_hantverkets_mastare", "gold", 20, "20 hantverksyrken"),
+                    ("yrke_lardomens_vaktare", "bronze", 3, "3 lärar-/skolyrken"),
+                    ("yrke_lardomens_vaktare", "silver", 6, "6 lärar-/skolyrken"),
+                    ("yrke_lardomens_vaktare", "gold", 10, "10 lärar-/skolyrken"),
+                    ("yrke_lag_och_ordning", "bronze", 3, "3 lag/ordning-yrken"),
+                    ("yrke_lag_och_ordning", "silver", 6, "6 lag/ordning-yrken"),
+                    ("yrke_lag_och_ordning", "gold", 10, "10 lag/ordning-yrken"),
+                    ("yrke_fruar_mamseller", "bronze", 5, "5 fruar/mamseller"),
+                    ("yrke_fruar_mamseller", "silver", 10, "10 fruar/mamseller"),
+                    ("yrke_fruar_mamseller", "gold", 20, "20 fruar/mamseller"),
+                    ("yrke_jord_och_gard", "bronze", 5, "5 jord/gårds-yrken"),
+                    ("yrke_jord_och_gard", "silver", 10, "10 jord/gårds-yrken"),
+                    ("yrke_jord_och_gard", "gold", 20, "20 jord/gårds-yrken"),
+                ]
+                for key, level, threshold, label in defaults_extra:
+                    if key not in existing_keys:
+                        db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
                 db.commit()
         except Exception:
             db.rollback()

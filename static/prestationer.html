@@ -19,29 +19,47 @@
     .prestationer-rad { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; }
     .prestationer-rad:last-child { margin-bottom: 0; }
     .prestationer-varde { font-weight: 600; color: var(--accent, #2563eb); }
-    .prestationer-nivaer { display: grid; gap: 0.75rem; margin-top: 1rem; }
-    .prestationer-niva-kort {
+    .prestationer-nivaer { margin-top: 1rem; }
+    .prestationer-medalj-grid {
+      display: grid;
+      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .prestationer-medalj-kort {
       background: var(--card, #fff);
       border: 1px solid var(--border, #e2e8f0);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+      border-radius: 10px;
+      padding: 0.9rem 0.75rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.2rem;
     }
-    .prestationer-niva-namn { font-weight: 600; min-width: 10rem; }
-    .prestationer-niva-badges { display: flex; gap: 0.35rem; align-items: center; }
-    .prestationer-badge {
-      padding: 0.2rem 0.45rem; font-size: 0.8rem; border-radius: 4px;
-      background: #e2e8f0; color: #64748b;
+    .prestationer-medalj-namn {
+      font-weight: 600;
+      font-size: 0.95rem;
     }
-    .prestationer-badge.earned-bronze { background: #fef3c7; color: #b45309; }
-    .prestationer-badge.earned-silver { background: #f1f5f9; color: #475569; }
-    .prestationer-badge.earned-gold { background: #fef9c3; color: #a16207; }
-    .prestationer-niva-varde { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .prestationer-medalj-emoji {
+      font-size: 1.6rem;
+      line-height: 1.2;
+    }
+    .prestationer-medalj-varde {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.9rem;
+      color: #334155;
+    }
     .prestationer-inställningar label { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
     .prestationer-inställningar input[type="checkbox"] { margin: 0; }
     .prestationer-sparad { font-size: 0.85rem; color: #16a34a; margin-top: 0.5rem; }
     .prestationer-laddar { color: #64748b; }
     .prestationer-fel { color: #b91c1c; }
+    .prestationer-sektioner-lista { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
+    .prestationer-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0; }
+    .prestationer-sektioner-namn { font-size: 0.9rem; }
+    .prestationer-sektioner-knappar { display: flex; gap: 0.25rem; }
+    .prestationer-sektioner-knappar button { padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -67,7 +85,10 @@
       </div>
       <section id="prestationer-nivaer-sektion" class="prestationer-nivaer" hidden aria-label="Utmärkelser">
         <h3 style="margin: 1rem 0 0.5rem; font-size: 1rem;">Utmärkelser</h3>
-        <div id="prestationer-nivaer-lista"></div>
+        <h4 style="margin: 0.25rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-reg-rubrik">Registreringar</h4>
+        <div id="prestationer-nivaer-lista-reg" class="prestationer-medalj-grid"></div>
+        <h4 style="margin: 0.75rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-yrke-rubrik">Yrken</h4>
+        <div id="prestationer-nivaer-lista-yrke" class="prestationer-medalj-grid"></div>
       </section>
     </section>
     <section id="prestationer-inställningar-sektion" aria-label="Inställningar för roliga saker">
@@ -78,6 +99,15 @@
         <label><input type="checkbox" id="pref-toast-on-new-yrke" /> Visa toast (nytt yrke och utmärkelser)</label>
         <label><input type="checkbox" id="pref-sound-on-new-yrke" /> Spela ljud (nytt yrke och utmärkelser)</label>
         <p id="prestationer-sparad" class="prestationer-sparad" hidden aria-live="polite">Inställningar sparade.</p>
+      </div>
+    </section>
+    <section id="prestationer-inmatning-sektion" aria-label="Ordning för inmatningssektioner">
+      <h2>Ordning på inmatningssektioner</h2>
+      <p class="prestationer-inställningar-brodtext" style="margin: 0 0 0.75rem; font-size: 0.9rem; color: #555;">
+        Välj i vilken ordning sektionerna visas på sidan <strong>/gravplatser</strong> för dig. Detta påverkar bara din egen vy.
+      </p>
+      <div class="prestationer-kort prestationer-inställningar">
+        <ul id="pref-sections-list" class="prestationer-sektioner-lista"></ul>
       </div>
     </section>
     <p style="margin-top: 1rem;"><a href="/yrken">Se alla unika yrken i systemet →</a></p>
@@ -132,20 +162,59 @@
 
       var nivaer = data.nivaer || [];
       var nivaerSektion = document.getElementById('prestationer-nivaer-sektion');
-      var nivaerLista = document.getElementById('prestationer-nivaer-lista');
-      if (nivaer.length > 0 && nivaerLista) {
-        nivaerLista.innerHTML = nivaer.map(function (n) {
-          var v = n.current_value != null ? n.current_value : 0;
-          var earned = n.earned_level || '';
-          var badges = ['bronze', 'silver', 'gold'].map(function (level) {
-            var t = n[level] && n[level].threshold != null ? n[level].threshold : '–';
-            var cls = 'prestationer-badge';
-            if (level === earned) cls += ' earned-' + level;
-            return '<span class="' + cls + '" title="' + (n[level] && n[level].label ? n[level].label : level + ': ' + t) + '">' + (level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : '🥇') + ' ' + t + '</span>';
+      var regLista = document.getElementById('prestationer-nivaer-lista-reg');
+      var yrkeLista = document.getElementById('prestationer-nivaer-lista-yrke');
+      var regRubrik = document.getElementById('prestationer-nivaer-reg-rubrik');
+      var yrkeRubrik = document.getElementById('prestationer-nivaer-yrke-rubrik');
+      if (regLista && yrkeLista) {
+        // Visa bara utmärkelser där användaren faktiskt har nått en nivå (hemliga tills dess)
+        var earnedOnly = (nivaer || []).filter(function (n) {
+          return !!n.earned_level;
+        });
+        var earnedReg = earnedOnly.filter(function (n) {
+          var key = String(n.achievement_key || '');
+          return key && !key.startsWith('yrke_');
+        });
+        var earnedYrke = earnedOnly.filter(function (n) {
+          var key = String(n.achievement_key || '');
+          return key && key.startsWith('yrke_');
+        });
+
+        function renderKort(listaEl, items) {
+          listaEl.innerHTML = items.map(function (n) {
+            var v = n.current_value != null ? n.current_value : 0;
+            var level = n.earned_level;
+            var emoji = level === 'gold' ? '🥇' : (level === 'silver' ? '🥈' : '🥉');
+            var namn = n.label || n.achievement_key;
+            return '<div class="prestationer-medalj-kort">' +
+              '<div class="prestationer-medalj-namn">' + namn + '</div>' +
+              '<div class="prestationer-medalj-emoji">' + emoji + '</div>' +
+              '<div class="prestationer-medalj-varde">' + v + ' st</div>' +
+              '</div>';
           }).join('');
-          return '<div class="prestationer-niva-kort"><span class="prestationer-niva-namn">' + (n.label || n.achievement_key) + '</span><span class="prestationer-niva-badges">' + badges + '</span><span class="prestationer-niva-varde">' + v + ' st</span></div>';
-        }).join('');
-        nivaerSektion.removeAttribute('hidden');
+        }
+
+        if (earnedReg.length > 0) {
+          renderKort(regLista, earnedReg);
+          if (regRubrik) regRubrik.hidden = false;
+        } else {
+          regLista.innerHTML = '';
+          if (regRubrik) regRubrik.hidden = true;
+        }
+
+        if (earnedYrke.length > 0) {
+          renderKort(yrkeLista, earnedYrke);
+          if (yrkeRubrik) yrkeRubrik.hidden = false;
+        } else {
+          yrkeLista.innerHTML = '';
+          if (yrkeRubrik) yrkeRubrik.hidden = true;
+        }
+
+        if (earnedReg.length > 0 || earnedYrke.length > 0) {
+          nivaerSektion.removeAttribute('hidden');
+        } else {
+          nivaerSektion.setAttribute('hidden', 'hidden');
+        }
       }
     })
     .catch(function (err) {
@@ -157,14 +226,76 @@
     return fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; });
   }
 
+  const SECTIONS_ALLOWED = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  const SECTION_LABELS = {
+    innehavare: 'Gravrättsinnehavare',
+    narmast_anhoriga: 'Närmast anhöriga',
+    gravplatsen: 'Gravplatsen',
+    skiss: 'Skiss och gravplatsstorlek',
+    gravsatta: 'Gravsatta'
+  };
+  let sectionsOrder = SECTIONS_ALLOWED.slice();
+
+  function normaliseraSectionsOrder(order) {
+    const out = [];
+    (order || []).forEach(function (s) {
+      if (SECTIONS_ALLOWED.indexOf(s) !== -1 && out.indexOf(s) === -1) out.push(s);
+    });
+    SECTIONS_ALLOWED.forEach(function (s) {
+      if (out.indexOf(s) === -1) out.push(s);
+    });
+    return out;
+  }
+
+  function renderSectionsOrder() {
+    const list = document.getElementById('pref-sections-list');
+    if (!list) return;
+    list.innerHTML = sectionsOrder.map(function (id, idx) {
+      const label = SECTION_LABELS[id] || id;
+      const upDisabled = idx === 0 ? ' disabled' : '';
+      const downDisabled = idx === sectionsOrder.length - 1 ? ' disabled' : '';
+      return '<li>' +
+        '<span class="prestationer-sektioner-namn">' + label + '</span>' +
+        '<span class="prestationer-sektioner-knappar">' +
+        '<button type="button" data-move="up" data-id="' + id + '"' + upDisabled + '>↑</button>' +
+        '<button type="button" data-move="down" data-id="' + id + '"' + downDisabled + '>↓</button>' +
+        '</span>' +
+        '</li>';
+    }).join('');
+  }
+
+  const sectionsListEl = document.getElementById('pref-sections-list');
+  if (sectionsListEl) {
+    sectionsListEl.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-move]');
+      if (!btn) return;
+      const dir = btn.getAttribute('data-move');
+      const id = btn.getAttribute('data-id');
+      const idx = sectionsOrder.indexOf(id);
+      if (idx === -1) return;
+      if (dir === 'up' && idx > 0) {
+        const tmp = sectionsOrder[idx - 1];
+        sectionsOrder[idx - 1] = sectionsOrder[idx];
+        sectionsOrder[idx] = tmp;
+      } else if (dir === 'down' && idx < sectionsOrder.length - 1) {
+        const tmp = sectionsOrder[idx + 1];
+        sectionsOrder[idx + 1] = sectionsOrder[idx];
+        sectionsOrder[idx] = tmp;
+      }
+      renderSectionsOrder();
+      sparaPreferenser();
+    });
+  }
+
   function sparaPreferenser() {
     const fun = document.getElementById('pref-fun-enabled').checked;
     const toast = document.getElementById('pref-toast-on-new-yrke').checked;
     const sound = document.getElementById('pref-sound-on-new-yrke').checked;
+    const sections = sectionsOrder && sectionsOrder.length ? sectionsOrder : SECTIONS_ALLOWED;
     return fetch(API + '/me/preferences', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound }),
+      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound, inmatning_sections_order: sections }),
       credentials: 'include'
     }).then(function (r) {
       if (!r.ok) throw new Error('Kunde inte spara');
@@ -181,6 +312,8 @@
     document.getElementById('pref-fun-enabled').checked = p.fun_enabled !== false;
     document.getElementById('pref-toast-on-new-yrke').checked = p.toast_on_new_yrke !== false;
     document.getElementById('pref-sound-on-new-yrke').checked = p.sound_on_new_yrke !== false;
+    sectionsOrder = normaliseraSectionsOrder(p.inmatning_sections_order);
+    renderSectionsOrder();
     if (me.is_admin) {
       var wrap = document.getElementById('prestationer-admin-lank-wrap');
       if (wrap) wrap.hidden = false;

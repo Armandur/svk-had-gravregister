@@ -20,6 +20,19 @@
     .admin-ach-fel { color: #b91c1c; margin-top: 0.5rem; }
     .admin-ach-ok { color: #16a34a; margin-top: 0.5rem; }
     .admin-ach-laddar { color: #64748b; }
+    .admin-ach-test-btn {
+      padding: 0;
+      margin: 0;
+      border: none;
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .admin-ach-test-btn:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -45,6 +58,24 @@
         <button type="button" id="admin-ach-spara">Spara alla ändringar</button>
         <span id="admin-ach-sparad" class="admin-ach-ok" hidden aria-live="polite">Sparat.</span>
       </p>
+
+      <h2 style="font-size:1.05rem;margin-top:2rem;margin-bottom:0.5rem;">Yrkesgrupper för yrkesbaserade prestationer</h2>
+      <p class="admin-ach-brodtext" style="font-size: 0.85rem; color: #555; margin-bottom: 0.75rem;">
+        Här kan du styra vilka yrkestitlar som räknas in i respektive yrkesbaserad prestation.
+        Skriv titlarna kommaseparerade. Ändringarna gäller för alla användare.
+      </p>
+      <table class="admin-ach-tabell" aria-label="Yrkesgrupper för prestationer">
+        <thead>
+          <tr>
+            <th scope="col">Yrkesprestation</th>
+            <th scope="col">Yrken som ingår (kommaseparerade)</th>
+          </tr>
+        </thead>
+        <tbody id="admin-yrkes-tbody"></tbody>
+      </table>
+      <p style="margin-top: 1rem;">
+        <button type="button" id="admin-yrkes-spara">Spara yrkesgrupper</button>
+      </p>
     </div>
   </main>
   <script src="/static/auth.js"></script>
@@ -57,6 +88,8 @@
   const tbody = document.getElementById('admin-ach-tbody');
   const sparaBtn = document.getElementById('admin-ach-spara');
   const sparadEl = document.getElementById('admin-ach-sparad');
+  const yrkesTbodyId = 'admin-yrkes-tbody';
+  const yrkesSparaId = 'admin-yrkes-spara';
 
   const labelByKey = {
     registreringar: 'Sparade registreringar',
@@ -67,6 +100,15 @@
     skisser: 'Skisser',
     unika_yrken: 'Unika yrken',
     storgravar: 'Storgravar (>3 gravsatta)',
+    yrke_kyrkans_man: 'Kyrkans man (kyrkliga yrken)',
+    yrke_havets_man: 'Havets män (sjöfolk/lotser)',
+    yrke_handelns_furste: 'Handelns furste (handelsyrken)',
+    yrke_fabrikens_herre: 'Fabrikens herre (bruk/fabrik)',
+    yrke_hantverkets_mastare: 'Hantverkets mästare (hantverkare)',
+    yrke_lardomens_vaktare: 'Lärdomens väktare (lärare m.fl.)',
+    yrke_lag_och_ordning: 'Lag & ordning (juridik/polis/tull)',
+    yrke_fruar_mamseller: 'Fruar & mamseller',
+    yrke_jord_och_gard: 'Jord och gård (jordägare m.fl.)',
   };
 
   function levelClass(l) {
@@ -83,42 +125,194 @@
     return l;
   }
 
+  function showTestToast(text) {
+    var container = document.getElementById('admin-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'admin-toast-container';
+      container.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;z-index:10000;';
+      document.body.appendChild(container);
+    }
+    var el = document.createElement('div');
+    el.setAttribute('role', 'alert');
+    el.setAttribute('aria-live', 'polite');
+    el.style.cssText = 'max-width:22rem;padding:0.8rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;';
+    el.innerHTML = text;
+    container.appendChild(el);
+    setTimeout(function () {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(4px)';
+      setTimeout(function () { el.remove(); }, 250);
+    }, 5500);
+  }
+
+  function achievementTestText(key, level, label, threshold) {
+    var nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
+    var emoji = level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : level === 'gold' ? '🥇' : '🎉';
+    var metricByKey = {
+      registreringar: 'antal sparade registreringar',
+      fardigtranskriberade: 'antal färdigtranskriberade gravplatser',
+      innehavare: 'antal registrerade gravrättsinnehavare',
+      narmast_anhoriga: 'antal registrerade närmast anhöriga',
+      gravsatta: 'antal registrerade gravsatta',
+      skisser: 'antal registrerade skisser',
+      unika_yrken: 'antal unika yrken i dina gravplatser',
+      storgravar: 'antal storgravar (>3 gravsatta)',
+      yrke_kyrkans_man: 'antal personer med kyrkliga yrken du registrerat',
+      yrke_havets_man: 'antal personer med sjö-/lotsyrken du registrerat',
+      yrke_handelns_furste: 'antal personer med handelsyrken du registrerat',
+      yrke_fabrikens_herre: 'antal personer med bruk/fabrik-yrken du registrerat',
+      yrke_hantverkets_mastare: 'antal personer med hantverksyrken du registrerat',
+      yrke_lardomens_vaktare: 'antal personer med lärar-/skolyrken du registrerat',
+      yrke_lag_och_ordning: 'antal personer med lag/ordning-yrken du registrerat',
+      yrke_fruar_mamseller: 'antal personer med fru/mamsell-roller du registrerat',
+      yrke_jord_och_gard: 'antal personer med jord/gårds-yrken du registrerat',
+    };
+    var metricText = metricByKey[key] || ('antal ' + (label || key));
+    var labelHtml = '<strong>' + metricText + '</strong>';
+    var countText = (typeof threshold === 'number' && !isNaN(threshold)) ? String(threshold) + ' st' : null;
+    var thresholdText = countText;
+    if (thresholdText) {
+      return emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml +
+        ' – du har nu ' + thresholdText + '!';
+    }
+    return emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + '!';
+  }
+
   Promise.all([
     fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; }),
-    fetch(API + '/admin/achievement-niva', { credentials: 'include' })
-  ]).then(function ([me, res]) {
+    fetch(API + '/admin/achievement-niva', { credentials: 'include' }),
+    fetch(API + '/admin/achievement-yrkesgrupp', { credentials: 'include' })
+  ]).then(function ([me, resNiva, resYrken]) {
     if (!me || !me.is_admin) {
       ingen.hidden = false;
       statusEl.hidden = true;
       return null;
     }
-    if (res.status === 401) {
+    if (resNiva.status === 401) {
       window.location.href = '/login?redirect=' + encodeURIComponent('/admin/achievement-niva');
       return null;
     }
-    if (res.status === 403) {
+    if (resNiva.status === 403) {
       ingen.hidden = false;
       statusEl.hidden = true;
       return null;
     }
-    if (!res.ok) throw new Error('Kunde inte ladda nivåer');
-    return res.json();
+    if (!resNiva.ok) throw new Error('Kunde inte ladda nivåer');
+    if (resYrken.status === 401 || resYrken.status === 403) {
+      // Om vi inte får yrkesgrupper men nivåer fungerar så fortsätter vi ändå
+      return Promise.all([resNiva.json(), null]);
+    }
+    return Promise.all([resNiva.json(), resYrken.ok ? resYrken.json() : null]);
   })
-  .then(function (data) {
-    if (!data) return;
+  .then(function (allData) {
+    if (!allData) return;
+    var data = allData[0];
+    var yrkesData = allData[1];
     ingen.hidden = true;
     statusEl.hidden = true;
     innehall.hidden = false;
     tbody.innerHTML = '';
     (data.nivaer || []).forEach(function (n) {
       const tr = document.createElement('tr');
+      const keyAttr = (n.achievement_key || '').replace(/"/g, '&quot;');
+      const levelAttr = (n.level || '').replace(/"/g, '&quot;');
+      const labelText = labelByKey[n.achievement_key] || n.achievement_key;
       tr.innerHTML =
-        '<td>' + (labelByKey[n.achievement_key] || n.achievement_key) + '</td>' +
+        '<td><button type="button" class="admin-ach-test-btn" data-key="' + keyAttr + '" data-level="' + levelAttr + '" data-label="' + labelText.replace(/"/g, '&quot;') + '" data-threshold="' + (n.threshold != null ? n.threshold : 0) + '">' + labelText + '</button></td>' +
         '<td><span class="' + levelClass(n.level) + '">' + levelLabel(n.level) + '</span></td>' +
         '<td><input type="number" min="0" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.threshold != null ? n.threshold : 0) + '" /></td>' +
         '<td><input type="text" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.label || '') + '" placeholder="t.ex. 10 st" style="width:8rem;padding:0.3rem 0.4rem;" /></td>';
       tbody.appendChild(tr);
     });
+
+    // Bygg yrkesgrupp-tabellen om vi har data
+    if (yrkesData && yrkesData.grupper) {
+      var yrkesTbody = document.getElementById(yrkesTbodyId);
+      if (yrkesTbody) {
+        yrkesTbody.innerHTML = '';
+
+        function skapaYrkesInput(radLista, key, value) {
+          var rad = document.createElement('div');
+          rad.style.display = 'flex';
+          rad.style.alignItems = 'center';
+          rad.style.gap = '0.25rem';
+          rad.style.marginBottom = '0.25rem';
+
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.value = value || '';
+          inp.setAttribute('data-yrke', '1');
+          inp.style.flex = '1 1 auto';
+          inp.style.padding = '0.25rem 0.4rem';
+
+          var rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.textContent = '−';
+          rmBtn.title = 'Ta bort yrke';
+          rmBtn.style.padding = '0.1rem 0.4rem';
+          rmBtn.style.border = '1px solid #e2e8f0';
+          rmBtn.style.background = '#fee2e2';
+          rmBtn.style.cursor = 'pointer';
+          rmBtn.addEventListener('click', function () {
+            rad.remove();
+          });
+
+          rad.appendChild(inp);
+          rad.appendChild(rmBtn);
+          radLista.appendChild(rad);
+        }
+
+        (yrkesData.grupper || []).forEach(function (g) {
+          var key = g.achievement_key;
+          var yrken = g.yrken || [];
+          var labelText = labelByKey[key] || key;
+
+          var tr = document.createElement('tr');
+          var tdLabel = document.createElement('td');
+          tdLabel.innerHTML = labelText + '<br><small style="color:#64748b;">' + key + '</small>';
+
+          var tdYrken = document.createElement('td');
+          var wrapper = document.createElement('div');
+          wrapper.setAttribute('data-key', key);
+          wrapper.style.display = 'flex';
+          wrapper.style.flexDirection = 'column';
+          wrapper.style.gap = '0.25rem';
+
+          var radLista = document.createElement('div');
+          radLista.className = 'yrkes-rad-list';
+
+          if (yrken.length === 0) {
+            skapaYrkesInput(radLista, key, '');
+          } else {
+            yrken.forEach(function (y) {
+              skapaYrkesInput(radLista, key, y);
+            });
+          }
+
+          var addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.textContent = '+ Lägg till yrke';
+          addBtn.className = 'yrkes-add-btn';
+          addBtn.style.alignSelf = 'flex-start';
+          addBtn.style.padding = '0.15rem 0.5rem';
+          addBtn.style.border = '1px solid #e2e8f0';
+          addBtn.style.background = '#f1f5f9';
+          addBtn.style.cursor = 'pointer';
+          addBtn.addEventListener('click', function () {
+            skapaYrkesInput(radLista, key, '');
+          });
+
+          wrapper.appendChild(radLista);
+          wrapper.appendChild(addBtn);
+          tdYrken.appendChild(wrapper);
+
+          tr.appendChild(tdLabel);
+          tr.appendChild(tdYrken);
+          yrkesTbody.appendChild(tr);
+        });
+      }
+    }
   })
   .catch(function (e) {
     statusEl.textContent = 'Fel: ' + (e.message || 'nätverksfel');
@@ -160,6 +354,62 @@
     })
     .finally(function () {
       sparaBtn.disabled = false;
+    });
+  });
+
+  tbody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.admin-ach-test-btn');
+    if (!btn) return;
+    const key = btn.dataset.key;
+    const level = btn.dataset.level;
+    const label = btn.dataset.label || key;
+    const threshold = parseInt(btn.dataset.threshold || '0', 10) || 0;
+    const text = achievementTestText(key, level, label, threshold);
+    showTestToast(text);
+  });
+
+  // Händelse för att spara yrkesgrupper (hela tabellen)
+  document.addEventListener('click', function (e) {
+    var yrkesSparaBtn = e.target.closest('#' + yrkesSparaId);
+    if (!yrkesSparaBtn) return;
+    var yrkesTbody = document.getElementById(yrkesTbodyId);
+    if (!yrkesTbody) return;
+    var rows = yrkesTbody.querySelectorAll('tr');
+    var updates = [];
+    rows.forEach(function (tr) {
+      var wrapper = tr.querySelector('td:nth-child(2) [data-key]');
+      if (!wrapper) return;
+      var key = wrapper.getAttribute('data-key');
+      var yrken = [];
+      var inps = wrapper.querySelectorAll('input[type="text"][data-yrke]');
+      inps.forEach(function (inp) {
+        var v = (inp.value || '').trim();
+        if (v && yrken.indexOf(v) === -1) {
+          yrken.push(v);
+        }
+      });
+      updates.push({ achievement_key: key, yrken: yrken });
+    });
+    if (!updates.length) return;
+    yrkesSparaBtn.disabled = true;
+    Promise.all(updates.map(function (u) {
+      return fetch(API + '/admin/achievement-yrkesgrupp', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(u),
+        credentials: 'include',
+      });
+    }))
+    .then(function (responses) {
+      var failed = responses.some(function (r) { return !r.ok; });
+      if (failed) throw new Error('Kunde inte spara alla yrkesgrupper');
+      showTestToast('Yrkesgrupper sparade.');
+    })
+    .catch(function (e) {
+      alert('Kunde inte spara yrkesgrupper: ' + (e.message || 'nätverksfel'));
+    })
+    .finally(function () {
+      yrkesSparaBtn.disabled = false;
     });
   });
 })();
