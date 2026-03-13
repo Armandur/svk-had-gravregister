@@ -19,24 +19,37 @@
     .prestationer-rad { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; }
     .prestationer-rad:last-child { margin-bottom: 0; }
     .prestationer-varde { font-weight: 600; color: var(--accent, #2563eb); }
-    .prestationer-nivaer { display: grid; gap: 0.75rem; margin-top: 1rem; }
-    .prestationer-niva-kort {
+    .prestationer-nivaer { margin-top: 1rem; }
+    .prestationer-medalj-grid {
+      display: grid;
+      gap: 0.9rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .prestationer-medalj-kort {
       background: var(--card, #fff);
       border: 1px solid var(--border, #e2e8f0);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem;
+      border-radius: 10px;
+      padding: 0.9rem 0.75rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.2rem;
     }
-    .prestationer-niva-namn { font-weight: 600; min-width: 10rem; }
-    .prestationer-niva-badges { display: flex; gap: 0.35rem; align-items: center; }
-    .prestationer-badge {
-      padding: 0.2rem 0.45rem; font-size: 0.8rem; border-radius: 4px;
-      background: #e2e8f0; color: #64748b;
+    .prestationer-medalj-namn {
+      font-weight: 600;
+      font-size: 0.95rem;
     }
-    .prestationer-badge.earned-bronze { background: #fef3c7; color: #b45309; }
-    .prestationer-badge.earned-silver { background: #f1f5f9; color: #475569; }
-    .prestationer-badge.earned-gold { background: #fef9c3; color: #a16207; }
-    .prestationer-niva-varde { margin-left: auto; font-variant-numeric: tabular-nums; }
+    .prestationer-medalj-emoji {
+      font-size: 1.6rem;
+      line-height: 1.2;
+    }
+    .prestationer-medalj-varde {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.9rem;
+      color: #334155;
+    }
     .prestationer-inställningar label { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
     .prestationer-inställningar input[type="checkbox"] { margin: 0; }
     .prestationer-sparad { font-size: 0.85rem; color: #16a34a; margin-top: 0.5rem; }
@@ -72,7 +85,10 @@
       </div>
       <section id="prestationer-nivaer-sektion" class="prestationer-nivaer" hidden aria-label="Utmärkelser">
         <h3 style="margin: 1rem 0 0.5rem; font-size: 1rem;">Utmärkelser</h3>
-        <div id="prestationer-nivaer-lista"></div>
+        <h4 style="margin: 0.25rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-reg-rubrik">Registreringar</h4>
+        <div id="prestationer-nivaer-lista-reg" class="prestationer-medalj-grid"></div>
+        <h4 style="margin: 0.75rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-yrke-rubrik">Yrken</h4>
+        <div id="prestationer-nivaer-lista-yrke" class="prestationer-medalj-grid"></div>
       </section>
     </section>
     <section id="prestationer-inställningar-sektion" aria-label="Inställningar för roliga saker">
@@ -146,20 +162,59 @@
 
       var nivaer = data.nivaer || [];
       var nivaerSektion = document.getElementById('prestationer-nivaer-sektion');
-      var nivaerLista = document.getElementById('prestationer-nivaer-lista');
-      if (nivaer.length > 0 && nivaerLista) {
-        nivaerLista.innerHTML = nivaer.map(function (n) {
-          var v = n.current_value != null ? n.current_value : 0;
-          var earned = n.earned_level || '';
-          var badges = ['bronze', 'silver', 'gold'].map(function (level) {
-            var t = n[level] && n[level].threshold != null ? n[level].threshold : '–';
-            var cls = 'prestationer-badge';
-            if (level === earned) cls += ' earned-' + level;
-            return '<span class="' + cls + '" title="' + (n[level] && n[level].label ? n[level].label : level + ': ' + t) + '">' + (level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : '🥇') + ' ' + t + '</span>';
+      var regLista = document.getElementById('prestationer-nivaer-lista-reg');
+      var yrkeLista = document.getElementById('prestationer-nivaer-lista-yrke');
+      var regRubrik = document.getElementById('prestationer-nivaer-reg-rubrik');
+      var yrkeRubrik = document.getElementById('prestationer-nivaer-yrke-rubrik');
+      if (regLista && yrkeLista) {
+        // Visa bara utmärkelser där användaren faktiskt har nått en nivå (hemliga tills dess)
+        var earnedOnly = (nivaer || []).filter(function (n) {
+          return !!n.earned_level;
+        });
+        var earnedReg = earnedOnly.filter(function (n) {
+          var key = String(n.achievement_key || '');
+          return key && !key.startsWith('yrke_');
+        });
+        var earnedYrke = earnedOnly.filter(function (n) {
+          var key = String(n.achievement_key || '');
+          return key && key.startsWith('yrke_');
+        });
+
+        function renderKort(listaEl, items) {
+          listaEl.innerHTML = items.map(function (n) {
+            var v = n.current_value != null ? n.current_value : 0;
+            var level = n.earned_level;
+            var emoji = level === 'gold' ? '🥇' : (level === 'silver' ? '🥈' : '🥉');
+            var namn = n.label || n.achievement_key;
+            return '<div class="prestationer-medalj-kort">' +
+              '<div class="prestationer-medalj-namn">' + namn + '</div>' +
+              '<div class="prestationer-medalj-emoji">' + emoji + '</div>' +
+              '<div class="prestationer-medalj-varde">' + v + ' st</div>' +
+              '</div>';
           }).join('');
-          return '<div class="prestationer-niva-kort"><span class="prestationer-niva-namn">' + (n.label || n.achievement_key) + '</span><span class="prestationer-niva-badges">' + badges + '</span><span class="prestationer-niva-varde">' + v + ' st</span></div>';
-        }).join('');
-        nivaerSektion.removeAttribute('hidden');
+        }
+
+        if (earnedReg.length > 0) {
+          renderKort(regLista, earnedReg);
+          if (regRubrik) regRubrik.hidden = false;
+        } else {
+          regLista.innerHTML = '';
+          if (regRubrik) regRubrik.hidden = true;
+        }
+
+        if (earnedYrke.length > 0) {
+          renderKort(yrkeLista, earnedYrke);
+          if (yrkeRubrik) yrkeRubrik.hidden = false;
+        } else {
+          yrkeLista.innerHTML = '';
+          if (yrkeRubrik) yrkeRubrik.hidden = true;
+        }
+
+        if (earnedReg.length > 0 || earnedYrke.length > 0) {
+          nivaerSektion.removeAttribute('hidden');
+        } else {
+          nivaerSektion.setAttribute('hidden', 'hidden');
+        }
       }
     })
     .catch(function (err) {

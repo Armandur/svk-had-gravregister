@@ -41,6 +41,7 @@ from app.database import (
     GravplatsSkiss,
     Gravsatt,
     AchievementNiva,
+    AchievementYrkesGrupp,
     init_db,
     get_db,
 )
@@ -410,6 +411,19 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
     antal_gravsatta = 0
     antal_skisser = 0
     unika_yrken_set = set()
+    # Yrkesbaserade achievements – grupper av yrken hämtas från databasen
+    yrkes_grupper: dict[str, set[str]] = {}
+    yrkes_rows = db.query(AchievementYrkesGrupp).all()
+    for r in yrkes_rows:
+        key = (r.achievement_key or "").strip()
+        if not key:
+            continue
+        if key not in yrkes_grupper:
+            yrkes_grupper[key] = set()
+        yrke_val = (r.yrke or "").strip()
+        if yrke_val:
+            yrkes_grupper[key].add(yrke_val)
+    yrkes_grupp_counts: dict[str, int] = {k: 0 for k in yrkes_grupper.keys()}
     if mina_ids:
         antal_innehavare = db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.in_(mina_ids)).count()
         antal_narmast_anhoriga = db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_ids)).count()
@@ -423,8 +437,13 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
             for row in q.all():
                 if row[0] is not None:
                     y = str(row[0]).strip()
-                    if y:
-                        unika_yrken_set.add(y)
+                    if not y:
+                        continue
+                    unika_yrken_set.add(y)
+                    # Räkna in yrket i alla relevanta dynamiska grupper
+                    for key, yrken in yrkes_grupper.items():
+                        if y in yrken:
+                            yrkes_grupp_counts[key] = yrkes_grupp_counts.get(key, 0) + 1
     antal_unika_yrken = len(unika_yrken_set)
 
     # Antal gravplatser med mer än 3 gravsatta (storgravar) bland användarens gravplatser
@@ -456,6 +475,9 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "unika_yrken": antal_unika_yrken,
         "storgravar": antal_storgravar,
     }
+    # Lägg till alla dynamiska yrkesgrupper i value_by_key
+    for key, count in yrkes_grupp_counts.items():
+        value_by_key[key] = count
     achievement_labels_sv = {
         "registreringar": "Sparade registreringar",
         "fardigtranskriberade": "Färdigtranskriberade gravplatser",
@@ -465,6 +487,15 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "skisser": "Skisser",
         "unika_yrken": "Unika yrken",
         "storgravar": "Storgravar (>3 gravsatta)",
+        "yrke_kyrkans_man": "Kyrkans man",
+        "yrke_havets_man": "Havets män",
+        "yrke_handelns_furste": "Handelns furste",
+        "yrke_fabrikens_herre": "Fabrikens herre",
+        "yrke_hantverkets_mastare": "Hantverkets mästare",
+        "yrke_lardomens_vaktare": "Lärdomens väktare",
+        "yrke_lag_och_ordning": "Lag & ordning",
+        "yrke_fruar_mamseller": "Fruar & mamseller",
+        "yrke_jord_och_gard": "Jord och gård",
     }
     nivaer = []
     for key, thresholds in key_to_thresholds.items():
@@ -537,6 +568,11 @@ class AchievementNivaUpdateBody(BaseModel):
     label: str | None = None
 
 
+class AchievementYrkesGruppBody(BaseModel):
+    achievement_key: str
+    yrken: list[str]
+
+
 @app.patch("/api/admin/achievement-niva")
 async def update_achievement_niva(
     body: AchievementNivaUpdateBody,
@@ -559,6 +595,57 @@ async def update_achievement_niva(
         row.label = body.label
     db.commit()
     return {"ok": True, "achievement_key": row.achievement_key, "level": row.level, "threshold": row.threshold}
+
+
+@app.get("/api/admin/achievement-yrkesgrupp")
+async def list_achievement_yrkesgrupp(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Lista alla yrkesgrupper för yrkesbaserade achievements – endast admin."""
+    rows = db.query(AchievementYrkesGrupp).order_by(
+        AchievementYrkesGrupp.achievement_key, AchievementYrkesGrupp.yrke
+    ).all()
+    grupper: dict[str, list[str]] = {}
+    for r in rows:
+        key = (r.achievement_key or "").strip()
+        yrke = (r.yrke or "").strip()
+        if not key or not yrke:
+            continue
+        grupper.setdefault(key, []).append(yrke)
+    return {
+        "grupper": [
+            {"achievement_key": key, "yrken": yrken}
+            for key, yrken in sorted(grupper.items(), key=lambda kv: kv[0])
+        ]
+    }
+
+
+@app.patch("/api/admin/achievement-yrkesgrupp")
+async def update_achievement_yrkesgrupp(
+    body: AchievementYrkesGruppBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Uppdatera vilka yrken som ingår i en viss yrkesbaserad prestationsnyckel.
+
+    Alla befintliga poster för nyckeln ersätts med den angivna listan.
+    """
+    key = (body.achievement_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="achievement_key krävs")
+    # Rensa befintliga rader för denna nyckel
+    db.query(AchievementYrkesGrupp).filter(AchievementYrkesGrupp.achievement_key == key).delete()
+    # Lägg till nya unika, icke-tomma yrken
+    seen: set[str] = set()
+    for yrke in body.yrken:
+        y = (yrke or "").strip()
+        if not y or y in seen:
+            continue
+        seen.add(y)
+        db.add(AchievementYrkesGrupp(achievement_key=key, yrke=y))
+    db.commit()
+    return {"ok": True, "achievement_key": key, "antal_yrken": len(seen)}
 
 
 @app.get("/api/loggar/gravplatser")
