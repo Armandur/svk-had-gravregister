@@ -4020,7 +4020,9 @@ function visaSparToasts(achievementsBefore, data) {
         const p = (me && me.preferences) || {};
         if (p.fun_enabled !== false) {
           if (p.toast_on_new_yrke !== false) {
-            gpShowToast(gpToastTextFörNyttYrke(data.new_unique_yrken));
+            (data.new_unique_yrken || []).forEach((yrke) => {
+              gpShowToast(gpToastTextFörNyttYrke([yrke]));
+            });
           }
           if (p.sound_on_new_yrke !== false) {
             gpPlayPling();
