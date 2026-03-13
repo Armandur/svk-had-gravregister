@@ -32,6 +32,8 @@ let inmatningData = null;
 let inmatningDirty = false;
 /** true = visa formulärfält (redigera), false = visa läsvy (layout). */
 let inmatningRedigerar = false;
+/** Ordning på inmatningssektioner för aktuell användare. */
+let inmatningSectionsOrder = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
 
 /** Input/textarea som ska få extraherad text (Alternativ B: sätts vid fokus). */
 let ocrTargetElement = null;
@@ -113,6 +115,34 @@ function getAdressTrioFalt(element) {
   const postort = row.querySelector('[name="inv_postort"], [name="na_postort"], [name^="gs_postort_"]');
   if (!gatuadress || !postnummer || !postort) return null;
   return { gatuadress, postnummer, postort };
+}
+
+function applyInmatningSectionsOrder(order) {
+  const root = document.getElementById('gp-inmatning');
+  if (!root) return;
+  const allowed = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  const unique = [];
+  (order || []).forEach((s) => {
+    if (allowed.indexOf(s) !== -1 && unique.indexOf(s) === -1) unique.push(s);
+  });
+  allowed.forEach((s) => {
+    if (unique.indexOf(s) === -1) unique.push(s);
+  });
+  inmatningSectionsOrder = unique;
+  const sectionsById = {};
+  allowed.forEach((s) => {
+    const btn = root.querySelector('.gp-sektion-rubrik[data-sektion="' + s + '"]');
+    if (btn) {
+      const sektionEl = btn.closest('.gp-inmatning-sektion');
+      if (sektionEl) sectionsById[s] = sektionEl;
+    }
+  });
+  unique.forEach((s) => {
+    const el = sectionsById[s];
+    if (el && el.parentNode === root) {
+      root.appendChild(el);
+    }
+  });
 }
 
 /**
@@ -4048,12 +4078,19 @@ function gpToastTextFörNyttYrke(yrkenLista) {
 
 /** Toast för "roliga saker" (t.ex. nytt unikt yrke). */
 function gpShowToast(text) {
+  let container = document.getElementById('gp-toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'gp-toast-container';
+    container.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;z-index:10000;';
+    document.body.appendChild(container);
+  }
   const el = document.createElement('div');
   el.setAttribute('role', 'alert');
   el.setAttribute('aria-live', 'polite');
-  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;z-index:10000;animation:gp-toast-in 0.2s ease;';
+  el.style.cssText = 'max-width:20rem;padding:0.75rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;animation:gp-toast-in 0.2s ease;';
   el.textContent = text;
-  document.body.appendChild(el);
+  container.appendChild(el);
   setTimeout(() => {
     el.style.animation = 'gp-toast-out 0.2s ease forwards';
     setTimeout(() => el.remove(), 220);
@@ -4267,6 +4304,23 @@ async function initFromUrl() {
   if (innehall) innehall.hidden = false;
   await laddaGravplatserForKvarter(parsed.gravplatsnummer);
   applyVyFromUrl();
+}
+
+// Hämta användarpreferenser (inkl. sektionordning) och tillämpa på inmatningssektionerna.
+try {
+  (window.gpEnsureAuthPromise || (typeof gpEnsureAuth === 'function' && gpEnsureAuth()) || Promise.resolve(null))
+    .then((me) => {
+      if (me && me.preferences && Array.isArray(me.preferences.inmatning_sections_order)) {
+        applyInmatningSectionsOrder(me.preferences.inmatning_sections_order);
+      } else {
+        applyInmatningSectionsOrder(inmatningSectionsOrder);
+      }
+    })
+    .catch(() => {
+      applyInmatningSectionsOrder(inmatningSectionsOrder);
+    });
+} catch (_) {
+  applyInmatningSectionsOrder(inmatningSectionsOrder);
 }
 
 initFromUrl();

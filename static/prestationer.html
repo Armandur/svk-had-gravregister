@@ -42,6 +42,11 @@
     .prestationer-sparad { font-size: 0.85rem; color: #16a34a; margin-top: 0.5rem; }
     .prestationer-laddar { color: #64748b; }
     .prestationer-fel { color: #b91c1c; }
+    .prestationer-sektioner-lista { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
+    .prestationer-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0; }
+    .prestationer-sektioner-namn { font-size: 0.9rem; }
+    .prestationer-sektioner-knappar { display: flex; gap: 0.25rem; }
+    .prestationer-sektioner-knappar button { padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -78,6 +83,15 @@
         <label><input type="checkbox" id="pref-toast-on-new-yrke" /> Visa toast (nytt yrke och utmärkelser)</label>
         <label><input type="checkbox" id="pref-sound-on-new-yrke" /> Spela ljud (nytt yrke och utmärkelser)</label>
         <p id="prestationer-sparad" class="prestationer-sparad" hidden aria-live="polite">Inställningar sparade.</p>
+      </div>
+    </section>
+    <section id="prestationer-inmatning-sektion" aria-label="Ordning för inmatningssektioner">
+      <h2>Ordning på inmatningssektioner</h2>
+      <p class="prestationer-inställningar-brodtext" style="margin: 0 0 0.75rem; font-size: 0.9rem; color: #555;">
+        Välj i vilken ordning sektionerna visas på sidan <strong>/gravplatser</strong> för dig. Detta påverkar bara din egen vy.
+      </p>
+      <div class="prestationer-kort prestationer-inställningar">
+        <ul id="pref-sections-list" class="prestationer-sektioner-lista"></ul>
       </div>
     </section>
     <p style="margin-top: 1rem;"><a href="/yrken">Se alla unika yrken i systemet →</a></p>
@@ -157,14 +171,76 @@
     return fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; });
   }
 
+  const SECTIONS_ALLOWED = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  const SECTION_LABELS = {
+    innehavare: 'Gravrättsinnehavare',
+    narmast_anhoriga: 'Närmast anhöriga',
+    gravplatsen: 'Gravplatsen',
+    skiss: 'Skiss och gravplatsstorlek',
+    gravsatta: 'Gravsatta'
+  };
+  let sectionsOrder = SECTIONS_ALLOWED.slice();
+
+  function normaliseraSectionsOrder(order) {
+    const out = [];
+    (order || []).forEach(function (s) {
+      if (SECTIONS_ALLOWED.indexOf(s) !== -1 && out.indexOf(s) === -1) out.push(s);
+    });
+    SECTIONS_ALLOWED.forEach(function (s) {
+      if (out.indexOf(s) === -1) out.push(s);
+    });
+    return out;
+  }
+
+  function renderSectionsOrder() {
+    const list = document.getElementById('pref-sections-list');
+    if (!list) return;
+    list.innerHTML = sectionsOrder.map(function (id, idx) {
+      const label = SECTION_LABELS[id] || id;
+      const upDisabled = idx === 0 ? ' disabled' : '';
+      const downDisabled = idx === sectionsOrder.length - 1 ? ' disabled' : '';
+      return '<li>' +
+        '<span class="prestationer-sektioner-namn">' + label + '</span>' +
+        '<span class="prestationer-sektioner-knappar">' +
+        '<button type="button" data-move="up" data-id="' + id + '"' + upDisabled + '>↑</button>' +
+        '<button type="button" data-move="down" data-id="' + id + '"' + downDisabled + '>↓</button>' +
+        '</span>' +
+        '</li>';
+    }).join('');
+  }
+
+  const sectionsListEl = document.getElementById('pref-sections-list');
+  if (sectionsListEl) {
+    sectionsListEl.addEventListener('click', function (e) {
+      const btn = e.target.closest('button[data-move]');
+      if (!btn) return;
+      const dir = btn.getAttribute('data-move');
+      const id = btn.getAttribute('data-id');
+      const idx = sectionsOrder.indexOf(id);
+      if (idx === -1) return;
+      if (dir === 'up' && idx > 0) {
+        const tmp = sectionsOrder[idx - 1];
+        sectionsOrder[idx - 1] = sectionsOrder[idx];
+        sectionsOrder[idx] = tmp;
+      } else if (dir === 'down' && idx < sectionsOrder.length - 1) {
+        const tmp = sectionsOrder[idx + 1];
+        sectionsOrder[idx + 1] = sectionsOrder[idx];
+        sectionsOrder[idx] = tmp;
+      }
+      renderSectionsOrder();
+      sparaPreferenser();
+    });
+  }
+
   function sparaPreferenser() {
     const fun = document.getElementById('pref-fun-enabled').checked;
     const toast = document.getElementById('pref-toast-on-new-yrke').checked;
     const sound = document.getElementById('pref-sound-on-new-yrke').checked;
+    const sections = sectionsOrder && sectionsOrder.length ? sectionsOrder : SECTIONS_ALLOWED;
     return fetch(API + '/me/preferences', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound }),
+      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound, inmatning_sections_order: sections }),
       credentials: 'include'
     }).then(function (r) {
       if (!r.ok) throw new Error('Kunde inte spara');
@@ -181,6 +257,8 @@
     document.getElementById('pref-fun-enabled').checked = p.fun_enabled !== false;
     document.getElementById('pref-toast-on-new-yrke').checked = p.toast_on_new_yrke !== false;
     document.getElementById('pref-sound-on-new-yrke').checked = p.sound_on_new_yrke !== false;
+    sectionsOrder = normaliseraSectionsOrder(p.inmatning_sections_order);
+    renderSectionsOrder();
     if (me.is_admin) {
       var wrap = document.getElementById('prestationer-admin-lank-wrap');
       if (wrap) wrap.hidden = false;
