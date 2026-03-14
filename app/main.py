@@ -2327,6 +2327,51 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         .group_by(Gravplats.kyrkogard, Gravplats.kvarter)
         .all()
     )
+    # Per-gravplats färdig-status (sorterad per kyrkogård+kvarter) för staplar
+    def _ledande_tal(nr: str) -> int:
+        s = (nr or "").strip()
+        n = 0
+        for c in s:
+            if c.isdigit():
+                n = n * 10 + int(c)
+            elif n > 0:
+                break
+        return n if n > 0 else -1
+
+    gravplatser_per_kvarter = (
+        db.query(
+            Gravplats.kyrkogard,
+            Gravplats.kvarter,
+            Gravplats.gravplatsnummer,
+            GravplatsInmatning.fardigtranskriberad,
+        )
+        .outerjoin(GravplatsInmatning, Gravplats.id == GravplatsInmatning.gravplats_id)
+        .filter(
+            Gravplats.kyrkogard.isnot(None),
+            Gravplats.kyrkogard != "",
+            Gravplats.kvarter.isnot(None),
+            Gravplats.kvarter != "",
+        )
+        .all()
+    )
+    # (kyrkogard, kvarter) -> [fardig, fardig, ...] i ordning gravplatsnummer
+    kvarter_gravplatser_fardiga: dict[tuple[str, str], list[bool]] = {}
+    for g in gravplatser_per_kvarter:
+        kg = (g.kyrkogard or "").strip()
+        kv = (g.kvarter or "").strip()
+        key = (kg, kv)
+        if key not in kvarter_gravplatser_fardiga:
+            kvarter_gravplatser_fardiga[key] = []
+        kvarter_gravplatser_fardiga[key].append((g.gravplatsnummer or "", bool(g.fardigtranskriberad)))
+    for key in kvarter_gravplatser_fardiga:
+        kvarter_gravplatser_fardiga[key].sort(
+            key=lambda x: (_ledande_tal(x[0]), (x[0] or ""))
+        )
+    # Konvertera till enkel lista av bool
+    kvarter_gravplatser_fardiga_list: dict[tuple[str, str], list[bool]] = {
+        k: [fardig for _, fardig in lst] for k, lst in kvarter_gravplatser_fardiga.items()
+    }
+
     # Bygg hierarki: total, per kyrkogård, per kvarter
     transk_total = 0
     transk_fardiga = 0
@@ -2339,15 +2384,19 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         fardiga_val = int(row.fardiga or 0)
         transk_total += total_val
         transk_fardiga += fardiga_val
+        gravplatser_fardiga = kvarter_gravplatser_fardiga_list.get((kg, kv))
         if kg not in per_kyrkogard:
             per_kyrkogard[kg] = {"total": 0, "fardiga": 0, "kvarter": []}
         per_kyrkogard[kg]["total"] += total_val
         per_kyrkogard[kg]["fardiga"] += fardiga_val
-        per_kyrkogard[kg]["kvarter"].append({
+        kvarter_item: dict = {
             "kvarter": kv,
             "total": total_val,
             "fardiga": fardiga_val,
-        })
+        }
+        if gravplatser_fardiga is not None:
+            kvarter_item["gravplatser_fardiga"] = gravplatser_fardiga
+        per_kyrkogard[kg]["kvarter"].append(kvarter_item)
     for kg in sorted(per_kyrkogard.keys(), key=lambda x: (x.upper(), x)):
         kvarter_list = per_kyrkogard[kg]["kvarter"]
         kvarter_list.sort(key=lambda x: (x["kvarter"].lower(), x["kvarter"]))
@@ -3129,10 +3178,16 @@ async def list_gravplats_global(
 
 
 @app.get("/api/gravplatser/nasta-ej-fardig")
-async def nasta_ej_fardig_gravplats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def nasta_ej_fardig_gravplats(
+    kyrkogard: str | None = None,
+    kvarter: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Returnerar nästa gravplats (i ordningen Kyrkogård → Kvarter → Gravplats) som inte är
     markerad som färdigtranskriberad (dvs. ej transkriberad eller påbörjad men inte slutförd). 404 om alla är färdiga.
+    Valfria query-parametrar: kyrkogard och kvarter för att begränsa till en kyrkogård resp. kyrkogård+kvarter.
     """
     subq = db.query(GravplatsInmatning.gravplats_id).filter(
         GravplatsInmatning.fardigtranskriberad == True
@@ -3141,9 +3196,12 @@ async def nasta_ej_fardig_gravplats(db: Session = Depends(get_db), current_user:
         db.query(Gravplats)
         .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
         .filter(~Gravplats.id.in_(subq))
-        .order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida)
-        .limit(10000)
     )
+    if kyrkogard and (kg := (kyrkogard or "").strip()):
+        q = q.filter(Gravplats.kyrkogard == kg)
+    if kvarter and (kv := (kvarter or "").strip()):
+        q = q.filter(Gravplats.kvarter == kv)
+    q = q.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(10000)
     rows = q.all()
     if not rows:
         raise HTTPException(status_code=404, detail="Ingen ej färdig gravplats hittades")
