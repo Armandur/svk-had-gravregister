@@ -3129,10 +3129,16 @@ async def list_gravplats_global(
 
 
 @app.get("/api/gravplatser/nasta-ej-fardig")
-async def nasta_ej_fardig_gravplats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def nasta_ej_fardig_gravplats(
+    kyrkogard: str | None = None,
+    kvarter: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Returnerar nästa gravplats (i ordningen Kyrkogård → Kvarter → Gravplats) som inte är
     markerad som färdigtranskriberad (dvs. ej transkriberad eller påbörjad men inte slutförd). 404 om alla är färdiga.
+    Valfria query-parametrar: kyrkogard och kvarter för att begränsa till en kyrkogård resp. kyrkogård+kvarter.
     """
     subq = db.query(GravplatsInmatning.gravplats_id).filter(
         GravplatsInmatning.fardigtranskriberad == True
@@ -3141,9 +3147,12 @@ async def nasta_ej_fardig_gravplats(db: Session = Depends(get_db), current_user:
         db.query(Gravplats)
         .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
         .filter(~Gravplats.id.in_(subq))
-        .order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida)
-        .limit(10000)
     )
+    if kyrkogard and (kg := (kyrkogard or "").strip()):
+        q = q.filter(Gravplats.kyrkogard == kg)
+    if kvarter and (kv := (kvarter or "").strip()):
+        q = q.filter(Gravplats.kvarter == kv)
+    q = q.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(10000)
     rows = q.all()
     if not rows:
         raise HTTPException(status_code=404, detail="Ingen ej färdig gravplats hittades")

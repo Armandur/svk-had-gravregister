@@ -93,8 +93,7 @@
       li.id = 'startsida-sok-item-' + i;
       li.setAttribute('data-index', String(i));
       const full = (gp.fullstandigt || '').trim();
-      const mapp = gp.mapp_namn ? ' (' + escapeHtml(gp.mapp_namn) + ')' : '';
-      li.innerHTML = full ? '<strong>' + escapeHtml(full) + '</strong>' + (mapp ? '<small>' + mapp + '</small>' : '') : '–';
+      li.innerHTML = full ? '<strong>' + escapeHtml(full) + '</strong>' : '–';
       li.addEventListener('click', function () { valjForslag(i); });
       listEl.appendChild(li);
     });
@@ -215,6 +214,64 @@
   const statistikSection = document.getElementById('startsida-statistik');
   if (statistikSection) {
     statistikSection.addEventListener('click', function (e) {
+      var gotoBtn = e.target && e.target.closest('.startsida-transk-goto-nasta');
+      if (gotoBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var kyrkogard = gotoBtn.getAttribute('data-kyrkogard');
+        if (!kyrkogard) return;
+        var params = new URLSearchParams();
+        params.set('kyrkogard', kyrkogard);
+        fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
+          .then(function (res) {
+            if (res.status === 404) {
+              alert('Ingen ej färdig gravplats i ' + kyrkogard + '. Alla är färdigtranskriberade.');
+              return null;
+            }
+            if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
+            return res.json();
+          })
+          .then(function (data) {
+            if (data && data.fullstandigt) {
+              var slug = slugFromFullstandigt(data.fullstandigt);
+              if (slug) window.location.href = '/gravplatser/' + slug;
+            }
+          })
+          .catch(function (err) {
+            alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          });
+        return;
+      }
+      var gotoKvarter = e.target && e.target.closest('.startsida-transk-goto-nasta-kvarter');
+      if (gotoKvarter) {
+        e.preventDefault();
+        e.stopPropagation();
+        var kyrkogard = gotoKvarter.getAttribute('data-kyrkogard');
+        var kvarter = gotoKvarter.getAttribute('data-kvarter');
+        if (!kyrkogard || !kvarter) return;
+        var params = new URLSearchParams();
+        params.set('kyrkogard', kyrkogard);
+        params.set('kvarter', kvarter);
+        fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
+          .then(function (res) {
+            if (res.status === 404) {
+              alert('Ingen ej färdig gravplats i ' + kyrkogard + ' ' + kvarter + '. Alla är färdigtranskriberade.');
+              return null;
+            }
+            if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
+            return res.json();
+          })
+          .then(function (data) {
+            if (data && data.fullstandigt) {
+              var slug = slugFromFullstandigt(data.fullstandigt);
+              if (slug) window.location.href = '/gravplatser/' + slug;
+            }
+          })
+          .catch(function (err) {
+            alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          });
+        return;
+      }
       var klickbar = e.target && e.target.closest('.startsida-transkriberingsstatus-kyrkogard-klickbar');
       if (!klickbar) return;
       var id = klickbar.getAttribute('aria-controls');
@@ -227,8 +284,15 @@
       if (chevron) chevron.textContent = expanded ? '\u25B6' : '\u25BC';
     });
     statistikSection.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var gotoKvarter = e.target && e.target.closest('.startsida-transk-goto-nasta-kvarter');
+      if (gotoKvarter) {
+        e.preventDefault();
+        gotoKvarter.click();
+        return;
+      }
       var klickbar = e.target && e.target.closest('.startsida-transkriberingsstatus-kyrkogard-klickbar');
-      if (!klickbar || (e.key !== 'Enter' && e.key !== ' ')) return;
+      if (!klickbar) return;
       e.preventDefault();
       klickbar.click();
     });
@@ -292,17 +356,20 @@
             var kvarterList = kg.kvarter || [];
             var nKvarter = kvarterList.length;
             var kvarterListId = 'transk-kvarter-' + kgIndex;
+            var kgLabel = kg.kyrkogard + ' – ' + kg.fardiga + ' av ' + kg.total + ', ' + procentStr(kg.total, kg.fardiga) + '%';
             html += '<div class="startsida-transkriberingsstatus-kyrkogard-block">';
             if (nKvarter > 0) {
               html += '<div class="startsida-transkriberingsstatus-kyrkogard-klickbar startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kyrkogard" role="button" tabindex="0" aria-expanded="false" aria-controls="' + kvarterListId + '" aria-label="' + escapeHtml(kg.kyrkogard + ', klicka för att visa kvarter') + '">';
+              html += '<div class="startsida-statistik-stapel-label">';
+              html += '<button type="button" class="startsida-transk-goto-nasta" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + '">' + escapeHtml(kgLabel) + '</button>';
+              html += ' <span class="startsida-transkriberingsstatus-chevron" aria-hidden="true">&#9654;</span>';
+              html += '</div>';
             } else {
               html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kyrkogard">';
+              html += '<div class="startsida-statistik-stapel-label">';
+              html += '<button type="button" class="startsida-transk-goto-nasta" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + '">' + escapeHtml(kgLabel) + '</button>';
+              html += '</div>';
             }
-            html += '<div class="startsida-statistik-stapel-label">' + escapeHtml(kg.kyrkogard + ' – ' + kg.fardiga + ' av ' + kg.total + ', ' + procentStr(kg.total, kg.fardiga) + '%');
-            if (nKvarter > 0) {
-              html += ' <span class="startsida-transkriberingsstatus-chevron" aria-hidden="true">&#9654;</span>';
-            }
-            html += '</div>';
             html += '<div class="startsida-statistik-stapel" role="img" aria-label="' + escapeHtml(procentStr(kg.total, kg.fardiga)) + ' procent">' +
               '<div class="startsida-statistik-stapel-fardiga" style="width:' + procentStr(kg.total, kg.fardiga) + '%"></div>' +
               '<div class="startsida-statistik-stapel-rest" style="width:' + (100 - parseInt(procentStr(kg.total, kg.fardiga), 10)) + '%"></div></div>';
@@ -310,9 +377,13 @@
             if (nKvarter > 0) {
               html += '<div class="startsida-transkriberingsstatus-kvarter-list" id="' + kvarterListId + '" hidden>';
               kvarterList.forEach(function (kv) {
-                var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter;
-                html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter">' +
-                  barHtml(kvarterLabel, kv.total, kv.fardiga) + '</div>';
+                var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter + ' – ' + kv.fardiga + ' av ' + kv.total + ', ' + procentStr(kv.total, kv.fardiga) + '%';
+                html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter startsida-transk-goto-nasta-kvarter" role="button" tabindex="0" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" data-kvarter="' + escapeHtml(kv.kvarter) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + ' ' + escapeHtml(kv.kvarter) + '">' +
+                  '<div class="startsida-statistik-stapel-label">' + escapeHtml(kvarterLabel) + '</div>' +
+                  '<div class="startsida-statistik-stapel" role="img" aria-label="' + escapeHtml(procentStr(kv.total, kv.fardiga)) + ' procent">' +
+                  '<div class="startsida-statistik-stapel-fardiga" style="width:' + procentStr(kv.total, kv.fardiga) + '%"></div>' +
+                  '<div class="startsida-statistik-stapel-rest" style="width:' + (100 - parseInt(procentStr(kv.total, kv.fardiga), 10)) + '%"></div></div>' +
+                  '</div>';
               });
               html += '</div>';
             }
