@@ -4050,7 +4050,7 @@ function visaSparToasts(achievementsBefore, data) {
           const p = (me && me.preferences) || {};
           if (p.fun_enabled !== false) {
             newlyEarned.forEach((item) => {
-              gpShowToast(gpToastTextFörAchievement(item.key, item.level, item.label, item.threshold, item.current));
+              gpShowToast(gpToastTextFörAchievement(item.level, item.label, item.threshold, item.current));
             });
             if (p.sound_on_new_yrke !== false) {
               gpPlayPling();
