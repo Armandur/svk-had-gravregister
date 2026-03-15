@@ -961,6 +961,7 @@ async function batchAutoLaddaClaude() {
   const redigeraBtn = document.getElementById('gp-btn-redigera');
   if (redigeraBtn) redigeraBtn.textContent = 'Sluta redigera gravplats';
   uppdateraInmatningSparaKnapp();
+  uppdateraFardigtranskriberadKnapp();
   const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
   sektioner.forEach((s) => renderInmatningSektion(s));
   if (currentExtramaterial.length > 0 && currentExtramaterialMapp) {
@@ -979,6 +980,8 @@ async function batchAutoLaddaClaude() {
     if (!inmatningHarNagonData()) {
       // Ingen befintlig data – applicera direkt (inget pling, svaret är redan sparat sedan batch-körningen)
       prefillFranClaude(data.svar_json);
+      markInmatningDirty();
+      uppdateraFardigtranskriberadKnapp();
       if (data.ocr_kommentar && bannerEl) {
         bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
         bannerEl.hidden = false;
