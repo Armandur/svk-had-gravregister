@@ -242,6 +242,7 @@ class ClaudeBatchJobbPost(Base):
     gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
     ordning: Mapped[int] = mapped_column(default=0)
     status: Mapped[str] = mapped_column(default="väntar")  # väntar | klar | fel | hoppad
+    fel_meddelande: Mapped[str | None] = mapped_column(nullable=True)
 
 
 class GravplatsSkiss(Base):
@@ -1003,6 +1004,13 @@ def init_db():
         user_cols = [row[1] for row in r]
         if "claude_batch_aktiv" not in user_cols:
             conn.execute(text("ALTER TABLE user ADD COLUMN claude_batch_aktiv INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+
+        # ---------- Migration: claude_batch_jobb_post fel_meddelande ----------
+        r = conn.execute(text("PRAGMA table_info(claude_batch_jobb_post)"))
+        post_cols = [row[1] for row in r]
+        if "fel_meddelande" not in post_cols:
+            conn.execute(text("ALTER TABLE claude_batch_jobb_post ADD COLUMN fel_meddelande TEXT"))
             conn.commit()
 
 

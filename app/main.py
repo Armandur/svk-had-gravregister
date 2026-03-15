@@ -5062,6 +5062,7 @@ async def hamta_batch_jobb(
             "gravplats_id": p.gravplats_id,
             "ordning": p.ordning,
             "status": p.status,
+            "fel_meddelande": p.fel_meddelande or None,
             "kyrkogard": gp.kyrkogard if gp else None,
             "kvarter": gp.kvarter if gp else None,
             "gravplatsnummer": gp.gravplatsnummer if gp else None,
@@ -5136,6 +5137,7 @@ async def batch_kor_nasta(
 
         if not png_images:
             post.status = "hoppad"
+            post.fel_meddelande = "Inga bilder hittades för gravplatsen"
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
             return
@@ -5176,11 +5178,13 @@ async def batch_kor_nasta(
                 ))
 
             post.status = "klar"
+            post.fel_meddelande = None
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
             db.commit()
 
-        except Exception:
+        except Exception as exc:
             post.status = "fel"
+            post.fel_meddelande = str(exc) or "Okänt fel"
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
 

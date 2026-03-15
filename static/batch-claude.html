@@ -43,6 +43,12 @@
     .batch-jobb-status-kor { background: #dbeafe; color: #1e40af; }
     .batch-jobb-status-avbruten { background: #fee2e2; color: #991b1b; }
     .batch-knappar { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .batch-jobb-fellog { width: 100%; margin-top: 0.5rem; }
+    .batch-jobb-fellog summary { font-size: 0.85rem; color: #b91c1c; cursor: pointer; }
+    .batch-jobb-fellog-lista { margin: 0.4rem 0 0 0; padding: 0; list-style: none; font-size: 0.82rem; }
+    .batch-jobb-fellog-rad { padding: 0.2rem 0; border-bottom: 1px solid #fee2e2; display: flex; gap: 0.5rem; }
+    .batch-jobb-fellog-nr { color: #64748b; white-space: nowrap; }
+    .batch-jobb-fellog-msg { color: #991b1b; }
     #batch-aktiv-wrap { border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem 1.25rem; background: #eff6ff; }
     #batch-aktiv-namn { font-weight: 600; margin-bottom: 0.5rem; }
 
@@ -305,8 +311,10 @@
         '<span class="batch-knappar">' +
         statusKnapp +
         (harKlara ? '<button type="button" class="batch-btn batch-btn-prim batch-granska-btn" data-id="' + j.id + '">Granska</button>' : '') +
+        (j.fel > 0 ? '<button type="button" class="batch-btn batch-btn-sec batch-fellog-btn" data-id="' + j.id + '">Visa fel (' + j.fel + ')</button>' : '') +
         '<button type="button" class="batch-btn batch-btn-danger batch-ta-bort-btn" data-id="' + j.id + '">Ta bort</button>' +
-        '</span>';
+        '</span>' +
+        '<div class="batch-jobb-fellog" id="batch-fellog-' + j.id + '" hidden></div>';
       lista.appendChild(li);
     });
     lista.querySelectorAll('.batch-granska-btn').forEach(function(btn) {
@@ -322,6 +330,38 @@
           await fetch(API + '/batch-claude/jobb/' + btn.dataset.id + '/avbryt', { method: 'POST', credentials: 'include' });
           laddaJobb();
         } catch(e) {}
+      });
+    });
+    lista.querySelectorAll('.batch-fellog-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const jobbId = btn.dataset.id;
+        const wrap = document.getElementById('batch-fellog-' + jobbId);
+        if (!wrap) return;
+        if (!wrap.hidden) { wrap.hidden = true; btn.textContent = btn.textContent.replace('Dölj', 'Visa'); return; }
+        btn.disabled = true;
+        try {
+          const res = await fetch(API + '/batch-claude/jobb/' + jobbId, { credentials: 'include' });
+          if (!res.ok) throw new Error('Kunde inte hämta');
+          const data = await res.json();
+          const felposter = (data.poster || []).filter(function(p) { return p.status === 'fel' || p.status === 'hoppad'; });
+          if (felposter.length === 0) { wrap.innerHTML = '<p style="font-size:0.85rem;color:#64748b;margin:0.4rem 0 0">Inga feldetaljer sparade.</p>'; }
+          else {
+            var html = '<ul class="batch-jobb-fellog-lista">';
+            felposter.forEach(function(p) {
+              var beteckning = [p.kyrkogard, p.kvarter, p.gravplatsnummer].filter(Boolean).join(' ') || ('gravplats_id ' + p.gravplats_id);
+              html += '<li class="batch-jobb-fellog-rad"><span class="batch-jobb-fellog-nr">' + escHtml(beteckning) + '</span><span class="batch-jobb-fellog-msg">' + escHtml(p.fel_meddelande || p.status) + '</span></li>';
+            });
+            html += '</ul>';
+            wrap.innerHTML = html;
+          }
+          wrap.hidden = false;
+          btn.textContent = btn.textContent.replace('Visa', 'Dölj');
+        } catch(e) {
+          wrap.innerHTML = '<p style="font-size:0.85rem;color:#b91c1c;margin:0.4rem 0 0">Kunde inte hämta fellog.</p>';
+          wrap.hidden = false;
+        } finally {
+          btn.disabled = false;
+        }
       });
     });
     lista.querySelectorAll('.batch-ta-bort-btn').forEach(function(btn) {
