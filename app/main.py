@@ -3,6 +3,7 @@ import asyncio
 import base64
 import json
 import os
+import random
 import re
 import time
 import shutil
@@ -5142,51 +5143,64 @@ async def batch_kor_nasta(
             db.commit()
             return
 
-        try:
-            _t0 = time.monotonic()
-            result, usage = await ocr_gravplats_from_images(png_images, api_key)
-            svarstid_ms = int((time.monotonic() - _t0) * 1000)
+        # Retry-loop: upp till 3 försök med exponentiell backoff vid rate limiting (429)
+        max_forsok = 3
+        for forsok in range(max_forsok):
+            try:
+                _t0 = time.monotonic()
+                result, usage = await ocr_gravplats_from_images(png_images, api_key)
+                svarstid_ms = int((time.monotonic() - _t0) * 1000)
 
-            inp = usage.get("input_tokens", 0)
-            out = usage.get("output_tokens", 0)
-            cache_create = usage.get("cache_creation_input_tokens", 0)
-            cache_read = usage.get("cache_read_input_tokens", 0)
-            kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
+                inp = usage.get("input_tokens", 0)
+                out = usage.get("output_tokens", 0)
+                cache_create = usage.get("cache_creation_input_tokens", 0)
+                cache_read = usage.get("cache_read_input_tokens", 0)
+                kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
 
-            db.add(ClaudeAnropslogg(
-                user_id=current_user.id,
-                gravplats_id=gravplats_id,
-                anropad_den=datetime.now(timezone.utc).isoformat(),
-                input_tokens=inp, output_tokens=out,
-                cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
-                kostnad_usd=round(kostnad, 6),
-                svarstid_ms=svarstid_ms,
-            ))
-
-            svar_json_str = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
-            existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
-            if existing_svar:
-                existing_svar.user_id = current_user.id
-                existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
-                existing_svar.svar_json = svar_json_str
-                existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
-            else:
-                db.add(ClaudeOcrSvar(
-                    gravplats_id=gravplats_id, user_id=current_user.id,
-                    skapad_den=datetime.now(timezone.utc).isoformat(),
-                    svar_json=svar_json_str, ocr_kommentar=result.get("ocr_kommentar", ""),
+                db.add(ClaudeAnropslogg(
+                    user_id=current_user.id,
+                    gravplats_id=gravplats_id,
+                    anropad_den=datetime.now(timezone.utc).isoformat(),
+                    input_tokens=inp, output_tokens=out,
+                    cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
+                    kostnad_usd=round(kostnad, 6),
+                    svarstid_ms=svarstid_ms,
                 ))
 
-            post.status = "klar"
-            post.fel_meddelande = None
-            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
-            db.commit()
+                svar_json_str = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
+                existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+                if existing_svar:
+                    existing_svar.user_id = current_user.id
+                    existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+                    existing_svar.svar_json = svar_json_str
+                    existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
+                else:
+                    db.add(ClaudeOcrSvar(
+                        gravplats_id=gravplats_id, user_id=current_user.id,
+                        skapad_den=datetime.now(timezone.utc).isoformat(),
+                        svar_json=svar_json_str, ocr_kommentar=result.get("ocr_kommentar", ""),
+                    ))
 
-        except Exception as exc:
-            post.status = "fel"
-            post.fel_meddelande = str(exc) or "Okänt fel"
-            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
-            db.commit()
+                post.status = "klar"
+                post.fel_meddelande = None
+                db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
+                db.commit()
+                return  # lyckat – avsluta retry-loopen
+
+            except Exception as exc:
+                meddelande = str(exc) or "Okänt fel"
+                ar_rate_limit = "429" in meddelande
+                if ar_rate_limit and forsok < max_forsok - 1:
+                    # Vänta med jitter för att undvika att alla parallella anrop
+                    # försöker igen samtidigt: 60 s + 0–20 s slumpmässig fördröjning
+                    vantetid = 60 * (forsok + 1) + random.uniform(0, 20)
+                    await asyncio.sleep(vantetid)
+                    continue  # försök igen
+                post.status = "fel"
+                post.fel_meddelande = meddelande
+                db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+                db.commit()
+                return
 
     await asyncio.gather(*[kör_en(p) for p in poster])
 
