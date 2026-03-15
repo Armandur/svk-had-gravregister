@@ -4413,7 +4413,6 @@ document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async fu
       bannerEl.hidden = false;
     }
     sparatClaudeSvar = { svar_json: data, ocr_kommentar: data.ocr_kommentar || '', skapad_den: new Date().toISOString(), username: '' };
-    visaSparatClaudeSvar(sparatClaudeSvar);
   } catch (err) {
     if (err.name === 'AbortError') { /* användaren avbröt – inget felmeddelande */ }
     else alert('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'));

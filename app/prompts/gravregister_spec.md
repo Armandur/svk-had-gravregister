@@ -37,6 +37,8 @@ Gravrättsinnehavare. Varje post:
 ```json
 { "fornamn": "", "efternamn": "", "yrke": "", "gatuadress": "", "postnummer": "", "postort": "", "kommentar": "" }
 ```
+Om ett dödsbosbeteckning förekommer direkt efter efternamnet – `db`, `ddb`, `sterbhus` eller `dödsbo` – läggs det till i `efternamn`-fältet med ett mellanslag:
+`"Anna Margareta" / "Wiklund ddb"` → `fornamn: "Anna Margareta"`, `efternamn: "Wiklund ddb"`
 
 ### narmast_anhoriga (lista)
 Närmast anhöriga. Varje post:
