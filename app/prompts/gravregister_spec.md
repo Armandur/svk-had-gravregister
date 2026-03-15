@@ -46,6 +46,8 @@ Närmast anhöriga. Varje post:
 { "fornamn": "", "efternamn": "", "yrke": "", "adress": "", "postnummer": "", "postort": "", "telefon": "", "kommentar": "" }
 ```
 Notera: fältet heter `adress` (inte `gatuadress`) för närmast anhöriga.
+Om `Fr.` eller `Fru` förekommer före namnet läggs det i `yrke`-fältet:
+`"Fru Anna Karlsson"` → `fornamn: "Anna"`, `efternamn: "Karlsson"`, `yrke: "Fru"`
 
 ### Gravplatsfälten
 - `storlek` – Hämtas **endast** från rutan märkt "Storlek". Ignorera markeringar inuti skissrutorna.
