@@ -4957,8 +4957,7 @@ class BatchJobbBody(BaseModel):
     namn: str = ""
     kyrkogard: str | None = None
     kvarter: str | None = None
-    gravplatsnummer_fran: int | None = None
-    gravplatsnummer_till: int | None = None
+    antal: int | None = None  # max antal gravplatser att inkludera (None = alla)
     ej_transkriberade: bool = True
     ej_claude_korda: bool = True
 
@@ -4985,22 +4984,28 @@ async def skapa_batch_jobb(
         korda_ids = [r[0] for r in db.query(ClaudeOcrSvar.gravplats_id).all()]
         if korda_ids:
             q = q.filter(~Gravplats.id.in_(korda_ids))
-    gravplatser = q.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.gravplatsnummer).all()
+    # Hämta alla matchande gravplatser utan SQL-sortering (vi sorterar i Python)
+    gravplatser = q.all()
 
-    # Filtrera på nummerspann om angivet (ledande heltal i gravplatsnummer)
-    if body.gravplatsnummer_fran is not None or body.gravplatsnummer_till is not None:
-        gravplatser = [
-            gp for gp in gravplatser
-            if (body.gravplatsnummer_fran is None or _ledande_tal(gp.gravplatsnummer or "") >= body.gravplatsnummer_fran)
-            and (body.gravplatsnummer_till is None or _ledande_tal(gp.gravplatsnummer or "") <= body.gravplatsnummer_till)
-        ]
+    # Sortera som i trädvyn: kyrkogård och kvarter alfabetiskt (case-insensitivt),
+    # sedan numeriskt på ledande tal i gravplatsnummer, sedan hela numret som sträng
+    gravplatser.sort(key=lambda gp: (
+        (gp.kyrkogard or "").lower(),
+        (gp.kvarter or "").lower(),
+        _ledande_tal(gp.gravplatsnummer or ""),
+        (gp.gravplatsnummer or ""),
+    ))
+
+    # Begränsa till önskat antal om angivet
+    if body.antal is not None and body.antal > 0:
+        gravplatser = gravplatser[:body.antal]
 
     if not gravplatser:
         raise HTTPException(status_code=404, detail="Inga gravplatser matchar filtret")
 
     namn = body.namn.strip() or (
         (body.kyrkogard or "") + (" " + body.kvarter if body.kvarter else "")
-        + (" " + str(body.gravplatsnummer_fran) + "–" + str(body.gravplatsnummer_till) if body.gravplatsnummer_fran or body.gravplatsnummer_till else "")
+        + (" " + str(body.antal) + " st" if body.antal else "")
         + " " + datetime.now().strftime("%Y-%m-%d")
     ).strip()
 
@@ -5012,7 +5017,7 @@ async def skapa_batch_jobb(
         totalt=len(gravplatser),
         klara=0,
         fel=0,
-        filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "gravplatsnummer_fran": body.gravplatsnummer_fran, "gravplatsnummer_till": body.gravplatsnummer_till, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
+        filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "antal": body.antal, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
     )
     db.add(jobb)
     db.flush()

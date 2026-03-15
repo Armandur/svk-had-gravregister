@@ -113,11 +113,9 @@
         <select id="batch-kvarter"><option value="">– Alla –</option></select>
       </div>
       <div class="batch-rad">
-        <label>Gravplatsnr</label>
-        <input type="number" id="batch-nr-fran" placeholder="Från" min="1" />
-        <span style="color:#64748b">–</span>
-        <input type="number" id="batch-nr-till" placeholder="Till" min="1" />
-        <span class="batch-rad-hint">Lämna tomt för hela kvarteret</span>
+        <label for="batch-antal">Antal</label>
+        <input type="number" id="batch-antal" placeholder="Alla" min="1" style="width:7rem" />
+        <span class="batch-rad-hint">Lämna tomt för alla gravplatser i urvalet</span>
       </div>
 
       <div id="batch-statistik-wrap" class="batch-stapel-wrap" hidden></div>
@@ -480,14 +478,12 @@
     felEl.hidden = true;
     infoEl.textContent = 'Skapar\u2026';
     btn.disabled = true;
-    const nrFran = document.getElementById('batch-nr-fran').value;
-    const nrTill = document.getElementById('batch-nr-till').value;
+    const antalVal = document.getElementById('batch-antal').value;
     const body = {
       namn: document.getElementById('batch-namn').value.trim(),
       kyrkogard: document.getElementById('batch-kyrkogard').value || null,
       kvarter: document.getElementById('batch-kvarter').value || null,
-      gravplatsnummer_fran: nrFran ? parseInt(nrFran) : null,
-      gravplatsnummer_till: nrTill ? parseInt(nrTill) : null,
+      antal: antalVal ? parseInt(antalVal) : null,
       ej_transkriberade: document.getElementById('batch-filter-ej-transkriberade').checked,
       ej_claude_korda: document.getElementById('batch-filter-ej-korda').checked,
     };
