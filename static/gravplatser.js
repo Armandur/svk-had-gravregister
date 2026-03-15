@@ -671,6 +671,8 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
  * @param {boolean} [behallInmatningState=false] – om true nollställs inte inmatningsläge (redigera/osparat); använd vid t.ex. Dölj/Visa igen.
  */
 async function uppdateraVy(behallInmatningState = false) {
+  const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
+  if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
   const rubrikEl = document.getElementById('gp-rubrik');
   const halvorEl = document.getElementById('gp-halvor');
   const btnTillbaka = document.getElementById('gp-btn-tillbaka');
@@ -3923,6 +3925,93 @@ function valideraAllaDatumFalt() {
   return true;
 }
 
+/**
+ * Fyll i formuläret med data från Claude OCR-svar.
+ * Ersätter inmatningData och ritar om alla öppna sektioner.
+ */
+function prefillFranClaude(data) {
+  if (!inmatningData || !data) return;
+
+  // Mappa Claude-fält till inmatningData-format
+  const innehavare = (data.innehavare || []).map((inv, i) => ({
+    id: null,
+    fornamn: inv.fornamn || '',
+    efternamn: inv.efternamn || '',
+    yrke: inv.yrke || '',
+    gatuadress: inv.gatuadress || '',
+    postnummer: inv.postnummer || '',
+    postort: inv.postort || '',
+    kommentar: inv.kommentar || '',
+    sort_order: i,
+  }));
+
+  const narmast_anhoriga = (data.narmast_anhoriga || []).map((na, i) => ({
+    id: null,
+    fornamn: na.fornamn || '',
+    efternamn: na.efternamn || '',
+    yrke: na.yrke || '',
+    adress: na.adress || '',
+    postnummer: na.postnummer || '',
+    postort: na.postort || '',
+    telefon: na.telefon || '',
+    kommentar: na.kommentar || '',
+    sort_order: i,
+  }));
+
+  const gravsatta = (data.gravsatta || []).map((gs) => ({
+    id: null,
+    position: gs.position,
+    ar_beteckning: gs.ar_beteckning || false,
+    fornamn: gs.fornamn || '',
+    efternamn: gs.efternamn || '',
+    yrke: gs.yrke || '',
+    gatuadress: gs.gatuadress || '',
+    postnummer: gs.postnummer || '',
+    postort: gs.postort || '',
+    fodelse_ar: gs.fodelse_ar ?? null,
+    fodelse_manad: gs.fodelse_manad ?? null,
+    fodelse_dag: gs.fodelse_dag ?? null,
+    fod_nr: gs.fod_nr || '',
+    dods_ar: gs.dods_ar ?? null,
+    dods_manad: gs.dods_manad ?? null,
+    dods_dag: gs.dods_dag ?? null,
+    dodsbok_nr: gs.dodsbok_nr || '',
+    gravsatt_den: gs.gravsatt_den || '',
+    urna: gs.urna || '',
+    kommentar: gs.kommentar || '',
+  }));
+
+  inmatningData = {
+    ...inmatningData,
+    innehavare,
+    narmast_anhoriga,
+    storlek: data.storlek != null ? String(data.storlek) : (inmatningData.storlek || ''),
+    underhall_text: data.underhall_text != null ? data.underhall_text : (inmatningData.underhall_text || ''),
+    underhall_overstruket: data.underhall_overstruket != null ? Boolean(data.underhall_overstruket) : (inmatningData.underhall_overstruket || false),
+    gravrattstid: data.gravrattstid != null ? data.gravrattstid : (inmatningData.gravrattstid || ''),
+    monument: data.monument != null ? data.monument : (inmatningData.monument || ''),
+    gravens_utformning: data.gravens_utformning != null ? data.gravens_utformning : (inmatningData.gravens_utformning || ''),
+    karta_nr: data.karta_nr != null ? data.karta_nr : (inmatningData.karta_nr || ''),
+    gravbrev_nr: data.gravbrev_nr != null ? data.gravbrev_nr : (inmatningData.gravbrev_nr || ''),
+    // Claude använder utfardat_den (med a), backend/frontend utfordat_den (med o)
+    utfordat_den: data.utfardat_den != null ? data.utfardat_den : (inmatningData.utfordat_den || ''),
+    kommentar: data.kommentar != null ? data.kommentar : (inmatningData.kommentar || ''),
+    gravsatta,
+  };
+
+  // Rita om alla sektioner (återställ dirty-flaggan tillfälligt så renderInmatningSektion inte hoppar över)
+  inmatningDirty = false;
+  const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  sektioner.forEach((sektion) => {
+    const btn = document.querySelector(`.gp-sektion-rubrik[data-sektion="${sektion}"]`);
+    const innehall = document.getElementById(`gp-innehall-${sektion}`);
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    if (innehall) innehall.hidden = false;
+    renderInmatningSektion(sektion);
+  });
+  markInmatningDirty();
+}
+
 async function sparaInmatning() {
   if (currentGravplatsId == null) return;
   if (!inmatningDirty) return;
@@ -4154,6 +4243,38 @@ document.querySelectorAll('.gp-sektion-rubrik').forEach((btn) => {
   btn.addEventListener('click', () => toggleInmatningSektion(btn.dataset.sektion));
 });
 document.getElementById('gp-inmatning-spara')?.addEventListener('click', sparaInmatning);
+
+document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async function () {
+  if (currentGravplatsId == null) return;
+  const btn = document.getElementById('gp-claude-ocr-btn');
+  const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
+  btn.disabled = true;
+  btn.textContent = 'Hämtar…';
+  if (bannerEl) { bannerEl.hidden = true; bannerEl.textContent = ''; }
+  try {
+    const res = await fetch(`${API}/ocr/gravplats/${currentGravplatsId}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    await ensureInmatningData();
+    prefillFranClaude(data);
+    gpPlayPling();
+    if (data.ocr_kommentar && bannerEl) {
+      bannerEl.textContent = data.ocr_kommentar;
+      bannerEl.hidden = false;
+    }
+  } catch (err) {
+    alert('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Hämta från Claude';
+  }
+});
 
 const gpInmatningEl = document.getElementById('gp-inmatning');
 if (gpInmatningEl) {
