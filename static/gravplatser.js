@@ -4648,6 +4648,13 @@ try {
       } else {
         applyInmatningSectionsOrder(inmatningSectionsOrder);
       }
+      if (me && !me.claude_tillganglig) {
+        ['gp-claude-ocr-btn', 'gp-claude-avbryt-btn', 'gp-claude-ladda-sparat-btn',
+         'gp-claude-sparat-panel', 'gp-ocr-kommentar-banner', 'gp-claude-diff-dialog'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el) el.remove();
+        });
+      }
     })
     .catch(() => {
       applyInmatningSectionsOrder(inmatningSectionsOrder);

@@ -22,6 +22,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(unique=True, index=True)
     password_hash: Mapped[str] = mapped_column()
     is_admin: Mapped[bool] = mapped_column(default=False)
+    claude_aktiv: Mapped[bool] = mapped_column(default=True)  # om Claude-funktioner är aktiverade för användaren
     # JSON: t.ex. {"fun_enabled": true, "toast_on_new_yrke": true, "sound_on_new_yrke": true}
     preferences: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -961,6 +962,13 @@ def init_db():
         logg_cols = [row[1] for row in r]
         if "svarstid_ms" not in logg_cols:
             conn.execute(text("ALTER TABLE claude_anropslogg ADD COLUMN svarstid_ms INTEGER"))
+            conn.commit()
+
+        # ---------- Migration: user claude_aktiv ----------
+        r = conn.execute(text("PRAGMA table_info(user)"))
+        user_cols = [row[1] for row in r]
+        if "claude_aktiv" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN claude_aktiv INTEGER NOT NULL DEFAULT 1"))
             conn.commit()
 
 

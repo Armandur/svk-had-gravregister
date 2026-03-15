@@ -77,6 +77,13 @@
       <nav class="inst-lankgrupp">
         <a href="/loggar/claude">Anropslogg (tokens och kostnad)</a>
       </nav>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-claude-instans-toggle" />
+          Aktivera Claude-funktioner för hela instansen
+        </label>
+        <span id="inst-claude-instans-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
     </section>
 
     <section class="inst-sektion" aria-label="API-nycklar">
@@ -113,6 +120,28 @@
         setTimeout(() => { meddEl.hidden = true; }, 4000);
       }
 
+      const instansToggle = document.getElementById('inst-claude-instans-toggle');
+      const instansStatus = document.getElementById('inst-claude-instans-status');
+
+      instansToggle && instansToggle.addEventListener('change', async function() {
+        const aktiv = instansToggle.checked;
+        instansStatus.textContent = 'Sparar…';
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ claude_aktiv_instans: aktiv }),
+          });
+          if (!res.ok) throw new Error();
+          instansStatus.textContent = aktiv ? 'Aktiverat.' : 'Inaktiverat.';
+          setTimeout(() => { instansStatus.textContent = ''; }, 2500);
+        } catch (_) {
+          instansStatus.textContent = 'Kunde inte spara.';
+          instansToggle.checked = !aktiv; // återställ
+        }
+      });
+
       async function laddaStatus() {
         try {
           const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
@@ -127,6 +156,7 @@
             statusEl.innerHTML = 'Anthropic API-nyckel: <span class="ej-satt">Ej satt</span>';
             taBortBtn.hidden = true;
           }
+          if (instansToggle) instansToggle.checked = d.claude_aktiv_instans !== false;
         } catch (_) {
           statusEl.textContent = 'Kunde inte hämta status.';
         }

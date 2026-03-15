@@ -137,6 +137,27 @@ def _get_anthropic_api_key() -> str | None:
         return None
 
 
+def _get_claude_instans_aktiv() -> bool:
+    """Returnera om Claude är aktiverat för hela instansen (api_keys.json)."""
+    try:
+        data = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        return bool(data.get("claude_aktiv_instans", True))
+    except (OSError, json.JSONDecodeError):
+        return True
+
+
+def _set_api_keys_json(**kwargs) -> None:
+    """Uppdatera ett eller flera fält i api_keys.json."""
+    existing: dict = {}
+    if API_KEYS_PATH.is_file():
+        try:
+            existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+    existing.update(kwargs)
+    API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 @app.on_event("startup")
 def startup():
     _read_git_version()
@@ -265,10 +286,6 @@ async def installningar_sida(admin: User = Depends(require_admin)):
     return FileResponse(Path(__file__).parent.parent / "static" / "installningar.html")
 
 
-class ApiKeysBody(BaseModel):
-    anthropic_api_key: str = ""
-
-
 @app.get("/api/settings/api-keys")
 async def get_api_keys(admin: User = Depends(require_admin)):
     """Returnera status för API-nycklar (om de är satta och en maskerad förhandsgranskning). Endast admin."""
@@ -283,12 +300,18 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "anthropic_api_key_set": bool(key),
         "anthropic_api_key_preview": preview,
         "anthropic_api_key_from_env": from_env,
+        "claude_aktiv_instans": _get_claude_instans_aktiv(),
     }
+
+
+class ApiKeysBody(BaseModel):
+    anthropic_api_key: str | None = None  # None = ej skickad (rör ej nyckeln), "" = ta bort
+    claude_aktiv_instans: bool | None = None
 
 
 @app.put("/api/settings/api-keys")
 async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
-    """Spara API-nycklar till api_keys.json. Skicka tom sträng för att ta bort nyckeln. Endast admin."""
+    """Spara API-nycklar och instansinställningar till api_keys.json. Endast admin."""
     try:
         existing: dict = {}
         if API_KEYS_PATH.is_file():
@@ -296,11 +319,14 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
                 existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 existing = {}
-        key = (body.anthropic_api_key or "").strip()
-        if key:
-            existing["anthropic_api_key"] = key
-        else:
-            existing.pop("anthropic_api_key", None)
+        if body.anthropic_api_key is not None:
+            key = body.anthropic_api_key.strip()
+            if key:
+                existing["anthropic_api_key"] = key
+            else:
+                existing.pop("anthropic_api_key", None)
+        if body.claude_aktiv_instans is not None:
+            existing["claude_aktiv_instans"] = body.claude_aktiv_instans
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
@@ -398,10 +424,16 @@ async def me(current_user: User = Depends(get_current_user)):
     for s in allowed:
         if s not in sections_order:
             sections_order.append(s)
+    claude_tillganglig = (
+        bool(_get_anthropic_api_key())
+        and _get_claude_instans_aktiv()
+        and getattr(current_user, "claude_aktiv", True)
+    )
     return {
         "id": current_user.id,
         "username": current_user.username,
         "is_admin": current_user.is_admin,
+        "claude_tillganglig": claude_tillganglig,
         "preferences": {
             "fun_enabled": prefs.get("fun_enabled", True),
             "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),
@@ -607,7 +639,27 @@ class CreateUserWithPasswordBody(BaseModel):
 async def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Lista alla användare (endast admin)."""
     users = db.query(User).order_by(User.username).all()
-    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]}
+    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True)} for u in users]}
+
+
+class ClaudeAktivBody(BaseModel):
+    aktiv: bool
+
+
+@app.put("/api/admin/users/{user_id:int}/claude-aktiv")
+async def set_user_claude_aktiv(
+    user_id: int,
+    body: ClaudeAktivBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Aktivera eller inaktivera Claude-funktioner för en användare. Endast admin."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    user.claude_aktiv = body.aktiv
+    db.commit()
+    return {"ok": True, "claude_aktiv": user.claude_aktiv}
 
 
 @app.get("/api/admin/achievement-niva")
@@ -4583,6 +4635,10 @@ async def ocr_gravplats_endpoint(
     Skicka gravplatsens halvor till Claude OCR och returnera strukturerad JSON.
     Kräver ANTHROPIC_API_KEY i miljön.
     """
+    if not _get_claude_instans_aktiv():
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för denna instans")
+    if not getattr(current_user, "claude_aktiv", True):
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för ditt konto")
     api_key = _get_anthropic_api_key()
     if not api_key:
         raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas – sätt den under Inställningar")
