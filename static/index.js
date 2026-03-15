@@ -40,6 +40,11 @@
       if (me.is_admin) installningarLink.removeAttribute('hidden');
       else installningarLink.remove();
     }
+    var batchLank = document.getElementById('startsida-batch-claude-lank');
+    if (batchLank) {
+      if (me.claude_batch_tillganglig) batchLank.removeAttribute('hidden');
+      else batchLank.remove();
+    }
   });
 
   document.getElementById('startsida-logga-ut')?.addEventListener('click', function(e) {
@@ -359,7 +364,7 @@
                   globalIdx += 1;
                   var vClassF = ' startsida-statistik-stapel-segment-fardig-v' + v;
                   var vClassR = ' startsida-statistik-stapel-segment-ej-fardig-v' + v;
-                  var title = segFardiga + ' av ' + segTotal;
+                  var title = (seg.kvarter ? seg.kvarter + ': ' : '') + segFardiga + ' av ' + segTotal + ' klara';
                   var h = '';
                   if (segFardiga > 0) {
                     h += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-fardig' + vClassF + '" style="flex:' + segFardiga + ' 0 0" title="' + title + '"></div>';
@@ -378,7 +383,7 @@
                 var v = segIdx % N_TONER;
                 var vClassF = ' startsida-statistik-stapel-segment-fardig-v' + v;
                 var vClassR = ' startsida-statistik-stapel-segment-ej-fardig-v' + v;
-                var title = segFardiga + ' av ' + segTotal;
+                var title = (seg.kvarter ? seg.kvarter + ': ' : '') + segFardiga + ' av ' + segTotal + ' klara';
                 var html = '';
                 if (useGap && seg.kyrkogardStart && segIdx > 0) {
                   html += '<div class="startsida-statistik-stapel-gap" aria-hidden="true"></div>';
@@ -427,7 +432,9 @@
               allSegments.push({
                 total: kv.total,
                 fardiga: kv.fardiga,
-                kyrkogardStart: i === 0
+                kyrkogardStart: i === 0,
+                kvarter: kv.kvarter,
+                kyrkogard: kg.kyrkogard
               });
             });
           });
@@ -455,7 +462,7 @@
               html += '<button type="button" class="startsida-transk-goto-nasta" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + '">' + escapeHtml(kgLabel) + '</button>';
               html += '</div>';
             }
-            html += segmentBarHtml(kvarterList.map(function (kv) { return { total: kv.total, fardiga: kv.fardiga }; }));
+            html += segmentBarHtml(kvarterList.map(function (kv) { return { total: kv.total, fardiga: kv.fardiga, kvarter: kv.kvarter, kyrkogard: kg.kyrkogard }; }));
             html += '</div>';
             if (nKvarter > 0) {
               html += '<div class="startsida-transkriberingsstatus-kvarter-list" id="' + kvarterListId + '" hidden>';

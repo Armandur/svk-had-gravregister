@@ -23,6 +23,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column()
     is_admin: Mapped[bool] = mapped_column(default=False)
     claude_aktiv: Mapped[bool] = mapped_column(default=True)  # om Claude-funktioner är aktiverade för användaren
+    claude_batch_aktiv: Mapped[bool] = mapped_column(default=False)
     # JSON: t.ex. {"fun_enabled": true, "toast_on_new_yrke": true, "sound_on_new_yrke": true}
     preferences: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -215,6 +216,32 @@ class ClaudeOcrSvar(Base):
     skapad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
     svar_json: Mapped[str] = mapped_column()            # JSON-sträng (utan _ocr_usage)
     ocr_kommentar: Mapped[str] = mapped_column(default="")
+
+
+class ClaudeBatchJobb(Base):
+    """Batch-jobb för att köra Claude OCR på flera gravplatser."""
+    __tablename__ = "claude_batch_jobb"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    namn: Mapped[str] = mapped_column(default="")
+    skapad_den: Mapped[str] = mapped_column()  # ISO 8601 UTC
+    status: Mapped[str] = mapped_column(default="klar")  # klar | kör | pausad | avbruten
+    totalt: Mapped[int] = mapped_column(default=0)
+    klara: Mapped[int] = mapped_column(default=0)
+    fel: Mapped[int] = mapped_column(default=0)
+    filter_json: Mapped[str | None] = mapped_column(nullable=True)  # JSON: {"kyrkogard": ..., "kvarter": ..., "ej_transkriberade": true, ...}
+
+
+class ClaudeBatchJobbPost(Base):
+    """Enskild gravplats i ett batch-jobb."""
+    __tablename__ = "claude_batch_jobb_post"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    jobb_id: Mapped[int] = mapped_column(ForeignKey("claude_batch_jobb.id"), nullable=False)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
+    ordning: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(default="väntar")  # väntar | klar | fel | hoppad
 
 
 class GravplatsSkiss(Base):
@@ -969,6 +996,13 @@ def init_db():
         user_cols = [row[1] for row in r]
         if "claude_aktiv" not in user_cols:
             conn.execute(text("ALTER TABLE user ADD COLUMN claude_aktiv INTEGER NOT NULL DEFAULT 1"))
+            conn.commit()
+
+        # ---------- Migration: user claude_batch_aktiv ----------
+        r = conn.execute(text("PRAGMA table_info(user)"))
+        user_cols = [row[1] for row in r]
+        if "claude_batch_aktiv" not in user_cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN claude_batch_aktiv INTEGER NOT NULL DEFAULT 0"))
             conn.commit()
 
 
