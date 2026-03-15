@@ -3,6 +3,7 @@ import asyncio
 import base64
 import json
 import os
+import random
 import re
 import time
 import shutil
@@ -4956,8 +4957,7 @@ class BatchJobbBody(BaseModel):
     namn: str = ""
     kyrkogard: str | None = None
     kvarter: str | None = None
-    gravplatsnummer_fran: int | None = None
-    gravplatsnummer_till: int | None = None
+    antal: int | None = None  # max antal gravplatser att inkludera (None = alla)
     ej_transkriberade: bool = True
     ej_claude_korda: bool = True
 
@@ -4984,22 +4984,28 @@ async def skapa_batch_jobb(
         korda_ids = [r[0] for r in db.query(ClaudeOcrSvar.gravplats_id).all()]
         if korda_ids:
             q = q.filter(~Gravplats.id.in_(korda_ids))
-    gravplatser = q.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.gravplatsnummer).all()
+    # Hämta alla matchande gravplatser utan SQL-sortering (vi sorterar i Python)
+    gravplatser = q.all()
 
-    # Filtrera på nummerspann om angivet (ledande heltal i gravplatsnummer)
-    if body.gravplatsnummer_fran is not None or body.gravplatsnummer_till is not None:
-        gravplatser = [
-            gp for gp in gravplatser
-            if (body.gravplatsnummer_fran is None or _ledande_tal(gp.gravplatsnummer or "") >= body.gravplatsnummer_fran)
-            and (body.gravplatsnummer_till is None or _ledande_tal(gp.gravplatsnummer or "") <= body.gravplatsnummer_till)
-        ]
+    # Sortera som i trädvyn: kyrkogård och kvarter alfabetiskt (case-insensitivt),
+    # sedan numeriskt på ledande tal i gravplatsnummer, sedan hela numret som sträng
+    gravplatser.sort(key=lambda gp: (
+        (gp.kyrkogard or "").lower(),
+        (gp.kvarter or "").lower(),
+        _ledande_tal(gp.gravplatsnummer or ""),
+        (gp.gravplatsnummer or ""),
+    ))
+
+    # Begränsa till önskat antal om angivet
+    if body.antal is not None and body.antal > 0:
+        gravplatser = gravplatser[:body.antal]
 
     if not gravplatser:
         raise HTTPException(status_code=404, detail="Inga gravplatser matchar filtret")
 
     namn = body.namn.strip() or (
         (body.kyrkogard or "") + (" " + body.kvarter if body.kvarter else "")
-        + (" " + str(body.gravplatsnummer_fran) + "–" + str(body.gravplatsnummer_till) if body.gravplatsnummer_fran or body.gravplatsnummer_till else "")
+        + (" " + str(body.antal) + " st" if body.antal else "")
         + " " + datetime.now().strftime("%Y-%m-%d")
     ).strip()
 
@@ -5011,7 +5017,7 @@ async def skapa_batch_jobb(
         totalt=len(gravplatser),
         klara=0,
         fel=0,
-        filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "gravplatsnummer_fran": body.gravplatsnummer_fran, "gravplatsnummer_till": body.gravplatsnummer_till, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
+        filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "antal": body.antal, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
     )
     db.add(jobb)
     db.flush()
@@ -5062,6 +5068,7 @@ async def hamta_batch_jobb(
             "gravplats_id": p.gravplats_id,
             "ordning": p.ordning,
             "status": p.status,
+            "fel_meddelande": p.fel_meddelande or None,
             "kyrkogard": gp.kyrkogard if gp else None,
             "kvarter": gp.kvarter if gp else None,
             "gravplatsnummer": gp.gravplatsnummer if gp else None,
@@ -5136,53 +5143,69 @@ async def batch_kor_nasta(
 
         if not png_images:
             post.status = "hoppad"
+            post.fel_meddelande = "Inga bilder hittades för gravplatsen"
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
             return
 
-        try:
-            _t0 = time.monotonic()
-            result, usage = await ocr_gravplats_from_images(png_images, api_key)
-            svarstid_ms = int((time.monotonic() - _t0) * 1000)
+        # Retry-loop: upp till 3 försök med exponentiell backoff vid rate limiting (429)
+        max_forsok = 3
+        for forsok in range(max_forsok):
+            try:
+                _t0 = time.monotonic()
+                result, usage = await ocr_gravplats_from_images(png_images, api_key)
+                svarstid_ms = int((time.monotonic() - _t0) * 1000)
 
-            inp = usage.get("input_tokens", 0)
-            out = usage.get("output_tokens", 0)
-            cache_create = usage.get("cache_creation_input_tokens", 0)
-            cache_read = usage.get("cache_read_input_tokens", 0)
-            kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
+                inp = usage.get("input_tokens", 0)
+                out = usage.get("output_tokens", 0)
+                cache_create = usage.get("cache_creation_input_tokens", 0)
+                cache_read = usage.get("cache_read_input_tokens", 0)
+                kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
 
-            db.add(ClaudeAnropslogg(
-                user_id=current_user.id,
-                gravplats_id=gravplats_id,
-                anropad_den=datetime.now(timezone.utc).isoformat(),
-                input_tokens=inp, output_tokens=out,
-                cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
-                kostnad_usd=round(kostnad, 6),
-                svarstid_ms=svarstid_ms,
-            ))
-
-            svar_json_str = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
-            existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
-            if existing_svar:
-                existing_svar.user_id = current_user.id
-                existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
-                existing_svar.svar_json = svar_json_str
-                existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
-            else:
-                db.add(ClaudeOcrSvar(
-                    gravplats_id=gravplats_id, user_id=current_user.id,
-                    skapad_den=datetime.now(timezone.utc).isoformat(),
-                    svar_json=svar_json_str, ocr_kommentar=result.get("ocr_kommentar", ""),
+                db.add(ClaudeAnropslogg(
+                    user_id=current_user.id,
+                    gravplats_id=gravplats_id,
+                    anropad_den=datetime.now(timezone.utc).isoformat(),
+                    input_tokens=inp, output_tokens=out,
+                    cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
+                    kostnad_usd=round(kostnad, 6),
+                    svarstid_ms=svarstid_ms,
                 ))
 
-            post.status = "klar"
-            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
-            db.commit()
+                svar_json_str = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
+                existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+                if existing_svar:
+                    existing_svar.user_id = current_user.id
+                    existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+                    existing_svar.svar_json = svar_json_str
+                    existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
+                else:
+                    db.add(ClaudeOcrSvar(
+                        gravplats_id=gravplats_id, user_id=current_user.id,
+                        skapad_den=datetime.now(timezone.utc).isoformat(),
+                        svar_json=svar_json_str, ocr_kommentar=result.get("ocr_kommentar", ""),
+                    ))
 
-        except Exception:
-            post.status = "fel"
-            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
-            db.commit()
+                post.status = "klar"
+                post.fel_meddelande = None
+                db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
+                db.commit()
+                return  # lyckat – avsluta retry-loopen
+
+            except Exception as exc:
+                meddelande = str(exc) or "Okänt fel"
+                ar_rate_limit = "429" in meddelande
+                if ar_rate_limit and forsok < max_forsok - 1:
+                    # Vänta med jitter för att undvika att alla parallella anrop
+                    # försöker igen samtidigt: 60 s + 0–20 s slumpmässig fördröjning
+                    vantetid = 60 * (forsok + 1) + random.uniform(0, 20)
+                    await asyncio.sleep(vantetid)
+                    continue  # försök igen
+                post.status = "fel"
+                post.fel_meddelande = meddelande
+                db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+                db.commit()
+                return
 
     await asyncio.gather(*[kör_en(p) for p in poster])
 
@@ -5192,7 +5215,20 @@ async def batch_kor_nasta(
         jobb.status = "klar"
         db.commit()
 
-    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar}
+    # Returnera senaste felmeddelande (om något gick fel i denna omgång) för realtidsvisning
+    senaste_fel_post = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(
+            ClaudeBatchJobbPost.jobb_id == jobb_id,
+            ClaudeBatchJobbPost.status.in_(["fel", "hoppad"]),
+            ClaudeBatchJobbPost.fel_meddelande.isnot(None),
+        )
+        .order_by(ClaudeBatchJobbPost.id.desc())
+        .first()
+    )
+    senaste_fel = senaste_fel_post.fel_meddelande if senaste_fel_post else None
+
+    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar, "fel": jobb.fel, "senaste_fel": senaste_fel}
 
 
 @app.post("/api/batch-claude/jobb/{jobb_id:int}/pausa")
