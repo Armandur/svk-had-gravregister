@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import time
 import shutil
 import signal
 import subprocess
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY, BACKUP_DIR, DATABASE_PATH, API_KEYS_PATH
+from app.services.ocr_service import ocr_gravplats_from_images
 from app.database import (
     SessionLocal,
     User,
@@ -38,6 +40,8 @@ from app.database import (
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
     GravplatsRedigeringslogg,
+    ClaudeAnropslogg,
+    ClaudeOcrSvar,
     GravplatsSkiss,
     Gravsatt,
     AchievementNiva,
@@ -56,6 +60,9 @@ from app.auth import (
 
 # Cache-huvud för genererade bilder (1 timme; webbläsaren kan cacha)
 CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
+
+# Priser för claude-sonnet-4-6 (USD per miljon tokens)
+_CLAUDE_PRIS = {"input": 3.00, "output": 15.00, "cache_creation": 3.75, "cache_read": 0.30}
 
 app = FastAPI(
     title="Gravregister – digitalisering",
@@ -747,6 +754,80 @@ async def list_loggar_gravplatser(
             "edited_at": logg.edited_at,
         })
     return {"loggar": loggar, "antal": len(loggar), "total": total}
+
+
+@app.get("/api/ocr/gravplats/{gravplats_id:int}/svar")
+async def get_ocr_svar(
+    gravplats_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hämta senaste sparade Claude OCR-svar för en gravplats."""
+    row = (
+        db.query(ClaudeOcrSvar, User.username)
+        .join(User, ClaudeOcrSvar.user_id == User.id)
+        .filter(ClaudeOcrSvar.gravplats_id == gravplats_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Inget sparat Claude-svar")
+    svar, username = row
+    return {
+        "svar_json": json.loads(svar.svar_json),
+        "ocr_kommentar": svar.ocr_kommentar,
+        "skapad_den": svar.skapad_den,
+        "username": username or "",
+    }
+
+
+@app.get("/api/loggar/claude")
+async def list_loggar_claude(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    limit: int = 500,
+    offset: int = 0,
+    anvandare: str | None = None,
+):
+    """
+    Lista Claude OCR-anropslogg med tokenanvändning och kostnad – kronologisk (senaste först). Endast admin.
+    """
+    q = (
+        db.query(ClaudeAnropslogg, Gravplats, MappConfig.namn, User.username)
+        .join(User, ClaudeAnropslogg.user_id == User.id)
+        .outerjoin(Gravplats, ClaudeAnropslogg.gravplats_id == Gravplats.id)
+        .outerjoin(MappConfig, Gravplats.mapp_id == MappConfig.id)
+    )
+    if anvandare and anvandare.strip():
+        q = q.filter(User.username.ilike("%" + anvandare.strip() + "%"))
+    total = q.count()
+    rows = (
+        q.order_by(ClaudeAnropslogg.anropad_den.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 2000)))
+        .all()
+    )
+
+    # Summera totalkostnad för alla rader (ofiltrerat på anvandare för totalraden)
+    totalt_kostnad = db.query(func.sum(ClaudeAnropslogg.kostnad_usd)).scalar() or 0.0
+
+    loggar = []
+    for logg, g, mapp_namn, username in rows:
+        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer) if g else ""
+        loggar.append({
+            "id": logg.id,
+            "gravplats_id": logg.gravplats_id,
+            "fullstandigt": fullstandigt,
+            "mapp_namn": mapp_namn or "",
+            "username": username or "",
+            "anropad_den": logg.anropad_den,
+            "input_tokens": logg.input_tokens,
+            "output_tokens": logg.output_tokens,
+            "cache_creation_tokens": logg.cache_creation_tokens,
+            "cache_read_tokens": logg.cache_read_tokens,
+            "kostnad_usd": logg.kostnad_usd,
+            "svarstid_ms": logg.svarstid_ms,
+        })
+    return {"loggar": loggar, "antal": len(loggar), "total": total, "totalt_kostnad_usd": round(totalt_kostnad, 4)}
 
 
 @app.post("/api/admin/users")
@@ -2121,6 +2202,12 @@ async def admin_user_prestationer_sida(user_id: int, admin: User = Depends(requi
 async def loggar_sida():
     """Redigeringslogg för gravplatser (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "loggar.html")
+
+
+@app.get("/loggar/claude")
+async def loggar_claude_sida():
+    """Claude OCR-anropslogg med tokenanvändning och kostnad (endast för admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "loggar-claude.html")
 
 
 @app.get("/databasunderhall")
@@ -4496,9 +4583,6 @@ async def ocr_gravplats_endpoint(
     Skicka gravplatsens halvor till Claude OCR och returnera strukturerad JSON.
     Kräver ANTHROPIC_API_KEY i miljön.
     """
-    import os
-    from app.services.ocr_service import ocr_gravplats_from_images
-
     api_key = _get_anthropic_api_key()
     if not api_key:
         raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas – sätt den under Inställningar")
@@ -4576,7 +4660,7 @@ async def ocr_gravplats_endpoint(
                 if path.is_file():
                     doc = fitz.open(path)
                     try:
-                        pix = doc[0].get_pixmap(dpi=150)
+                        pix = doc[0].get_pixmap(dpi=200)
                         png_images.append(pix.tobytes("png"))
                     finally:
                         doc.close()
@@ -4598,17 +4682,17 @@ async def ocr_gravplats_endpoint(
         if typ == "blank":
             use_halva = "ovre" if segment_index == 0 else "nedre"
             use_split = andelar[0] if andelar else 0.5
-            png_images.append(_blank_page_png_bytes(dpi=150, split=use_split, halva=use_halva))
+            png_images.append(_blank_page_png_bytes(dpi=200, split=use_split, halva=use_halva))
             continue
 
         doc = fitz.open(val)
         try:
             page = doc[0]
             if val.name in redan_halva_set or dela_sidor == "ingen":
-                pix = page.get_pixmap(dpi=150)
+                pix = page.get_pixmap(dpi=200)
             else:
                 clip = _clip_rect_for_segment(page.rect, segment_index, andelar, dela_sidor)
-                pix = page.get_pixmap(dpi=150, clip=clip) if clip is not None else page.get_pixmap(dpi=150)
+                pix = page.get_pixmap(dpi=200, clip=clip) if clip is not None else page.get_pixmap(dpi=200)
             png_images.append(pix.tobytes("png"))
         finally:
             doc.close()
@@ -4616,11 +4700,66 @@ async def ocr_gravplats_endpoint(
     if not png_images:
         raise HTTPException(status_code=422, detail="Inga bilder hittades för gravplatsen")
 
+    _t0 = time.monotonic()
     try:
-        result = await ocr_gravplats_from_images(png_images, api_key)
+        result, usage = await ocr_gravplats_from_images(png_images, api_key)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Claude API-fel: {exc}")
+    svarstid_ms = int((time.monotonic() - _t0) * 1000)
 
+    inp = usage.get("input_tokens", 0)
+    out = usage.get("output_tokens", 0)
+    cache_create = usage.get("cache_creation_input_tokens", 0)
+    cache_read = usage.get("cache_read_input_tokens", 0)
+    kostnad = (
+        inp * _CLAUDE_PRIS["input"]
+        + out * _CLAUDE_PRIS["output"]
+        + cache_create * _CLAUDE_PRIS["cache_creation"]
+        + cache_read * _CLAUDE_PRIS["cache_read"]
+    ) / 1_000_000
+
+    logg = ClaudeAnropslogg(
+        user_id=current_user.id,
+        gravplats_id=gravplats_id,
+        anropad_den=datetime.now(timezone.utc).isoformat(),
+        input_tokens=inp,
+        output_tokens=out,
+        cache_creation_tokens=cache_create,
+        cache_read_tokens=cache_read,
+        kostnad_usd=round(kostnad, 6),
+        svarstid_ms=svarstid_ms,
+    )
+    db.add(logg)
+    db.commit()
+
+    # Spara/uppdatera senaste Claude-svar per gravplats
+    svar_json_str = json.dumps(
+        {k: v for k, v in result.items() if k != "_ocr_usage"},
+        ensure_ascii=False
+    )
+    existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+    if existing_svar:
+        existing_svar.user_id = current_user.id
+        existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+        existing_svar.svar_json = svar_json_str
+        existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
+    else:
+        db.add(ClaudeOcrSvar(
+            gravplats_id=gravplats_id,
+            user_id=current_user.id,
+            skapad_den=datetime.now(timezone.utc).isoformat(),
+            svar_json=svar_json_str,
+            ocr_kommentar=result.get("ocr_kommentar", ""),
+        ))
+    db.commit()
+
+    result["_ocr_usage"] = {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_creation_tokens": cache_create,
+        "cache_read_tokens": cache_read,
+        "kostnad_usd": round(kostnad, 6),
+    }
     return result
 
 

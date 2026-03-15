@@ -15,7 +15,7 @@ def _load_spec() -> str:
     return _SPEC_PATH.read_text(encoding="utf-8")
 
 
-async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> dict:
+async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> tuple[dict, dict]:
     """
     Skicka PNG-bilder (gravplatsens halvor) till Claude och returnera strukturerad JSON.
     Använder prompt caching för specifikationen (~90 % besparing på spec-tokens).
@@ -48,7 +48,7 @@ async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> di
 
     payload = {
         "model": MODEL,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "system": [
             {
                 "type": "text",
@@ -80,4 +80,5 @@ async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> di
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-    return json.loads(text)
+    usage = raw.get("usage", {})
+    return json.loads(text), usage

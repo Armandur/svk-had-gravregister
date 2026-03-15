@@ -188,6 +188,34 @@ class GravplatsRedigeringslogg(Base):
     edited_at: Mapped[str] = mapped_column()  # ISO 8601 datetime (UTC)
 
 
+class ClaudeAnropslogg(Base):
+    """Logg över varje anrop till Claude OCR – tokens och beräknad kostnad."""
+    __tablename__ = "claude_anropslogg"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    gravplats_id: Mapped[int | None] = mapped_column(ForeignKey("gravplats.id"), nullable=True)
+    anropad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
+    input_tokens: Mapped[int] = mapped_column(default=0)
+    output_tokens: Mapped[int] = mapped_column(default=0)
+    cache_creation_tokens: Mapped[int] = mapped_column(default=0)
+    cache_read_tokens: Mapped[int] = mapped_column(default=0)
+    kostnad_usd: Mapped[float] = mapped_column(default=0.0)  # beräknad kostnad i USD
+    svarstid_ms: Mapped[int | None] = mapped_column(nullable=True)  # ms från anrop till svar
+
+
+class ClaudeOcrSvar(Base):
+    """Senaste sparade Claude OCR-svar per gravplats – ett svar per gravplats (upsert)."""
+    __tablename__ = "claude_ocr_svar"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False, unique=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    skapad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
+    svar_json: Mapped[str] = mapped_column()            # JSON-sträng (utan _ocr_usage)
+    ocr_kommentar: Mapped[str] = mapped_column(default="")
+
+
 class GravplatsSkiss(Base):
     """En skiss = en rektangelmarkering på en av gravplatsens bilder (segment eller extramaterial)."""
     __tablename__ = "gravplats_skiss"
@@ -927,6 +955,13 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+
+        # ---------- Migration: claude_anropslogg svarstid_ms ----------
+        r = conn.execute(text("PRAGMA table_info(claude_anropslogg)"))
+        logg_cols = [row[1] for row in r]
+        if "svarstid_ms" not in logg_cols:
+            conn.execute(text("ALTER TABLE claude_anropslogg ADD COLUMN svarstid_ms INTEGER"))
+            conn.commit()
 
 
 def get_db():

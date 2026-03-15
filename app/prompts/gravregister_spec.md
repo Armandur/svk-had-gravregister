@@ -82,7 +82,7 @@ Varje post:
 - `urna` – En av: `"urna"` | `"kista"` | `"okant"` | `""`.
 
 ### ocr_kommentar
-Notera **bara** saker som kan påverka datakvaliteten eller kräver manuell kontroll (t.ex. svårläst text, tvetydigt värde, ovanlig formatering). Lämna tom sträng om allt är tydligt. Kommentera inte tomma fält eller förtryckt text utan ifyllnad.
+Notera **bara** saker som kan påverka datakvaliteten eller kräver manuell kontroll (t.ex. svårläst text, tvetydigt värde, ovanlig formatering). Lämna tom sträng om allt är tydligt. Kommentera inte tomma fält eller förtryckt text utan ifyllnad. Varje separat observation skrivs på **egen rad** (använd `\n` mellan punkterna).
 
 ---
 
@@ -104,6 +104,8 @@ Lagras som **sträng** i ett av tre format: `"YYYY"`, `"YYYY-MM"` eller `"YYYY-M
 **Flicknamn:** `"Andersson Maja Kristina f. Winqvist"` → `fornamn: "Maja Kristina"`, `efternamn: "Andersson f. Winqvist"`. Flicknamnet läggs alltså i `efternamn`, inte i `kommentar`.
 
 **Icke-sekventiell ordning:** Om kortets positioner inte är ifyllda i följd (t.ex. 1–3 ifyllda, 4–5 tomma, 6–7 ifyllda) numreras de faktiskt ifyllda löpande 1, 2, 3, 4… i utdatan. Det ursprungliga numret noteras i `kommentar`: `"Inför på gravplats nr 6"`.
+
+**Handskrivna begravningsordningsnummer:** Ibland finns ett litet handskrivet nummer bredvid "Adress"-raden på varje post (inte bredvid det tryckta slotnumret). Dessa anger i vilken ordning personerna faktiskt begravdes och stämmer vanligtvis med dödsårens kronologi. De tryckta slotnumren är i detta fall *inte* överkorsade. Regel: de handskrivna numren prioriteras – sortera posterna efter dessa och numrera löpande 1, 2, 3… i utdatan. Om de handskrivna numren inte är i följd (t.ex. 2, 5, 7) noteras det ursprungliga handskrivna numret i `kommentar`: `"Inskriven på gravsatt nr. 5"`.
 
 **Kolumnerna dag / föd.nr / db.nr:** Var noggrann – siffror i dag-kolumnen får **aldrig** hamna i `fod_nr` eller `dodsbok_nr`.
 
