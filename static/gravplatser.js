@@ -977,9 +977,8 @@ async function batchAutoLaddaClaude() {
 
     const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
     if (!inmatningHarNagonData()) {
-      // Ingen befintlig data – applicera direkt
+      // Ingen befintlig data – applicera direkt (inget pling, svaret är redan sparat sedan batch-körningen)
       prefillFranClaude(data.svar_json);
-      gpPlayPling();
       if (data.ocr_kommentar && bannerEl) {
         bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
         bannerEl.hidden = false;
