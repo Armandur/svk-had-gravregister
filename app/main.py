@@ -5196,7 +5196,20 @@ async def batch_kor_nasta(
         jobb.status = "klar"
         db.commit()
 
-    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar}
+    # Returnera senaste felmeddelande (om något gick fel i denna omgång) för realtidsvisning
+    senaste_fel_post = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(
+            ClaudeBatchJobbPost.jobb_id == jobb_id,
+            ClaudeBatchJobbPost.status.in_(["fel", "hoppad"]),
+            ClaudeBatchJobbPost.fel_meddelande.isnot(None),
+        )
+        .order_by(ClaudeBatchJobbPost.id.desc())
+        .first()
+    )
+    senaste_fel = senaste_fel_post.fel_meddelande if senaste_fel_post else None
+
+    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar, "fel": jobb.fel, "senaste_fel": senaste_fel}
 
 
 @app.post("/api/batch-claude/jobb/{jobb_id:int}/pausa")

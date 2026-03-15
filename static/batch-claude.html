@@ -84,6 +84,7 @@
       <div class="batch-progress-wrap">
         <div class="batch-progress-bar"><div class="batch-progress-fill" id="batch-progress-fill" style="width:0%"></div></div>
         <div class="batch-progress-text" id="batch-progress-text"></div>
+        <div class="batch-progress-text" id="batch-progress-fel" style="color:#b91c1c;margin-top:0.2rem" hidden></div>
       </div>
       <div class="batch-knappar" style="margin-top:0.75rem;align-items:center">
         <button type="button" class="batch-btn batch-btn-sec" id="batch-pausa-btn">Pausa</button>
@@ -398,6 +399,7 @@
     document.getElementById('batch-aktiv-namn').textContent = namn || ('Jobb ' + jobbId);
     document.getElementById('batch-progress-fill').style.width = '0%';
     document.getElementById('batch-progress-text').textContent = 'Startar\u2026';
+    document.getElementById('batch-progress-fel').hidden = true;
     document.getElementById('batch-granska-aktiv-btn').hidden = true;
     document.getElementById('batch-pausa-btn').textContent = 'Pausa';
     wrap.hidden = false;
@@ -428,7 +430,14 @@
       const totalt = aktivtJobbTotalt || data.totalt || 1;
       const pct = Math.round((klara / totalt) * 100);
       document.getElementById('batch-progress-fill').style.width = pct + '%';
-      document.getElementById('batch-progress-text').textContent = klara + ' av ' + totalt + ' klara' + (data.kvar === 0 ? ' \u2013 Klart!' : '');
+      document.getElementById('batch-progress-text').textContent = klara + ' av ' + totalt + ' klara' + (data.fel > 0 ? ' \u00b7 ' + data.fel + ' fel' : '') + (data.kvar === 0 ? ' \u2013 Klart!' : '');
+      const felEl = document.getElementById('batch-progress-fel');
+      if (data.senaste_fel && felEl) {
+        felEl.textContent = 'Senaste fel: ' + data.senaste_fel;
+        felEl.hidden = false;
+      } else if (felEl) {
+        felEl.hidden = true;
+      }
       if (data.kvar === 0) {
         document.getElementById('batch-granska-aktiv-btn').hidden = false;
         document.getElementById('batch-granska-aktiv-btn').dataset.id = aktivtJobbId;
