@@ -34,3 +34,6 @@ KYRKOGARDAR = [k.strip() for k in _kyrkogardar_str.split(",") if k.strip()]
 # Mapp för databas-säkerhetskopior (skapas vid behov; filer serveras via API för nedladdning)
 BACKUP_DIR = PROJECT_ROOT / "säkerhetskopior"
 
+# Fil för API-nycklar som sätts via admin-UI (alternativ till miljövariabler)
+API_KEYS_PATH = PROJECT_ROOT / "api_keys.json"
+

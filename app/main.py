@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import time
 import shutil
 import signal
 import subprocess
@@ -22,7 +23,8 @@ from sqlalchemy import and_, case, func, or_, tuple_, update
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY, BACKUP_DIR, DATABASE_PATH
+from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY, BACKUP_DIR, DATABASE_PATH, API_KEYS_PATH
+from app.services.ocr_service import ocr_gravplats_from_images
 from app.database import (
     SessionLocal,
     User,
@@ -38,6 +40,8 @@ from app.database import (
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
     GravplatsRedigeringslogg,
+    ClaudeAnropslogg,
+    ClaudeOcrSvar,
     GravplatsSkiss,
     Gravsatt,
     AchievementNiva,
@@ -56,6 +60,9 @@ from app.auth import (
 
 # Cache-huvud för genererade bilder (1 timme; webbläsaren kan cacha)
 CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
+
+# Priser för claude-sonnet-4-6 (USD per miljon tokens)
+_CLAUDE_PRIS = {"input": 3.00, "output": 15.00, "cache_creation": 3.75, "cache_read": 0.30}
 
 app = FastAPI(
     title="Gravregister – digitalisering",
@@ -116,6 +123,39 @@ def _read_git_version() -> None:
                 GIT_VERSION["branch"] = branch
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
+
+
+def _get_anthropic_api_key() -> str | None:
+    """Returnera Anthropic API-nyckel: miljövariabeln har prioritet, annars api_keys.json."""
+    val = os.environ.get("ANTHROPIC_API_KEY")
+    if val:
+        return val
+    try:
+        data = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        return data.get("anthropic_api_key") or None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _get_claude_instans_aktiv() -> bool:
+    """Returnera om Claude är aktiverat för hela instansen (api_keys.json)."""
+    try:
+        data = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        return bool(data.get("claude_aktiv_instans", True))
+    except (OSError, json.JSONDecodeError):
+        return True
+
+
+def _set_api_keys_json(**kwargs) -> None:
+    """Uppdatera ett eller flera fält i api_keys.json."""
+    existing: dict = {}
+    if API_KEYS_PATH.is_file():
+        try:
+            existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            existing = {}
+    existing.update(kwargs)
+    API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 @app.on_event("startup")
@@ -240,6 +280,59 @@ async def sakerhetskopior_sida(admin: User = Depends(require_admin)):
     return FileResponse(Path(__file__).parent.parent / "static" / "sakerhetskopior.html")
 
 
+@app.get("/installningar")
+async def installningar_sida(admin: User = Depends(require_admin)):
+    """Inställningssida – API-nycklar, användarhantering m.m. Endast admin."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "installningar.html")
+
+
+@app.get("/api/settings/api-keys")
+async def get_api_keys(admin: User = Depends(require_admin)):
+    """Returnera status för API-nycklar (om de är satta och en maskerad förhandsgranskning). Endast admin."""
+    key = _get_anthropic_api_key()
+    if key:
+        preview = key[:12] + "••••••••••••" if len(key) > 12 else "••••••••••••"
+        from_env = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    else:
+        preview = None
+        from_env = False
+    return {
+        "anthropic_api_key_set": bool(key),
+        "anthropic_api_key_preview": preview,
+        "anthropic_api_key_from_env": from_env,
+        "claude_aktiv_instans": _get_claude_instans_aktiv(),
+    }
+
+
+class ApiKeysBody(BaseModel):
+    anthropic_api_key: str | None = None  # None = ej skickad (rör ej nyckeln), "" = ta bort
+    claude_aktiv_instans: bool | None = None
+
+
+@app.put("/api/settings/api-keys")
+async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
+    """Spara API-nycklar och instansinställningar till api_keys.json. Endast admin."""
+    try:
+        existing: dict = {}
+        if API_KEYS_PATH.is_file():
+            try:
+                existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                existing = {}
+        if body.anthropic_api_key is not None:
+            key = body.anthropic_api_key.strip()
+            if key:
+                existing["anthropic_api_key"] = key
+            else:
+                existing.pop("anthropic_api_key", None)
+        if body.claude_aktiv_instans is not None:
+            existing["claude_aktiv_instans"] = body.claude_aktiv_instans
+        API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
+    return {"ok": True}
+
+
 @app.get("/login")
 async def login_sida():
     """Inloggningssida."""
@@ -331,10 +424,16 @@ async def me(current_user: User = Depends(get_current_user)):
     for s in allowed:
         if s not in sections_order:
             sections_order.append(s)
+    claude_tillganglig = (
+        bool(_get_anthropic_api_key())
+        and _get_claude_instans_aktiv()
+        and getattr(current_user, "claude_aktiv", True)
+    )
     return {
         "id": current_user.id,
         "username": current_user.username,
         "is_admin": current_user.is_admin,
+        "claude_tillganglig": claude_tillganglig,
         "preferences": {
             "fun_enabled": prefs.get("fun_enabled", True),
             "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),
@@ -540,7 +639,27 @@ class CreateUserWithPasswordBody(BaseModel):
 async def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Lista alla användare (endast admin)."""
     users = db.query(User).order_by(User.username).all()
-    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin} for u in users]}
+    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True)} for u in users]}
+
+
+class ClaudeAktivBody(BaseModel):
+    aktiv: bool
+
+
+@app.put("/api/admin/users/{user_id:int}/claude-aktiv")
+async def set_user_claude_aktiv(
+    user_id: int,
+    body: ClaudeAktivBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Aktivera eller inaktivera Claude-funktioner för en användare. Endast admin."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    user.claude_aktiv = body.aktiv
+    db.commit()
+    return {"ok": True, "claude_aktiv": user.claude_aktiv}
 
 
 @app.get("/api/admin/achievement-niva")
@@ -687,6 +806,80 @@ async def list_loggar_gravplatser(
             "edited_at": logg.edited_at,
         })
     return {"loggar": loggar, "antal": len(loggar), "total": total}
+
+
+@app.get("/api/ocr/gravplats/{gravplats_id:int}/svar")
+async def get_ocr_svar(
+    gravplats_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hämta senaste sparade Claude OCR-svar för en gravplats."""
+    row = (
+        db.query(ClaudeOcrSvar, User.username)
+        .join(User, ClaudeOcrSvar.user_id == User.id)
+        .filter(ClaudeOcrSvar.gravplats_id == gravplats_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Inget sparat Claude-svar")
+    svar, username = row
+    return {
+        "svar_json": json.loads(svar.svar_json),
+        "ocr_kommentar": svar.ocr_kommentar,
+        "skapad_den": svar.skapad_den,
+        "username": username or "",
+    }
+
+
+@app.get("/api/loggar/claude")
+async def list_loggar_claude(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+    limit: int = 500,
+    offset: int = 0,
+    anvandare: str | None = None,
+):
+    """
+    Lista Claude OCR-anropslogg med tokenanvändning och kostnad – kronologisk (senaste först). Endast admin.
+    """
+    q = (
+        db.query(ClaudeAnropslogg, Gravplats, MappConfig.namn, User.username)
+        .join(User, ClaudeAnropslogg.user_id == User.id)
+        .outerjoin(Gravplats, ClaudeAnropslogg.gravplats_id == Gravplats.id)
+        .outerjoin(MappConfig, Gravplats.mapp_id == MappConfig.id)
+    )
+    if anvandare and anvandare.strip():
+        q = q.filter(User.username.ilike("%" + anvandare.strip() + "%"))
+    total = q.count()
+    rows = (
+        q.order_by(ClaudeAnropslogg.anropad_den.desc())
+        .offset(max(0, offset))
+        .limit(max(1, min(limit, 2000)))
+        .all()
+    )
+
+    # Summera totalkostnad för alla rader (ofiltrerat på anvandare för totalraden)
+    totalt_kostnad = db.query(func.sum(ClaudeAnropslogg.kostnad_usd)).scalar() or 0.0
+
+    loggar = []
+    for logg, g, mapp_namn, username in rows:
+        fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer) if g else ""
+        loggar.append({
+            "id": logg.id,
+            "gravplats_id": logg.gravplats_id,
+            "fullstandigt": fullstandigt,
+            "mapp_namn": mapp_namn or "",
+            "username": username or "",
+            "anropad_den": logg.anropad_den,
+            "input_tokens": logg.input_tokens,
+            "output_tokens": logg.output_tokens,
+            "cache_creation_tokens": logg.cache_creation_tokens,
+            "cache_read_tokens": logg.cache_read_tokens,
+            "kostnad_usd": logg.kostnad_usd,
+            "svarstid_ms": logg.svarstid_ms,
+        })
+    return {"loggar": loggar, "antal": len(loggar), "total": total, "totalt_kostnad_usd": round(totalt_kostnad, 4)}
 
 
 @app.post("/api/admin/users")
@@ -2061,6 +2254,12 @@ async def admin_user_prestationer_sida(user_id: int, admin: User = Depends(requi
 async def loggar_sida():
     """Redigeringslogg för gravplatser (endast för admin)."""
     return FileResponse(Path(__file__).parent.parent / "static" / "loggar.html")
+
+
+@app.get("/loggar/claude")
+async def loggar_claude_sida():
+    """Claude OCR-anropslogg med tokenanvändning och kostnad (endast för admin)."""
+    return FileResponse(Path(__file__).parent.parent / "static" / "loggar-claude.html")
 
 
 @app.get("/databasunderhall")
@@ -4424,6 +4623,200 @@ async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(g
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+@app.post("/api/ocr/gravplats/{gravplats_id:int}")
+async def ocr_gravplats_endpoint(
+    gravplats_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Skicka gravplatsens halvor till Claude OCR och returnera strukturerad JSON.
+    Kräver ANTHROPIC_API_KEY i miljön.
+    """
+    if not _get_claude_instans_aktiv():
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för denna instans")
+    if not getattr(current_user, "claude_aktiv", True):
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för ditt konto")
+    api_key = _get_anthropic_api_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas – sätt den under Inställningar")
+
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+
+    mapp_config = db.query(MappConfig).filter(MappConfig.id == g.mapp_id).first()
+    if not mapp_config:
+        raise HTTPException(status_code=404, detail="Mapp saknas")
+
+    mapp_namn = mapp_config.namn
+    layout_typ = getattr(mapp_config, "layout_typ", None) or "standard_3_sidor"
+    dela_sidor = getattr(mapp_config, "dela_sidor", None) or "hojdled"
+
+    foregaende = None
+    if layout_typ == "standard_3_sidor":
+        foregaende = (
+            db.query(Gravplats)
+            .filter(
+                Gravplats.mapp_id == g.mapp_id,
+                Gravplats.start_sida == g.start_sida - 2,
+            )
+            .first()
+        )
+
+    halvor = _gravplats_halvor(g, foregaende, layout_typ=layout_typ)
+    excluded = _excluded_filenames_for_mapp(db, mapp_namn)
+    expanded = _expanded_effective_list(mapp_namn, excluded, db)
+
+    # Anrika med filnamn (samma logik som get_gravplats_halvor)
+    for h in halvor:
+        sid = h.get("content_sida")
+        if sid is not None and 1 <= sid <= len(expanded):
+            item = expanded[sid - 1]
+            if item.get("t") == "f":
+                h["filnamn"] = item["v"]
+
+    # Lägg till extramaterial markerade som redan_halva
+    for em in (
+        db.query(Extramaterial)
+        .filter(
+            Extramaterial.mapp_id == mapp_config.id,
+            Extramaterial.grav_start_sida == g.start_sida,
+            Extramaterial.redan_halva == True,
+            Extramaterial.dold != True,
+        )
+        .order_by(Extramaterial.id)
+    ):
+        halvor.append({"redan_halva": True, "filnamn": em.filnamn})
+
+    # Exkludera dolda halvor
+    dold_halvor_rows = db.query(GravplatsDoldHalva).filter(GravplatsDoldHalva.gravplats_id == g.id).all()
+
+    def _dold_seg(r):
+        if getattr(r, "halva", None) == "ovre":
+            return 0
+        if getattr(r, "halva", None) == "nedre":
+            return 1
+        return getattr(r, "segment_index", 0)
+
+    dold_set = {(r.content_sida, _dold_seg(r)) for r in dold_halvor_rows}
+    halvor = [h for h in halvor if (h.get("content_sida"), h.get("segment_index", 0)) not in dold_set]
+
+    # Rendera varje halva till PNG
+    redan_halva_set = _redan_halva_filenames_for_mapp(db, mapp_config.id)
+    png_images: list[bytes] = []
+
+    for h in halvor:
+        if h.get("redan_halva"):
+            filnamn = h.get("filnamn")
+            if filnamn:
+                path = _mapp_path(mapp_namn) / filnamn
+                if path.is_file():
+                    doc = fitz.open(path)
+                    try:
+                        pix = doc[0].get_pixmap(dpi=200)
+                        png_images.append(pix.tobytes("png"))
+                    finally:
+                        doc.close()
+            continue
+
+        sid = h.get("content_sida")
+        if sid is None:
+            continue
+
+        item = _content_page_to_item(mapp_namn, excluded, sid, db)
+        if item is None:
+            continue
+        typ, val = item
+
+        position = h.get("position")
+        andelar = _mapp_config_andelar(mapp_config, position=position)
+        segment_index = h.get("segment_index", 0)
+
+        if typ == "blank":
+            use_halva = "ovre" if segment_index == 0 else "nedre"
+            use_split = andelar[0] if andelar else 0.5
+            png_images.append(_blank_page_png_bytes(dpi=200, split=use_split, halva=use_halva))
+            continue
+
+        doc = fitz.open(val)
+        try:
+            page = doc[0]
+            if val.name in redan_halva_set or dela_sidor == "ingen":
+                pix = page.get_pixmap(dpi=200)
+            else:
+                clip = _clip_rect_for_segment(page.rect, segment_index, andelar, dela_sidor)
+                pix = page.get_pixmap(dpi=200, clip=clip) if clip is not None else page.get_pixmap(dpi=200)
+            png_images.append(pix.tobytes("png"))
+        finally:
+            doc.close()
+
+    if not png_images:
+        raise HTTPException(status_code=422, detail="Inga bilder hittades för gravplatsen")
+
+    _t0 = time.monotonic()
+    try:
+        result, usage = await ocr_gravplats_from_images(png_images, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API-fel: {exc}")
+    svarstid_ms = int((time.monotonic() - _t0) * 1000)
+
+    inp = usage.get("input_tokens", 0)
+    out = usage.get("output_tokens", 0)
+    cache_create = usage.get("cache_creation_input_tokens", 0)
+    cache_read = usage.get("cache_read_input_tokens", 0)
+    kostnad = (
+        inp * _CLAUDE_PRIS["input"]
+        + out * _CLAUDE_PRIS["output"]
+        + cache_create * _CLAUDE_PRIS["cache_creation"]
+        + cache_read * _CLAUDE_PRIS["cache_read"]
+    ) / 1_000_000
+
+    logg = ClaudeAnropslogg(
+        user_id=current_user.id,
+        gravplats_id=gravplats_id,
+        anropad_den=datetime.now(timezone.utc).isoformat(),
+        input_tokens=inp,
+        output_tokens=out,
+        cache_creation_tokens=cache_create,
+        cache_read_tokens=cache_read,
+        kostnad_usd=round(kostnad, 6),
+        svarstid_ms=svarstid_ms,
+    )
+    db.add(logg)
+    db.commit()
+
+    # Spara/uppdatera senaste Claude-svar per gravplats
+    svar_json_str = json.dumps(
+        {k: v for k, v in result.items() if k != "_ocr_usage"},
+        ensure_ascii=False
+    )
+    existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+    if existing_svar:
+        existing_svar.user_id = current_user.id
+        existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+        existing_svar.svar_json = svar_json_str
+        existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
+    else:
+        db.add(ClaudeOcrSvar(
+            gravplats_id=gravplats_id,
+            user_id=current_user.id,
+            skapad_den=datetime.now(timezone.utc).isoformat(),
+            svar_json=svar_json_str,
+            ocr_kommentar=result.get("ocr_kommentar", ""),
+        ))
+    db.commit()
+
+    result["_ocr_usage"] = {
+        "input_tokens": inp,
+        "output_tokens": out,
+        "cache_creation_tokens": cache_create,
+        "cache_read_tokens": cache_read,
+        "kostnad_usd": round(kostnad, 6),
+    }
+    return result
 
 
 @app.get("/api/mappar/{mapp_namn}/extramaterial")

@@ -35,25 +35,10 @@
       if (me.is_admin) listvyLink.removeAttribute('hidden');
       else listvyLink.remove();
     }
-    var adminLink = document.getElementById('startsida-admin-lank');
-    if (adminLink) {
-      if (me.is_admin) adminLink.removeAttribute('hidden');
-      else adminLink.remove();
-    }
-    var loggarLink = document.getElementById('startsida-loggar-lank');
-    if (loggarLink) {
-      if (me.is_admin) loggarLink.removeAttribute('hidden');
-      else loggarLink.remove();
-    }
-    var dbuhLink = document.getElementById('startsida-databasunderhall-lank');
-    if (dbuhLink) {
-      if (me.is_admin) dbuhLink.removeAttribute('hidden');
-      else dbuhLink.remove();
-    }
-    var backupLink = document.getElementById('startsida-sakerhetskopior-lank');
-    if (backupLink) {
-      if (me.is_admin) backupLink.removeAttribute('hidden');
-      else backupLink.remove();
+    var installningarLink = document.getElementById('startsida-installningar-lank');
+    if (installningarLink) {
+      if (me.is_admin) installningarLink.removeAttribute('hidden');
+      else installningarLink.remove();
     }
   });
 

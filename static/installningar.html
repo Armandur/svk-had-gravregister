@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inställningar – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .inst-sida { max-width: 42rem; margin: 2rem auto; padding: 2rem; }
+    .inst-sida h1 { font-size: 1.35rem; margin-bottom: 0.25rem; color: var(--accent, #2563eb); }
+    .inst-tillbaka { margin-bottom: 1.5rem; }
+    .inst-tillbaka a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .inst-tillbaka a:hover { text-decoration: underline; }
+
+    .inst-sektion { margin-bottom: 2rem; }
+    .inst-sektion h2 { font-size: 1.05rem; font-weight: 600; color: #475569; margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+
+    .inst-lankgrupp { display: flex; flex-direction: column; gap: 0.5rem; }
+    .inst-lankgrupp a {
+      display: block; padding: 0.75rem 1rem; font-size: 0.97rem;
+      text-decoration: none; color: #1e293b;
+      background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .inst-lankgrupp a:hover { background: #f8fafc; border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+
+    .inst-api-status { font-size: 0.9rem; margin-bottom: 0.75rem; color: #475569; min-height: 1.4em; }
+    .inst-api-status .ok { color: #16a34a; font-weight: 600; }
+    .inst-api-status .ej-satt { color: #dc2626; font-weight: 600; }
+    .inst-api-status .fran-miljo { color: #6b7280; font-size: 0.85em; margin-left: 0.4em; }
+
+    .inst-api-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    .inst-api-form input[type="password"] {
+      flex: 1; min-width: 14rem;
+      padding: 0.45rem 0.65rem; font-size: 0.95rem; font-family: monospace;
+      border: 1px solid var(--border, #e2e8f0); border-radius: 5px;
+      background: var(--card, #fff);
+    }
+    .inst-api-form input[type="password"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .inst-api-form button {
+      padding: 0.45rem 1rem; font-size: 0.95rem;
+      background: var(--accent, #2563eb); color: #fff;
+      border: none; border-radius: 5px; cursor: pointer; font-family: inherit;
+    }
+    .inst-api-form button:hover:not(:disabled) { filter: brightness(1.1); }
+    .inst-api-form button:disabled { opacity: 0.6; cursor: wait; }
+    .inst-api-ta-bort {
+      background: none !important; color: #dc2626 !important;
+      border: 1px solid #dc2626 !important; border-radius: 5px;
+      padding: 0.45rem 0.75rem; font-size: 0.9rem; cursor: pointer; font-family: inherit;
+    }
+    .inst-api-ta-bort:hover:not(:disabled) { background: #fee2e2 !important; }
+
+    .inst-meddelande { margin-top: 0.6rem; font-size: 0.9rem; padding: 0.4rem 0.65rem; border-radius: 4px; }
+    .inst-meddelande.ok { background: #dcfce7; color: #166534; }
+    .inst-meddelande.fel { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <main class="inst-sida">
+    <h1>Inställningar</h1>
+    <p class="inst-tillbaka"><a href="/">← Tillbaka till menyn</a></p>
+
+    <section class="inst-sektion" aria-label="Administration">
+      <h2>Administration</h2>
+      <nav class="inst-lankgrupp">
+        <a href="/admin">Användarhantering</a>
+        <a href="/loggar">Loggar</a>
+        <a href="/databasunderhall">Databasunderhåll</a>
+        <a href="/sakerhetskopior">Säkerhetskopior</a>
+      </nav>
+    </section>
+
+    <section class="inst-sektion" aria-label="Claude OCR">
+      <h2>Claude OCR</h2>
+      <nav class="inst-lankgrupp">
+        <a href="/loggar/claude">Anropslogg (tokens och kostnad)</a>
+      </nav>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-claude-instans-toggle" />
+          Aktivera Claude-funktioner för hela instansen
+        </label>
+        <span id="inst-claude-instans-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="inst-sektion" aria-label="API-nycklar">
+      <h2>API-nycklar</h2>
+      <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
+      <div class="inst-api-form">
+        <input type="password" id="inst-api-input" placeholder="sk-ant-api03-…" autocomplete="off" aria-label="Anthropic API-nyckel" />
+        <button type="button" id="inst-api-spara">Spara nyckel</button>
+        <button type="button" id="inst-api-ta-bort" class="inst-api-ta-bort" hidden>Ta bort nyckel</button>
+      </div>
+      <p id="inst-api-meddelande" class="inst-meddelande" hidden aria-live="polite"></p>
+      <p style="margin-top:0.75rem; font-size:0.85rem; color:#64748b;">
+        Nyckeln sparas i <code>api_keys.json</code> bredvid databasen.
+        Miljövariabeln <code>ANTHROPIC_API_KEY</code> har prioritet om den är satt.
+      </p>
+    </section>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+    (async function () {
+      const me = await gpEnsureAuth();
+      if (!me || !me.is_admin) { window.location.href = '/'; return; }
+
+      const statusEl = document.getElementById('inst-api-status');
+      const inputEl = document.getElementById('inst-api-input');
+      const sparaBtn = document.getElementById('inst-api-spara');
+      const taBortBtn = document.getElementById('inst-api-ta-bort');
+      const meddEl = document.getElementById('inst-api-meddelande');
+
+      function visaMedd(text, typ) {
+        meddEl.textContent = text;
+        meddEl.className = 'inst-meddelande ' + typ;
+        meddEl.hidden = false;
+        setTimeout(() => { meddEl.hidden = true; }, 4000);
+      }
+
+      const instansToggle = document.getElementById('inst-claude-instans-toggle');
+      const instansStatus = document.getElementById('inst-claude-instans-status');
+
+      instansToggle && instansToggle.addEventListener('change', async function() {
+        const aktiv = instansToggle.checked;
+        instansStatus.textContent = 'Sparar…';
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ claude_aktiv_instans: aktiv }),
+          });
+          if (!res.ok) throw new Error();
+          instansStatus.textContent = aktiv ? 'Aktiverat.' : 'Inaktiverat.';
+          setTimeout(() => { instansStatus.textContent = ''; }, 2500);
+        } catch (_) {
+          instansStatus.textContent = 'Kunde inte spara.';
+          instansToggle.checked = !aktiv; // återställ
+        }
+      });
+
+      async function laddaStatus() {
+        try {
+          const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
+          if (!res.ok) throw new Error();
+          const d = await res.json();
+          if (d.anthropic_api_key_set) {
+            statusEl.innerHTML = 'Anthropic API-nyckel: <span class="ok">✓ Satt</span>' +
+              (d.anthropic_api_key_preview ? ' <code>' + d.anthropic_api_key_preview + '</code>' : '') +
+              (d.anthropic_api_key_from_env ? '<span class="fran-miljo">(från miljövariabel)</span>' : '');
+            taBortBtn.hidden = d.anthropic_api_key_from_env;
+          } else {
+            statusEl.innerHTML = 'Anthropic API-nyckel: <span class="ej-satt">Ej satt</span>';
+            taBortBtn.hidden = true;
+          }
+          if (instansToggle) instansToggle.checked = d.claude_aktiv_instans !== false;
+        } catch (_) {
+          statusEl.textContent = 'Kunde inte hämta status.';
+        }
+      }
+
+      sparaBtn.addEventListener('click', async () => {
+        const key = inputEl.value.trim();
+        if (!key) { visaMedd('Ange en nyckel först.', 'fel'); return; }
+        sparaBtn.disabled = true;
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ anthropic_api_key: key }),
+          });
+          if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Fel'); }
+          inputEl.value = '';
+          visaMedd('Nyckeln har sparats.', 'ok');
+          await laddaStatus();
+        } catch (err) {
+          visaMedd('Kunde inte spara: ' + err.message, 'fel');
+        } finally {
+          sparaBtn.disabled = false;
+        }
+      });
+
+      taBortBtn.addEventListener('click', async () => {
+        if (!confirm('Ta bort den sparade API-nyckeln?')) return;
+        taBortBtn.disabled = true;
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ anthropic_api_key: '' }),
+          });
+          if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Fel'); }
+          visaMedd('Nyckeln har tagits bort.', 'ok');
+          await laddaStatus();
+        } catch (err) {
+          visaMedd('Kunde inte ta bort: ' + err.message, 'fel');
+        } finally {
+          taBortBtn.disabled = false;
+        }
+      });
+
+      await laddaStatus();
+    })();
+  </script>
+</body>
+</html>
