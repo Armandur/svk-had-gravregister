@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude-anropslogg – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .loggar-sida { max-width: 64rem; margin: 2rem auto; padding: 2rem; }
+    .loggar-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    .loggar-sida a { color: var(--accent, #2563eb); text-decoration: none; }
+    .loggar-sida a:hover { text-decoration: underline; }
+    .loggar-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+    .loggar-filter input { padding: 0.4rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; width: 12rem; box-sizing: border-box; }
+    .loggar-filter input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .loggar-filter button { padding: 0.4rem 0.75rem; font-size: 0.95rem; cursor: pointer; background: var(--accent, #2563eb); color: #fff; border: none; border-radius: 6px; }
+    .loggar-filter button:hover { filter: brightness(1.05); }
+    .loggar-info { font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem; }
+    .loggar-totalt { font-size: 0.95rem; font-weight: 600; color: #1e293b; margin-bottom: 0.75rem; }
+    .loggar-tabell-wrap { overflow-x: auto; margin-bottom: 1rem; }
+    .loggar-tabell { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .loggar-tabell th, .loggar-tabell td { padding: 0.45rem 0.65rem; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); }
+    .loggar-tabell th { background: #f8fafc; font-weight: 600; color: #475569; white-space: nowrap; }
+    .loggar-tabell tbody tr:hover { background: #f8fafc; }
+    .loggar-tabell .loggar-datum { white-space: nowrap; }
+    .loggar-tabell .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .loggar-paginering { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-top: 1rem; }
+    .loggar-paginering button { padding: 0.35rem 0.6rem; font-size: 0.9rem; cursor: pointer; background: #f1f5f9; border: 1px solid var(--border); border-radius: 6px; }
+    .loggar-paginering button:hover:not(:disabled) { background: #e2e8f0; }
+    .loggar-paginering button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .loggar-ingen { color: #64748b; font-style: italic; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <main class="loggar-sida">
+    <h1>Claude OCR – anropslogg</h1>
+    <p><a href="/installningar">← Tillbaka till inställningar</a></p>
+    <p id="loggar-ingen">Endast administratörer kan se loggar.</p>
+    <section id="loggar-innehall" hidden>
+      <p class="loggar-info">Varje rad är ett anrop till Claude OCR. Kostnad beräknas utifrån officiella priser för claude-sonnet-4-6.</p>
+      <p class="loggar-totalt" id="loggar-totalt"></p>
+      <div class="loggar-filter" style="margin-bottom:0.5rem;">
+        <label style="font-size:0.9rem;color:#64748b;">USD/SEK-kurs <input type="number" id="sek-kurs" value="10.5" min="0.01" step="0.1" style="width:5.5rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:6px;" /></label>
+        <span id="sek-kurs-status" style="font-size:0.82rem;color:#94a3b8;">hämtar…</span>
+        <button type="button" id="sek-kurs-uppdatera" style="padding:0.3rem 0.65rem;font-size:0.9rem;cursor:pointer;background:#f1f5f9;border:1px solid var(--border);border-radius:6px;">Räkna om</button>
+      </div>
+      <div class="loggar-filter">
+        <label>Filtrera på användare <input type="text" id="loggar-filter-anvandare" placeholder="t.ex. användarnamn" /></label>
+        <button type="button" id="loggar-filter-btn">Filtrera</button>
+        <button type="button" id="loggar-rensa-btn">Rensa filter</button>
+      </div>
+      <div class="loggar-tabell-wrap">
+        <table class="loggar-tabell" id="loggar-tabell" role="grid">
+          <thead>
+            <tr>
+              <th scope="col">Datum och tid</th>
+              <th scope="col">Gravplats</th>
+              <th scope="col">Användare</th>
+              <th scope="col" class="num">Indata</th>
+              <th scope="col" class="num">Utdata</th>
+              <th scope="col" class="num">Cache skapad</th>
+              <th scope="col" class="num">Cache läst</th>
+              <th scope="col" class="num">Kostnad (USD / SEK)</th>
+              <th scope="col" class="num">Svarstid</th>
+            </tr>
+          </thead>
+          <tbody id="loggar-tbody"></tbody>
+        </table>
+      </div>
+      <p class="loggar-ingen" id="loggar-tom" hidden>Inga loggposter hittades.</p>
+      <div class="loggar-paginering" id="loggar-paginering">
+        <span id="loggar-paginering-text"></span>
+        <button type="button" id="loggar-prev" disabled>Föregående</button>
+        <button type="button" id="loggar-next" disabled>Nästa</button>
+      </div>
+    </section>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+    (function() {
+      var API = '/api';
+      var PAGE_SIZE = 100;
+      var currentOffset = 0;
+      var totalCount = 0;
+      var filterAnvandare = '';
+
+      var innehall = document.getElementById('loggar-innehall');
+      var ingen = document.getElementById('loggar-ingen');
+      var tbody = document.getElementById('loggar-tbody');
+      var tomEl = document.getElementById('loggar-tom');
+      var pagineringText = document.getElementById('loggar-paginering-text');
+      var prevBtn = document.getElementById('loggar-prev');
+      var nextBtn = document.getElementById('loggar-next');
+      var filterInput = document.getElementById('loggar-filter-anvandare');
+      var filterBtn = document.getElementById('loggar-filter-btn');
+      var rensaBtn = document.getElementById('loggar-rensa-btn');
+      var totaltEl = document.getElementById('loggar-totalt');
+      var sekKursInput = document.getElementById('sek-kurs');
+      var sekKursStatus = document.getElementById('sek-kurs-status');
+
+      function getSekKurs() {
+        var v = parseFloat(sekKursInput && sekKursInput.value);
+        return isNaN(v) || v <= 0 ? 10.5 : v;
+      }
+
+      function hamtaValutakurs() {
+        var urls = [
+          'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.min.json',
+          'https://latest.currency-api.pages.dev/v1/currencies/usd.min.json',
+        ];
+        function tryNext(i) {
+          if (i >= urls.length) {
+            if (sekKursStatus) sekKursStatus.textContent = '(kunde inte hämta kurs, använd manuellt värde)';
+            laddaLoggar();
+            return;
+          }
+          fetch(urls[i])
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+            .then(function(d) {
+              var kurs = d && d.usd && d.usd.sek;
+              if (!kurs) return tryNext(i + 1);
+              sekKursInput.value = kurs.toFixed(4);
+              if (sekKursStatus) sekKursStatus.textContent = '(hämtad ' + (d.date || '') + ')';
+              laddaLoggar();
+            })
+            .catch(function() { tryNext(i + 1); });
+        }
+        tryNext(0);
+      }
+
+      function formatDatum(s) {
+        if (!s) return '–';
+        try {
+          var d = new Date(s);
+          if (isNaN(d.getTime())) return s;
+          return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+        } catch (_) { return s; }
+      }
+
+      function formatSvarstid(ms) {
+        if (ms == null) return '–';
+        if (ms < 1000) return ms + ' ms';
+        return (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+      }
+
+      function formatKostnad(v) {
+        if (v == null) return '–';
+        var usd = Number(v);
+        var sek = usd * getSekKurs();
+        return '$' + usd.toFixed(5) + ' / ' + sek.toFixed(3) + '\u00a0kr';
+      }
+
+      function laddaLoggar() {
+        tbody.innerHTML = '';
+        tomEl.hidden = true;
+        var params = new URLSearchParams();
+        params.set('limit', String(PAGE_SIZE));
+        params.set('offset', String(currentOffset));
+        if (filterAnvandare) params.set('anvandare', filterAnvandare);
+
+        fetch(API + '/loggar/claude?' + params.toString(), { credentials: 'include' })
+          .then(function(res) {
+            if (res.status === 403) { ingen.hidden = false; innehall.hidden = true; return null; }
+            if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent('/loggar/claude'); return null; }
+            if (!res.ok) throw new Error('Kunde inte hämta loggar');
+            return res.json();
+          })
+          .then(function(data) {
+            if (!data) return;
+            ingen.hidden = true;
+            innehall.hidden = false;
+            totalCount = data.total != null ? data.total : (data.loggar || []).length;
+            if (data.totalt_kostnad_usd != null) {
+              var tusd = Number(data.totalt_kostnad_usd);
+              var tsek = tusd * getSekKurs();
+              totaltEl.textContent = 'Total kostnad (alla anrop): $' + tusd.toFixed(4) + ' ≈ ' + tsek.toFixed(2) + ' kr';
+            }
+            var loggar = data.loggar || [];
+            if (loggar.length === 0 && currentOffset === 0) { tomEl.hidden = false; }
+            loggar.forEach(function(r) {
+              var tr = document.createElement('tr');
+              var gravLink = r.fullstandigt
+                ? '<a href="/gravplatser/' + encodeURIComponent(r.fullstandigt) + '">' + r.fullstandigt + '</a>'
+                : '–';
+              tr.innerHTML =
+                '<td class="loggar-datum">' + formatDatum(r.anropad_den) + '</td>' +
+                '<td>' + gravLink + '</td>' +
+                '<td>' + (r.username || '–') + '</td>' +
+                '<td class="num">' + (r.input_tokens || 0).toLocaleString('sv-SE') + '</td>' +
+                '<td class="num">' + (r.output_tokens || 0).toLocaleString('sv-SE') + '</td>' +
+                '<td class="num">' + (r.cache_creation_tokens || 0).toLocaleString('sv-SE') + '</td>' +
+                '<td class="num">' + (r.cache_read_tokens || 0).toLocaleString('sv-SE') + '</td>' +
+                '<td class="num">' + formatKostnad(r.kostnad_usd) + '</td>' +
+                '<td class="num">' + formatSvarstid(r.svarstid_ms) + '</td>';
+              tbody.appendChild(tr);
+            });
+            pagineringText.textContent = 'Visar ' + (currentOffset + 1) + '–' + (currentOffset + loggar.length) + ' av ' + totalCount;
+            prevBtn.disabled = currentOffset === 0;
+            nextBtn.disabled = currentOffset + loggar.length >= totalCount;
+          })
+          .catch(function(err) {
+            innehall.hidden = false;
+            ingen.hidden = true;
+            ingen.textContent = 'Fel: ' + (err.message || 'nätverksfel');
+          });
+      }
+
+      document.getElementById('sek-kurs-uppdatera').addEventListener('click', function() { laddaLoggar(); });
+      sekKursInput && sekKursInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') laddaLoggar(); });
+
+      filterBtn.addEventListener('click', function() {
+        filterAnvandare = filterInput.value.trim();
+        currentOffset = 0;
+        laddaLoggar();
+      });
+      rensaBtn.addEventListener('click', function() {
+        filterAnvandare = '';
+        filterInput.value = '';
+        currentOffset = 0;
+        laddaLoggar();
+      });
+      prevBtn.addEventListener('click', function() {
+        if (currentOffset > 0) { currentOffset = Math.max(0, currentOffset - PAGE_SIZE); laddaLoggar(); }
+      });
+      nextBtn.addEventListener('click', function() { currentOffset += PAGE_SIZE; laddaLoggar(); });
+
+      (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() { hamtaValutakurs(); });
+    })();
+  </script>
+</body>
+</html>

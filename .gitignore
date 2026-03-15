@@ -18,3 +18,5 @@ källdata/
 
 # Säkerhetskopior av databas (skapas via webbgränssnittet)
 säkerhetskopior/
+
+api_keys.json

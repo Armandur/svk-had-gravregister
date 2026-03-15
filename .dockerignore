@@ -16,3 +16,4 @@ __pycache__
 !SPECIFICATION.md
 !docs/
 !docs/*.md
+api_keys.json
