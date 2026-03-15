@@ -90,6 +90,7 @@
               const isSelf = u.id === currentUserId;
               li.setAttribute('data-user-id', u.id);
               const claudeAktiv = u.claude_aktiv !== false;
+              const claudeBatchAktiv = u.claude_batch_aktiv === true;
               li.innerHTML = '<span class="admin-namn">' + (u.username || '') + (u.is_admin ? ' <span class="admin-badge">admin</span>' : '') + '</span>' +
                 '<span class="admin-knappar">' +
                 '<button type="button" class="admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
@@ -97,6 +98,7 @@
                 '<a href="/admin/users/' + u.id + '/prestationer" class="admin-prestationer-lank">Prestationer</a>' +
                 '<button type="button" class="admin-roliga-saker" data-id="' + u.id + '">Roliga saker</button>' +
                 '<label class="admin-claude-toggle" title="Aktivera/inaktivera Claude OCR för denna användare"><input type="checkbox" class="admin-claude-aktiv" data-id="' + u.id + '"' + (claudeAktiv ? ' checked' : '') + ' /> Claude</label>' +
+                '<label class="admin-claude-toggle" title="Aktivera/inaktivera Claude Batch OCR för denna användare"><input type="checkbox" class="admin-claude-batch-aktiv" data-id="' + u.id + '"' + (claudeBatchAktiv ? ' checked' : '') + ' /> Batch</label>' +
                 '<button type="button" class="admin-ta-bort" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
                 '</span>' +
                 '<div class="admin-prefs-wrap" id="admin-prefs-' + u.id + '" hidden>' +
@@ -165,6 +167,20 @@
                   credentials: 'include',
                 }).then(function(r) {
                   if (!r.ok) { cb.checked = !aktiv; alert('Kunde inte ändra Claude-status.'); }
+                }).catch(function() { cb.checked = !aktiv; });
+              });
+            });
+            listEl.querySelectorAll('.admin-claude-batch-aktiv').forEach(function(cb) {
+              cb.addEventListener('change', function() {
+                const id = cb.dataset.id;
+                const aktiv = cb.checked;
+                fetch('/api/admin/users/' + id + '/claude-batch-aktiv', {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ aktiv: aktiv }),
+                  credentials: 'include',
+                }).then(function(r) {
+                  if (!r.ok) { cb.checked = !aktiv; alert('Kunde inte ändra Batch-status.'); }
                 }).catch(function() { cb.checked = !aktiv; });
               });
             });
