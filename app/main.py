@@ -1,4 +1,5 @@
 """FastAPI-app för gravregister – digitalisering av skannade gravregister (HKG/HKN)."""
+import asyncio
 import base64
 import json
 import os
@@ -15,8 +16,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 import fitz  # PyMuPDF
-from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import and_, case, func, or_, tuple_, update
@@ -42,6 +43,8 @@ from app.database import (
     GravplatsRedigeringslogg,
     ClaudeAnropslogg,
     ClaudeOcrSvar,
+    ClaudeBatchJobb,
+    ClaudeBatchJobbPost,
     GravplatsSkiss,
     Gravsatt,
     AchievementNiva,
@@ -63,6 +66,18 @@ CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
 
 # Priser för claude-sonnet-4-6 (USD per miljon tokens)
 _CLAUDE_PRIS = {"input": 3.00, "output": 15.00, "cache_creation": 3.75, "cache_read": 0.30}
+
+
+def _ledande_tal(nr: str) -> int:
+    """Extraherar det ledande heltalet ur ett gravplatsnummer, t.ex. '42 Ser XXII' → 42."""
+    s = (nr or "").strip()
+    n = 0
+    for c in s:
+        if c.isdigit():
+            n = n * 10 + int(c)
+        elif n > 0:
+            break
+    return n if n > 0 else -1
 
 app = FastAPI(
     title="Gravregister – digitalisering",
@@ -429,11 +444,16 @@ async def me(current_user: User = Depends(get_current_user)):
         and _get_claude_instans_aktiv()
         and getattr(current_user, "claude_aktiv", True)
     )
+    claude_batch_tillganglig = (
+        claude_tillganglig
+        and getattr(current_user, "claude_batch_aktiv", False)
+    )
     return {
         "id": current_user.id,
         "username": current_user.username,
         "is_admin": current_user.is_admin,
         "claude_tillganglig": claude_tillganglig,
+        "claude_batch_tillganglig": claude_batch_tillganglig,
         "preferences": {
             "fun_enabled": prefs.get("fun_enabled", True),
             "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),
@@ -639,7 +659,7 @@ class CreateUserWithPasswordBody(BaseModel):
 async def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Lista alla användare (endast admin)."""
     users = db.query(User).order_by(User.username).all()
-    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True)} for u in users]}
+    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True), "claude_batch_aktiv": getattr(u, "claude_batch_aktiv", False)} for u in users]}
 
 
 class ClaudeAktivBody(BaseModel):
@@ -660,6 +680,25 @@ async def set_user_claude_aktiv(
     user.claude_aktiv = body.aktiv
     db.commit()
     return {"ok": True, "claude_aktiv": user.claude_aktiv}
+
+
+class ClaudeBatchAktivBody(BaseModel):
+    aktiv: bool
+
+@app.put("/api/admin/users/{user_id:int}/claude-batch-aktiv")
+async def set_user_claude_batch_aktiv(
+    user_id: int,
+    body: ClaudeBatchAktivBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Aktivera eller inaktivera Claude batch-funktioner för en användare. Endast admin."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    user.claude_batch_aktiv = body.aktiv
+    db.commit()
+    return {"ok": True, "claude_batch_aktiv": user.claude_batch_aktiv}
 
 
 @app.get("/api/admin/achievement-niva")
@@ -2527,15 +2566,6 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         .all()
     )
     # Per-gravplats färdig-status (sorterad per kyrkogård+kvarter) för staplar
-    def _ledande_tal(nr: str) -> int:
-        s = (nr or "").strip()
-        n = 0
-        for c in s:
-            if c.isdigit():
-                n = n * 10 + int(c)
-            elif n > 0:
-                break
-        return n if n > 0 else -1
 
     gravplatser_per_kvarter = (
         db.query(
@@ -4817,6 +4847,397 @@ async def ocr_gravplats_endpoint(
         "kostnad_usd": round(kostnad, 6),
     }
     return result
+
+
+# ─── Batch Claude OCR ────────────────────────────────────────────────────────
+
+def _collect_png_images_for_gravplats(gravplats_id: int, db: Session) -> list[bytes]:
+    """Samla PNG-bilder för en gravplats (samma logik som ocr_gravplats_endpoint)."""
+    g = db.query(Gravplats).filter(Gravplats.id == gravplats_id).first()
+    if not g:
+        return []
+    mapp_config = db.query(MappConfig).filter(MappConfig.id == g.mapp_id).first()
+    if not mapp_config:
+        return []
+    mapp_namn = mapp_config.namn
+    layout_typ = getattr(mapp_config, "layout_typ", None) or "standard_3_sidor"
+    dela_sidor = getattr(mapp_config, "dela_sidor", None) or "hojdled"
+    foregaende = None
+    if layout_typ == "standard_3_sidor":
+        foregaende = (
+            db.query(Gravplats)
+            .filter(Gravplats.mapp_id == g.mapp_id, Gravplats.start_sida == g.start_sida - 2)
+            .first()
+        )
+    halvor = _gravplats_halvor(g, foregaende, layout_typ=layout_typ)
+    excluded = _excluded_filenames_for_mapp(db, mapp_namn)
+    expanded = _expanded_effective_list(mapp_namn, excluded, db)
+    for h in halvor:
+        sid = h.get("content_sida")
+        if sid is not None and 1 <= sid <= len(expanded):
+            item = expanded[sid - 1]
+            if item.get("t") == "f":
+                h["filnamn"] = item["v"]
+    for em in (
+        db.query(Extramaterial)
+        .filter(
+            Extramaterial.mapp_id == mapp_config.id,
+            Extramaterial.grav_start_sida == g.start_sida,
+            Extramaterial.redan_halva == True,
+            Extramaterial.dold != True,
+        )
+        .order_by(Extramaterial.id)
+    ):
+        halvor.append({"redan_halva": True, "filnamn": em.filnamn})
+    dold_halvor_rows = db.query(GravplatsDoldHalva).filter(GravplatsDoldHalva.gravplats_id == g.id).all()
+    def _dold_seg(r):
+        if getattr(r, "halva", None) == "ovre": return 0
+        if getattr(r, "halva", None) == "nedre": return 1
+        return getattr(r, "segment_index", 0)
+    dold_set = {(r.content_sida, _dold_seg(r)) for r in dold_halvor_rows}
+    halvor = [h for h in halvor if (h.get("content_sida"), h.get("segment_index", 0)) not in dold_set]
+    redan_halva_set = _redan_halva_filenames_for_mapp(db, mapp_config.id)
+    png_images: list[bytes] = []
+    for h in halvor:
+        if h.get("redan_halva"):
+            filnamn = h.get("filnamn")
+            if filnamn:
+                path = _mapp_path(mapp_namn) / filnamn
+                if path.is_file():
+                    doc = fitz.open(path)
+                    try:
+                        pix = doc[0].get_pixmap(dpi=200)
+                        png_images.append(pix.tobytes("png"))
+                    finally:
+                        doc.close()
+            continue
+        sid = h.get("content_sida")
+        if sid is None:
+            continue
+        item = _content_page_to_item(mapp_namn, excluded, sid, db)
+        if item is None:
+            continue
+        typ, val = item
+        position = h.get("position")
+        andelar = _mapp_config_andelar(mapp_config, position=position)
+        segment_index = h.get("segment_index", 0)
+        if typ == "blank":
+            use_halva = "ovre" if segment_index == 0 else "nedre"
+            use_split = andelar[0] if andelar else 0.5
+            png_images.append(_blank_page_png_bytes(dpi=200, split=use_split, halva=use_halva))
+            continue
+        doc = fitz.open(val)
+        try:
+            page = doc[0]
+            if val.name in redan_halva_set or dela_sidor == "ingen":
+                pix = page.get_pixmap(dpi=200)
+            else:
+                clip = _clip_rect_for_segment(page.rect, segment_index, andelar, dela_sidor)
+                pix = page.get_pixmap(dpi=200, clip=clip) if clip is not None else page.get_pixmap(dpi=200)
+            png_images.append(pix.tobytes("png"))
+        finally:
+            doc.close()
+    return png_images
+
+
+def _require_claude_batch(current_user: User) -> None:
+    """Kasta 403 om batch-Claude inte är tillgängligt för användaren."""
+    if not _get_claude_instans_aktiv():
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för denna instans")
+    if not getattr(current_user, "claude_aktiv", True):
+        raise HTTPException(status_code=403, detail="Claude är inaktiverat för ditt konto")
+    if not getattr(current_user, "claude_batch_aktiv", False):
+        raise HTTPException(status_code=403, detail="Claude batch är inte aktiverat för ditt konto")
+    if not _get_anthropic_api_key():
+        raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas")
+
+
+class BatchJobbBody(BaseModel):
+    namn: str = ""
+    kyrkogard: str | None = None
+    kvarter: str | None = None
+    gravplatsnummer_fran: int | None = None
+    gravplatsnummer_till: int | None = None
+    ej_transkriberade: bool = True
+    ej_claude_korda: bool = True
+
+
+@app.post("/api/batch-claude/jobb")
+async def skapa_batch_jobb(
+    body: BatchJobbBody,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Skapa ett nytt batch-jobb. Väljer ut gravplatser baserat på filter."""
+    _require_claude_batch(current_user)
+
+    q = db.query(Gravplats)
+    if body.kyrkogard:
+        q = q.filter(Gravplats.kyrkogard == body.kyrkogard)
+    if body.kvarter:
+        q = q.filter(Gravplats.kvarter == body.kvarter)
+    if body.ej_transkriberade:
+        fardigtranskriberade_ids = [r[0] for r in db.query(GravplatsInmatning.gravplats_id).filter(GravplatsInmatning.fardigtranskriberad == True).all()]
+        if fardigtranskriberade_ids:
+            q = q.filter(~Gravplats.id.in_(fardigtranskriberade_ids))
+    if body.ej_claude_korda:
+        korda_ids = [r[0] for r in db.query(ClaudeOcrSvar.gravplats_id).all()]
+        if korda_ids:
+            q = q.filter(~Gravplats.id.in_(korda_ids))
+    gravplatser = q.order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.gravplatsnummer).all()
+
+    # Filtrera på nummerspann om angivet (ledande heltal i gravplatsnummer)
+    if body.gravplatsnummer_fran is not None or body.gravplatsnummer_till is not None:
+        gravplatser = [
+            gp for gp in gravplatser
+            if (body.gravplatsnummer_fran is None or _ledande_tal(gp.gravplatsnummer or "") >= body.gravplatsnummer_fran)
+            and (body.gravplatsnummer_till is None or _ledande_tal(gp.gravplatsnummer or "") <= body.gravplatsnummer_till)
+        ]
+
+    if not gravplatser:
+        raise HTTPException(status_code=404, detail="Inga gravplatser matchar filtret")
+
+    namn = body.namn.strip() or (
+        (body.kyrkogard or "") + (" " + body.kvarter if body.kvarter else "")
+        + (" " + str(body.gravplatsnummer_fran) + "–" + str(body.gravplatsnummer_till) if body.gravplatsnummer_fran or body.gravplatsnummer_till else "")
+        + " " + datetime.now().strftime("%Y-%m-%d")
+    ).strip()
+
+    jobb = ClaudeBatchJobb(
+        user_id=current_user.id,
+        namn=namn,
+        skapad_den=datetime.now(timezone.utc).isoformat(),
+        status="klar",
+        totalt=len(gravplatser),
+        klara=0,
+        fel=0,
+        filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "gravplatsnummer_fran": body.gravplatsnummer_fran, "gravplatsnummer_till": body.gravplatsnummer_till, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
+    )
+    db.add(jobb)
+    db.flush()
+    for i, gp in enumerate(gravplatser):
+        db.add(ClaudeBatchJobbPost(jobb_id=jobb.id, gravplats_id=gp.id, ordning=i, status="väntar"))
+    db.commit()
+    db.refresh(jobb)
+    return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt}
+
+
+@app.get("/api/batch-claude/jobb")
+async def lista_batch_jobb(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista användarens batch-jobb."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.user_id == current_user.id).order_by(ClaudeBatchJobb.skapad_den.desc()).all()
+    return {"jobb": [{"id": j.id, "namn": j.namn, "skapad_den": j.skapad_den, "status": j.status, "totalt": j.totalt, "klara": j.klara, "fel": j.fel} for j in jobb]}
+
+
+@app.get("/api/batch-claude/jobb/{jobb_id:int}")
+async def hamta_batch_jobb(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Hämta detaljer och poster för ett batch-jobb."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    poster = db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == jobb_id).order_by(ClaudeBatchJobbPost.ordning).all()
+    gravplats_ids = [p.gravplats_id for p in poster]
+    gravplatser_rows = (
+        db.query(Gravplats, MappConfig.namn)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .filter(Gravplats.id.in_(gravplats_ids))
+        .all()
+    ) if gravplats_ids else []
+    gravplatser = {g.id: (g, mapp_namn) for g, mapp_namn in gravplatser_rows}
+    poster_data = []
+    for p in poster:
+        pair = gravplatser.get(p.gravplats_id)
+        gp, mapp_namn = pair if pair else (None, None)
+        poster_data.append({
+            "id": p.id,
+            "gravplats_id": p.gravplats_id,
+            "ordning": p.ordning,
+            "status": p.status,
+            "kyrkogard": gp.kyrkogard if gp else None,
+            "kvarter": gp.kvarter if gp else None,
+            "gravplatsnummer": gp.gravplatsnummer if gp else None,
+            "mapp_namn": mapp_namn if mapp_namn else None,
+        })
+    return {
+        "id": jobb.id, "namn": jobb.namn, "skapad_den": jobb.skapad_den,
+        "status": jobb.status, "totalt": jobb.totalt, "klara": jobb.klara, "fel": jobb.fel,
+        "poster": poster_data,
+    }
+
+
+@app.delete("/api/batch-claude/jobb/{jobb_id:int}")
+async def ta_bort_batch_jobb(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Ta bort ett batch-jobb (och dess poster)."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == jobb_id).delete()
+    db.delete(jobb)
+    db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/batch-claude/jobb/{jobb_id:int}/nasta")
+async def batch_kor_nasta(
+    jobb_id: int,
+    antal: int = Query(default=1, ge=1, le=5),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kör OCR parallellt på nästa `antal` väntande poster. Returnerar 204 om jobbet är klart."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    if jobb.status == "avbruten":
+        raise HTTPException(status_code=400, detail="Jobbet är avbrutet")
+
+    poster = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(ClaudeBatchJobbPost.jobb_id == jobb_id, ClaudeBatchJobbPost.status == "väntar")
+        .order_by(ClaudeBatchJobbPost.ordning)
+        .limit(antal)
+        .all()
+    )
+
+    if not poster:
+        jobb.status = "klar"
+        db.commit()
+        return Response(status_code=204)
+
+    # Markera alla valda poster som "kör" innan vi awaitar, så de inte plockas igen
+    for p in poster:
+        p.status = "kör"
+    jobb.status = "kör"
+    db.commit()
+
+    api_key = _get_anthropic_api_key()
+
+    async def kör_en(post: ClaudeBatchJobbPost) -> None:
+        gravplats_id = post.gravplats_id
+        try:
+            png_images = _collect_png_images_for_gravplats(gravplats_id, db)
+        except Exception:
+            png_images = []
+
+        if not png_images:
+            post.status = "hoppad"
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+            db.commit()
+            return
+
+        try:
+            _t0 = time.monotonic()
+            result, usage = await ocr_gravplats_from_images(png_images, api_key)
+            svarstid_ms = int((time.monotonic() - _t0) * 1000)
+
+            inp = usage.get("input_tokens", 0)
+            out = usage.get("output_tokens", 0)
+            cache_create = usage.get("cache_creation_input_tokens", 0)
+            cache_read = usage.get("cache_read_input_tokens", 0)
+            kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
+
+            db.add(ClaudeAnropslogg(
+                user_id=current_user.id,
+                gravplats_id=gravplats_id,
+                anropad_den=datetime.now(timezone.utc).isoformat(),
+                input_tokens=inp, output_tokens=out,
+                cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
+                kostnad_usd=round(kostnad, 6),
+                svarstid_ms=svarstid_ms,
+            ))
+
+            svar_json_str = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
+            existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+            if existing_svar:
+                existing_svar.user_id = current_user.id
+                existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+                existing_svar.svar_json = svar_json_str
+                existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
+            else:
+                db.add(ClaudeOcrSvar(
+                    gravplats_id=gravplats_id, user_id=current_user.id,
+                    skapad_den=datetime.now(timezone.utc).isoformat(),
+                    svar_json=svar_json_str, ocr_kommentar=result.get("ocr_kommentar", ""),
+                ))
+
+            post.status = "klar"
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
+            db.commit()
+
+        except Exception:
+            post.status = "fel"
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+            db.commit()
+
+    await asyncio.gather(*[kör_en(p) for p in poster])
+
+    db.refresh(jobb)
+    kvar = db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == jobb_id, ClaudeBatchJobbPost.status == "väntar").count()
+    if kvar == 0:
+        jobb.status = "klar"
+        db.commit()
+
+    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar}
+
+
+@app.post("/api/batch-claude/jobb/{jobb_id:int}/pausa")
+async def batch_pausa(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Sätt jobbets status till pausad."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    if jobb.status in ("kör", "klar"):
+        jobb.status = "pausad"
+        db.commit()
+    return {"ok": True, "status": jobb.status}
+
+
+@app.post("/api/batch-claude/jobb/{jobb_id:int}/avbryt")
+async def batch_avbryt(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Avbryt ett jobb permanent – väntande poster markeras som hoppade."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    db.query(ClaudeBatchJobbPost).filter(
+        ClaudeBatchJobbPost.jobb_id == jobb_id,
+        ClaudeBatchJobbPost.status == "väntar"
+    ).update({"status": "hoppad"})
+    jobb.status = "avbruten"
+    db.commit()
+    return {"ok": True, "status": jobb.status}
+
+
+@app.get("/batch-claude", response_class=HTMLResponse)
+async def batch_claude_page():
+    return FileResponse("static/batch-claude.html")
+
+
+# ─── End Batch Claude OCR ─────────────────────────────────────────────────────
 
 
 @app.get("/api/mappar/{mapp_namn}/extramaterial")

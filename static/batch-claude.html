@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Batch Claude OCR – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .batch-sida { max-width: 52rem; margin: 2rem auto; padding: 1rem 2rem; }
+    .batch-sida h1 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+    .batch-sida a { color: var(--accent, #2563eb); }
+    .batch-avsnitt { margin: 1.5rem 0; }
+    .batch-avsnitt h2 { font-size: 1.05rem; margin-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; }
+    .batch-rad { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0; flex-wrap: wrap; }
+    .batch-rad label { font-weight: 500; min-width: 8rem; }
+    .batch-rad select, .batch-rad input[type="text"], .batch-rad input[type="number"] { padding: 0.4rem 0.5rem; font-size: 0.95rem; }
+    .batch-rad select { min-width: 14rem; }
+    .batch-rad input[type="number"] { width: 7rem; }
+    .batch-rad input[type="checkbox"] { width: 1.1rem; height: 1.1rem; }
+    .batch-rad .batch-label-check { font-weight: normal; display: flex; align-items: center; gap: 0.4rem; }
+    .batch-rad-hint { font-size: 0.82rem; color: #64748b; margin-left: 0.25rem; }
+    .batch-btn { padding: 0.5rem 1.1rem; font-size: 0.95rem; cursor: pointer; border: none; border-radius: 5px; font-family: inherit; }
+    .batch-btn-prim { background: var(--accent, #2563eb); color: #fff; }
+    .batch-btn-prim:hover:not(:disabled) { background: #1d4ed8; }
+    .batch-btn-prim:disabled { opacity: 0.5; cursor: not-allowed; }
+    .batch-btn-sec { background: #e2e8f0; color: #1e293b; border: 1px solid #cbd5e1; }
+    .batch-btn-sec:hover:not(:disabled) { background: #cbd5e1; }
+    .batch-btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+    .batch-btn-danger:hover:not(:disabled) { background: #fecaca; }
+    .batch-fel { color: #b91c1c; font-size: 0.9rem; margin-top: 0.5rem; }
+    .batch-ok { color: #16a34a; font-size: 0.9rem; margin-top: 0.5rem; }
+    .batch-progress-wrap { margin: 1rem 0; }
+    .batch-progress-bar { width: 100%; height: 1.1rem; background: #e2e8f0; border-radius: 999px; overflow: hidden; }
+    .batch-progress-fill { height: 100%; background: #2563eb; border-radius: 999px; transition: width 0.3s; }
+    .batch-progress-text { font-size: 0.9rem; color: #475569; margin-top: 0.3rem; }
+    .batch-jobb-lista { list-style: none; padding: 0; margin: 0; }
+    .batch-jobb-li { border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .batch-jobb-namn { font-weight: 500; flex: 1; min-width: 10rem; }
+    .batch-jobb-info { font-size: 0.85rem; color: #64748b; }
+    .batch-jobb-status { font-size: 0.8rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; }
+    .batch-jobb-status-klar { background: #dcfce7; color: #166534; }
+    .batch-jobb-status-pausad { background: #fef9c3; color: #854d0e; }
+    .batch-jobb-status-kor { background: #dbeafe; color: #1e40af; }
+    .batch-jobb-status-avbruten { background: #fee2e2; color: #991b1b; }
+    .batch-knappar { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    #batch-aktiv-wrap { border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem 1.25rem; background: #eff6ff; }
+    #batch-aktiv-namn { font-weight: 600; margin-bottom: 0.5rem; }
+
+    /* Statistikstaplar (samma som startsidan) */
+    .batch-stapel-wrap { margin: 0.75rem 0 0; }
+    .batch-stapel-rad { margin: 0.3rem 0; }
+    .batch-stapel-label { font-size: 0.82rem; color: #475569; margin-bottom: 0.2rem; }
+    .batch-stapel { height: 0.85rem; border-radius: 4px; overflow: hidden; display: flex; background: #dc2626; }
+    .batch-stapel-seg-fardig-v0 { background: #15803d; }
+    .batch-stapel-seg-fardig-v1 { background: #16a34a; }
+    .batch-stapel-seg-fardig-v2 { background: #22c55e; }
+    .batch-stapel-seg-fardig-v3 { background: #166534; }
+    .batch-stapel-seg-fardig-v4 { background: #4ade80; }
+    .batch-stapel-seg-fardig-v5 { background: #14532d; }
+    .batch-stapel-seg-ej-fardig-v0 { background: #b91c1c; }
+    .batch-stapel-seg-ej-fardig-v1 { background: #dc2626; }
+    .batch-stapel-seg-ej-fardig-v2 { background: #ef4444; }
+    .batch-stapel-seg-ej-fardig-v3 { background: #991b1b; }
+    .batch-stapel-seg-ej-fardig-v4 { background: #f87171; }
+    .batch-stapel-seg-ej-fardig-v5 { background: #7f1d1d; }
+    .batch-stapel-segment { min-width: 2px; transition: flex 0.2s; }
+    .batch-stapel-gap { flex: 0 0 4px; min-width: 4px; background: var(--card, #fff); }
+  </style>
+</head>
+<body>
+  <main class="batch-sida">
+    <p><a href="/">&#8592; Tillbaka till menyn</a></p>
+    <h1>Batch Claude OCR</h1>
+    <p style="color:#64748b;font-size:0.95rem">Kör Claude OCR automatiskt på ett urval gravplatser och granska sedan resultaten.</p>
+
+    <div class="batch-avsnitt" id="batch-aktiv-wrap" hidden>
+      <div id="batch-aktiv-namn"></div>
+      <div class="batch-progress-wrap">
+        <div class="batch-progress-bar"><div class="batch-progress-fill" id="batch-progress-fill" style="width:0%"></div></div>
+        <div class="batch-progress-text" id="batch-progress-text"></div>
+      </div>
+      <div class="batch-knappar" style="margin-top:0.75rem;align-items:center">
+        <button type="button" class="batch-btn batch-btn-sec" id="batch-pausa-btn">Pausa</button>
+        <button type="button" class="batch-btn batch-btn-danger" id="batch-stoppa-btn">Stoppa</button>
+        <button type="button" class="batch-btn batch-btn-prim" id="batch-granska-aktiv-btn" hidden>Granska</button>
+        <label for="batch-antal-select" style="font-size:0.88rem;color:#475569;margin-left:0.5rem">Parallellt:</label>
+        <select id="batch-antal-select" style="font-size:0.88rem;padding:0.25rem 0.4rem">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="batch-avsnitt">
+      <h2>Skapa nytt jobb</h2>
+
+      <div class="batch-rad">
+        <label for="batch-kyrkogard">Kyrkogård</label>
+        <select id="batch-kyrkogard"><option value="">– Alla –</option></select>
+      </div>
+      <div class="batch-rad">
+        <label for="batch-kvarter">Kvarter</label>
+        <select id="batch-kvarter"><option value="">– Alla –</option></select>
+      </div>
+      <div class="batch-rad">
+        <label>Gravplatsnr</label>
+        <input type="number" id="batch-nr-fran" placeholder="Från" min="1" />
+        <span style="color:#64748b">–</span>
+        <input type="number" id="batch-nr-till" placeholder="Till" min="1" />
+        <span class="batch-rad-hint">Lämna tomt för hela kvarteret</span>
+      </div>
+
+      <div id="batch-statistik-wrap" class="batch-stapel-wrap" hidden></div>
+
+      <div class="batch-rad" style="margin-top:0.75rem">
+        <label>Filter</label>
+        <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-transkriberade" checked /> Hoppa över färdigtranskriberade</label>
+        <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-korda" checked /> Hoppa över redan Claude-körda</label>
+      </div>
+      <div class="batch-rad">
+        <label for="batch-namn">Namn (valfritt)</label>
+        <input type="text" id="batch-namn" placeholder="T.ex. Kvarter XII mars 2026" style="min-width:20rem" />
+      </div>
+      <div class="batch-rad" style="margin-top:0.75rem">
+        <button type="button" class="batch-btn batch-btn-prim" id="batch-skapa-btn">Skapa och kör</button>
+        <span id="batch-skapa-info" style="font-size:0.9rem;color:#64748b"></span>
+      </div>
+      <div id="batch-skapa-fel" class="batch-fel" hidden></div>
+    </div>
+
+    <div class="batch-avsnitt">
+      <h2>Tidigare jobb</h2>
+      <div id="batch-jobb-tom" style="color:#64748b;font-size:0.95rem" hidden>Inga jobb ännu.</div>
+      <ul class="batch-jobb-lista" id="batch-jobb-lista"></ul>
+    </div>
+  </main>
+  <script src="/static/auth.js"></script>
+  <script>
+(function() {
+  const API = '/api';
+  let aktivtJobbId = null;
+  let aktivtJobbPausad = false;
+  let aktivtJobbTotalt = 0;
+  let aktivtAntal = 3;
+  let statistikData = null;
+
+  gpEnsureAuth().then(function(ok) {
+    if (!ok) return;
+    laddaTrad();
+    laddaStatistik();
+    laddaJobb();
+  });
+
+  /* ── Träddata (kyrkogård / kvarter) ─────────────────────────── */
+  async function laddaTrad() {
+    try {
+      const res = await fetch(API + '/gravplatser/trad', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const kyrkSelect = document.getElementById('batch-kyrkogard');
+      const kvSelect = document.getElementById('batch-kvarter');
+      (data.kyrkogardar || []).forEach(function(k) {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = k;
+        kyrkSelect.appendChild(opt);
+      });
+      kyrkSelect.addEventListener('change', function() {
+        const k = kyrkSelect.value;
+        kvSelect.innerHTML = '<option value="">– Alla –</option>';
+        if (k && data.kvarter_per_kyrkogard && data.kvarter_per_kyrkogard[k]) {
+          data.kvarter_per_kyrkogard[k].forEach(function(kv) {
+            const opt = document.createElement('option');
+            opt.value = kv;
+            opt.textContent = kv;
+            kvSelect.appendChild(opt);
+          });
+        }
+        uppdateraStaplar();
+      });
+      kvSelect.addEventListener('change', uppdateraStaplar);
+    } catch(e) {}
+  }
+
+  /* ── Statistikstaplar ────────────────────────────────────────── */
+  async function laddaStatistik() {
+    try {
+      const res = await fetch(API + '/statistik', { credentials: 'include' });
+      if (!res.ok) return;
+      statistikData = await res.json();
+      uppdateraStaplar();
+    } catch(e) {}
+  }
+
+  function uppdateraStaplar() {
+    const wrap = document.getElementById('batch-statistik-wrap');
+    if (!statistikData || !statistikData.transkriberingsstatus) { wrap.hidden = true; return; }
+    const ts = statistikData.transkriberingsstatus;
+    const valdKyrkogard = document.getElementById('batch-kyrkogard').value;
+    const valdKvarter = document.getElementById('batch-kvarter').value;
+    const kyrkogardar = ts.kyrkogardar || [];
+
+    var html = '';
+    var N = 6;
+
+    function stapelSegment(total, fardiga, v, kvarter) {
+      var vf = ' batch-stapel-seg-fardig-v' + (v % N);
+      var vr = ' batch-stapel-seg-ej-fardig-v' + (v % N);
+      var prefix = kvarter ? kvarter + ': ' : '';
+      var tooltip = prefix + fardiga + ' av ' + total + ' klara';
+      var h = '';
+      if (fardiga > 0) h += '<div class="batch-stapel-segment' + vf + '" style="flex:' + fardiga + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
+      var rest = total - fardiga;
+      if (rest > 0) h += '<div class="batch-stapel-segment' + vr + '" style="flex:' + rest + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
+      return h;
+    }
+
+    if (valdKvarter) {
+      // Visa enskild kvarter per gravplats
+      var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
+      var kv = kg && (kg.kvarter || []).find(function(k) { return k.kvarter === valdKvarter; });
+      if (kv) {
+        var label = escHtml(valdKyrkogard + ' – ' + valdKvarter) + ' &nbsp;<span style="color:#64748b">' + kv.fardiga + ' av ' + kv.total + ' färdigtranskriberade (' + Math.round((kv.fardiga / Math.max(kv.total,1)) * 100) + '%)</span>';
+        var inner = '';
+        if (kv.gravplatser_fardiga && kv.gravplatser_fardiga.length) {
+          kv.gravplatser_fardiga.forEach(function(f, i) {
+            inner += '<div class="batch-stapel-segment ' + (f ? 'batch-stapel-seg-fardig-v0' : 'batch-stapel-seg-ej-fardig-v0') + '" style="flex:1 0 0"></div>';
+          });
+        } else {
+          inner = stapelSegment(kv.total, kv.fardiga, 0, valdKvarter);
+        }
+        html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + label + '</div><div class="batch-stapel">' + inner + '</div></div>';
+      }
+    } else if (valdKyrkogard) {
+      // Visa kvarter inom vald kyrkogård
+      var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
+      if (kg) {
+        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + Math.round((kg.fardiga / Math.max(kg.total,1)) * 100) + '%)</span>';
+        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, i, kv.kvarter); }).join('<div class="batch-stapel-gap"></div>');
+        html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + kgLabel + '</div><div class="batch-stapel">' + segs + '</div></div>';
+        (kg.kvarter || []).forEach(function(kv, i) {
+          var pct = Math.round((kv.fardiga / Math.max(kv.total,1)) * 100);
+          var kvLabel = escHtml(kv.kvarter) + ' &nbsp;<span style="color:#94a3b8">' + kv.fardiga + '/' + kv.total + ' (' + pct + '%)</span>';
+          var inner = '';
+          if (kv.gravplatser_fardiga && kv.gravplatser_fardiga.length) {
+            kv.gravplatser_fardiga.forEach(function(f) {
+              inner += '<div class="batch-stapel-segment ' + (f ? 'batch-stapel-seg-fardig-v' + (i%N) : 'batch-stapel-seg-ej-fardig-v' + (i%N)) + '" style="flex:1 0 0" title="' + escHtml(kv.kvarter) + '"></div>';
+            });
+          } else {
+            inner = stapelSegment(kv.total, kv.fardiga, i, kv.kvarter);
+          }
+          html += '<div class="batch-stapel-rad" style="padding-left:1rem"><div class="batch-stapel-label" style="font-size:0.78rem">' + kvLabel + '</div><div class="batch-stapel">' + inner + '</div></div>';
+        });
+      }
+    } else {
+      // Visa alla kyrkogårdar
+      kyrkogardar.forEach(function(kg, kgi) {
+        var pct = Math.round((kg.fardiga / Math.max(kg.total,1)) * 100);
+        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + pct + '%)</span>';
+        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, kgi, kv.kvarter); }).join('<div class="batch-stapel-gap"></div>');
+        html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + kgLabel + '</div><div class="batch-stapel">' + segs + '</div></div>';
+      });
+    }
+
+    wrap.innerHTML = html;
+    wrap.hidden = !html;
+  }
+
+  /* ── Jobblistning ────────────────────────────────────────────── */
+  async function laddaJobb() {
+    try {
+      const res = await fetch(API + '/batch-claude/jobb', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      renderJobbLista(data.jobb || []);
+    } catch(e) {}
+  }
+
+  function renderJobbLista(jobb) {
+    const lista = document.getElementById('batch-jobb-lista');
+    const tom = document.getElementById('batch-jobb-tom');
+    lista.innerHTML = '';
+    if (jobb.length === 0) { tom.hidden = false; return; }
+    tom.hidden = true;
+    jobb.forEach(function(j) {
+      const li = document.createElement('li');
+      li.className = 'batch-jobb-li';
+      const datum = j.skapad_den ? new Date(j.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+      const statusKlass = {'klar':'klar', 'pausad':'pausad', 'kör':'kor', 'avbruten':'avbruten'}[j.status] || 'klar';
+      const pct = j.totalt > 0 ? Math.round((j.klara / j.totalt) * 100) : 0;
+      const harKlara = j.klara > 0;
+      // En knapp som varierar beroende på status: Återuppta (pausad) eller Stoppa (kör)
+      const statusKnapp = j.status === 'pausad'
+        ? '<button type="button" class="batch-btn batch-btn-sec batch-aterta-btn" data-id="' + j.id + '" data-totalt="' + j.totalt + '" data-namn="' + escAttr(j.namn) + '">Återuppta</button>'
+        : j.status === 'kör'
+          ? '<button type="button" class="batch-btn batch-btn-danger batch-stoppa-lista-btn" data-id="' + j.id + '">Stoppa</button>'
+          : '';
+      li.innerHTML =
+        '<span class="batch-jobb-namn">' + escHtml(j.namn || ('Jobb ' + j.id)) + '</span>' +
+        '<span class="batch-jobb-info">' + datum + ' &nbsp;&middot;&nbsp; ' + j.klara + '/' + j.totalt + ' klara (' + pct + '%)' + (j.fel > 0 ? ' &nbsp;&middot;&nbsp; ' + j.fel + ' fel' : '') + '</span>' +
+        '<span class="batch-jobb-status batch-jobb-status-' + statusKlass + '">' + escHtml(j.status) + '</span>' +
+        '<span class="batch-knappar">' +
+        statusKnapp +
+        (harKlara ? '<button type="button" class="batch-btn batch-btn-prim batch-granska-btn" data-id="' + j.id + '">Granska</button>' : '') +
+        '<button type="button" class="batch-btn batch-btn-danger batch-ta-bort-btn" data-id="' + j.id + '">Ta bort</button>' +
+        '</span>';
+      lista.appendChild(li);
+    });
+    lista.querySelectorAll('.batch-granska-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { oppnaGranskning(btn.dataset.id); });
+    });
+    lista.querySelectorAll('.batch-aterta-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { startaKorning(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt)); });
+    });
+    lista.querySelectorAll('.batch-stoppa-lista-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+        try {
+          await fetch(API + '/batch-claude/jobb/' + btn.dataset.id + '/avbryt', { method: 'POST', credentials: 'include' });
+          laddaJobb();
+        } catch(e) {}
+      });
+    });
+    lista.querySelectorAll('.batch-ta-bort-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        if (!confirm('Ta bort jobbet?')) return;
+        try {
+          const r = await fetch(API + '/batch-claude/jobb/' + btn.dataset.id, { method: 'DELETE', credentials: 'include' });
+          if (r.ok) laddaJobb();
+        } catch(e) {}
+      });
+    });
+  }
+
+  /* ── Granskning ──────────────────────────────────────────────── */
+  async function oppnaGranskning(jobbId) {
+    try {
+      const res = await fetch(API + '/batch-claude/jobb/' + jobbId, { credentials: 'include' });
+      if (!res.ok) { alert('Kunde inte hämta jobbet.'); return; }
+      const data = await res.json();
+      const forsta = (data.poster || []).find(function(p) { return p.status === 'klar'; });
+      if (!forsta) { alert('Inga körda gravplatser i detta jobb ännu.'); return; }
+      const slug = encodeURIComponent([forsta.kyrkogard, forsta.kvarter, forsta.gravplatsnummer].filter(Boolean).join(' '));
+      window.location.href = '/gravplatser/' + slug + '?batch_jobb_id=' + jobbId;
+    } catch(e) { alert('Fel: ' + (e.message || 'okänt')); }
+  }
+
+  /* ── Körning ─────────────────────────────────────────────────── */
+  function startaKorning(jobbId, namn, totalt) {
+    aktivtJobbId = jobbId;
+    aktivtJobbPausad = false;
+    aktivtJobbTotalt = totalt;
+    aktivtAntal = parseInt(document.getElementById('batch-antal-select').value) || 3;
+    const wrap = document.getElementById('batch-aktiv-wrap');
+    document.getElementById('batch-aktiv-namn').textContent = namn || ('Jobb ' + jobbId);
+    document.getElementById('batch-progress-fill').style.width = '0%';
+    document.getElementById('batch-progress-text').textContent = 'Startar\u2026';
+    document.getElementById('batch-granska-aktiv-btn').hidden = true;
+    document.getElementById('batch-pausa-btn').textContent = 'Pausa';
+    wrap.hidden = false;
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    korNasta();
+  }
+
+  document.getElementById('batch-antal-select').addEventListener('change', function() {
+    aktivtAntal = parseInt(this.value) || 3;
+  });
+
+  async function korNasta() {
+    if (aktivtJobbPausad) return;
+    try {
+      const res = await fetch(API + '/batch-claude/jobb/' + aktivtJobbId + '/nasta?antal=' + aktivtAntal, { method: 'POST', credentials: 'include' });
+      if (res.status === 204) {
+        document.getElementById('batch-progress-fill').style.width = '100%';
+        document.getElementById('batch-progress-text').textContent = 'Klart!';
+        document.getElementById('batch-granska-aktiv-btn').hidden = false;
+        document.getElementById('batch-granska-aktiv-btn').dataset.id = aktivtJobbId;
+        laddaJobb();
+        laddaStatistik();
+        return;
+      }
+      if (!res.ok) { alert('Fel vid k\u00f6rning.'); laddaJobb(); return; }
+      const data = await res.json();
+      const klara = data.klara || 0;
+      const totalt = aktivtJobbTotalt || data.totalt || 1;
+      const pct = Math.round((klara / totalt) * 100);
+      document.getElementById('batch-progress-fill').style.width = pct + '%';
+      document.getElementById('batch-progress-text').textContent = klara + ' av ' + totalt + ' klara' + (data.kvar === 0 ? ' \u2013 Klart!' : '');
+      if (data.kvar === 0) {
+        document.getElementById('batch-granska-aktiv-btn').hidden = false;
+        document.getElementById('batch-granska-aktiv-btn').dataset.id = aktivtJobbId;
+        laddaJobb();
+        laddaStatistik();
+        return;
+      }
+      setTimeout(korNasta, 800);
+    } catch(e) { alert('N\u00e4tverksfel: ' + (e.message || '')); laddaJobb(); }
+  }
+
+  document.getElementById('batch-pausa-btn').addEventListener('click', async function() {
+    if (!aktivtJobbId) return;
+    aktivtJobbPausad = true;
+    try { await fetch(API + '/batch-claude/jobb/' + aktivtJobbId + '/pausa', { method: 'POST', credentials: 'include' }); } catch(e) {}
+    document.getElementById('batch-pausa-btn').textContent = 'Pausad';
+    document.getElementById('batch-pausa-btn').disabled = true;
+    laddaJobb();
+  });
+
+  document.getElementById('batch-stoppa-btn').addEventListener('click', async function() {
+    if (!aktivtJobbId) return;
+    if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+    aktivtJobbPausad = true;
+    try { await fetch(API + '/batch-claude/jobb/' + aktivtJobbId + '/avbryt', { method: 'POST', credentials: 'include' }); } catch(e) {}
+    document.getElementById('batch-aktiv-wrap').hidden = true;
+    aktivtJobbId = null;
+    laddaJobb();
+  });
+
+  document.getElementById('batch-granska-aktiv-btn').addEventListener('click', function() {
+    const id = this.dataset.id;
+    if (id) oppnaGranskning(id);
+  });
+
+  document.getElementById('batch-skapa-btn').addEventListener('click', async function() {
+    const btn = this;
+    const felEl = document.getElementById('batch-skapa-fel');
+    const infoEl = document.getElementById('batch-skapa-info');
+    felEl.hidden = true;
+    infoEl.textContent = 'Skapar\u2026';
+    btn.disabled = true;
+    const nrFran = document.getElementById('batch-nr-fran').value;
+    const nrTill = document.getElementById('batch-nr-till').value;
+    const body = {
+      namn: document.getElementById('batch-namn').value.trim(),
+      kyrkogard: document.getElementById('batch-kyrkogard').value || null,
+      kvarter: document.getElementById('batch-kvarter').value || null,
+      gravplatsnummer_fran: nrFran ? parseInt(nrFran) : null,
+      gravplatsnummer_till: nrTill ? parseInt(nrTill) : null,
+      ej_transkriberade: document.getElementById('batch-filter-ej-transkriberade').checked,
+      ej_claude_korda: document.getElementById('batch-filter-ej-korda').checked,
+    };
+    try {
+      const res = await fetch(API + '/batch-claude/jobb', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Kunde inte skapa jobb');
+      infoEl.textContent = data.totalt + ' gravplatser valda';
+      btn.disabled = false;
+      await laddaJobb();
+      startaKorning(data.id, data.namn, data.totalt);
+    } catch(e) {
+      felEl.textContent = e.message || 'Fel';
+      felEl.hidden = false;
+      infoEl.textContent = '';
+      btn.disabled = false;
+    }
+  });
+
+  function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escAttr(s) { return String(s || '').replace(/"/g,'&quot;'); }
+})();
+  </script>
+</body>
+</html>

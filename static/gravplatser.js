@@ -26,6 +26,8 @@ let vertikalVy = true;
 /** true = bläddrar användares registreringar (admin); Föregående/Nästa utan kvarterbyten. */
 let granskaAnvandareMode = false;
 let granskaAnvandareId = null;
+let batchJobbMode = false;
+let batchJobbId = null;
 let currentGravplatsId = null;
 let lastInmatningGravplatsId = null;
 let inmatningData = null;
@@ -713,7 +715,7 @@ async function uppdateraVy(behallInmatningState = false) {
   const gp = gravplatserLista[idx];
   currentGravplatsId = gp.id;
   const mappNamn = gp.mapp_namn;
-  if (granskaAnvandareMode) {
+  if (granskaAnvandareMode || batchJobbMode) {
     valdKyrkogard = gp.kyrkogard || null;
     valdKvarter = gp.kvarter || null;
   }
@@ -727,7 +729,7 @@ async function uppdateraVy(behallInmatningState = false) {
   const paSistaGravplats = idx >= n - 1;
   const paForstaGravplats = idx <= 0;
 
-  if (granskaAnvandareMode) {
+  if (granskaAnvandareMode || batchJobbMode) {
     if (btnTillbaka) {
       btnTillbaka.disabled = paForstaGravplats;
       btnTillbaka.textContent = '← Föregående';
@@ -753,6 +755,9 @@ async function uppdateraVy(behallInmatningState = false) {
   if (granskaAnvandareMode && granskaAnvandareId) {
     fullUrl += '?granska_anvandare=' + encodeURIComponent(granskaAnvandareId);
     if (!vertikalVy) fullUrl += '&vy=horisontell';
+  } else if (batchJobbMode && batchJobbId) {
+    fullUrl += '?batch_jobb_id=' + encodeURIComponent(batchJobbId);
+    if (!vertikalVy) fullUrl += '&vy=horisontell';
   } else if (!vertikalVy) {
     fullUrl += '?vy=horisontell';
   }
@@ -764,6 +769,9 @@ async function uppdateraVy(behallInmatningState = false) {
   if (granskaInfoEl) {
     if (granskaAnvandareMode && n > 0) {
       granskaInfoEl.innerHTML = 'Granskar användares registreringar (' + (idx + 1) + ' av ' + n + '). <a href="/databasunderhall/granska-anvandare">Avsluta granskning</a>';
+      granskaInfoEl.hidden = false;
+    } else if (batchJobbMode && n > 0) {
+      granskaInfoEl.innerHTML = 'Granskar batch-jobb (' + (idx + 1) + ' av ' + n + '). <a href="/batch-claude">Avsluta granskning</a>';
       granskaInfoEl.hidden = false;
     } else {
       granskaInfoEl.hidden = true;
@@ -934,6 +942,53 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
     sektioner.forEach((s) => renderInmatningSektion(s));
   }
   uppdateraFardigtranskriberadKnapp();
+  if (batchJobbMode) await batchAutoLaddaClaude();
+}
+
+/**
+ * I batch-granskningsläge: gå automatiskt in i redigeringsläge och ladda in det sparade
+ * Claude-svaret. Om gravplatsen redan har inmatad data visas panelen för manuell
+ * bekräftelse; annars appliceras svaret direkt.
+ */
+async function batchAutoLaddaClaude() {
+  if (!batchJobbMode || currentGravplatsId == null) return;
+  const gpId = currentGravplatsId;
+
+  // Gå in i redigeringsläge
+  inmatningRedigerar = true;
+  const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
+  if (sparaWrap) sparaWrap.hidden = false;
+  const redigeraBtn = document.getElementById('gp-btn-redigera');
+  if (redigeraBtn) redigeraBtn.textContent = 'Sluta redigera gravplats';
+  uppdateraInmatningSparaKnapp();
+  const sektioner = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+  sektioner.forEach((s) => renderInmatningSektion(s));
+  if (currentExtramaterial.length > 0 && currentExtramaterialMapp) {
+    uppdateraExtramaterialSektion(currentExtramaterial, currentExtramaterialMapp);
+  }
+
+  // Hämta sparat Claude-svar
+  try {
+    const res = await fetch(`${API}/ocr/gravplats/${gpId}/svar`, { credentials: 'include' });
+    if (!res.ok || currentGravplatsId !== gpId) return;
+    const data = await res.json();
+    if (currentGravplatsId !== gpId) return;
+    sparatClaudeSvar = data;
+
+    const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
+    if (!inmatningHarNagonData()) {
+      // Ingen befintlig data – applicera direkt
+      prefillFranClaude(data.svar_json);
+      gpPlayPling();
+      if (data.ocr_kommentar && bannerEl) {
+        bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
+        bannerEl.hidden = false;
+      }
+    } else {
+      // Befintlig data finns – visa panel för manuell bekräftelse
+      visaSparatClaudeSvar(data);
+    }
+  } catch (e) {}
 }
 
 function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
@@ -2113,7 +2168,7 @@ document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', ()
   window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
-  if (granskaAnvandareMode) {
+  if (granskaAnvandareMode || batchJobbMode) {
     tillbaka();
     return;
   }
@@ -2125,7 +2180,7 @@ document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
   }
 });
 document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
-  if (granskaAnvandareMode) {
+  if (granskaAnvandareMode || batchJobbMode) {
     nasta();
     return;
   }
@@ -4606,6 +4661,41 @@ async function initFromUrl() {
       document.title = 'Gravplatser';
       applyVyFromUrl();
       return;
+    }
+  }
+
+  const batchJobbIdParam = params.get('batch_jobb_id');
+  if (parsed && batchJobbIdParam) {
+    await laddaTrad();
+    valdKyrkogard = parsed.kyrkogard;
+    valdKvarter = parsed.kvarter;
+    if (tradVy) tradVy.hidden = true;
+    if (innehall) innehall.hidden = false;
+    try {
+      const res = await fetch(`${API}/batch-claude/jobb/${encodeURIComponent(batchJobbIdParam)}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Kunde inte hämta batch-jobb');
+      const data = await res.json();
+      // Only include gravplatser with status 'klar' (have Claude responses)
+      const poster = (data.poster || []).filter(function(p) { return p.status === 'klar'; });
+      gravplatserLista = poster.map(function(p) {
+        return {
+          id: p.gravplats_id,
+          kyrkogard: p.kyrkogard,
+          kvarter: p.kvarter,
+          gravplatsnummer: p.gravplatsnummer,
+          mapp_namn: p.mapp_namn,
+        };
+      });
+      let idx = gravplatserLista.findIndex(function(g) { return g.kyrkogard === parsed.kyrkogard && g.kvarter === parsed.kvarter && String(g.gravplatsnummer) === String(parsed.gravplatsnummer); });
+      if (idx < 0) idx = 0;
+      currentIndex = idx;
+      batchJobbMode = true;
+      batchJobbId = batchJobbIdParam;
+      await uppdateraVy();
+      applyVyFromUrl();
+      return;
+    } catch(e) {
+      console.error('Batch-jobb-fel:', e);
     }
   }
 
