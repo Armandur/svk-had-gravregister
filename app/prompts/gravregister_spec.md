@@ -55,6 +55,7 @@ Om `Fr.`, `Fru`, `Hr.`, `Hr` eller `Herr` förekommer före namnet läggs det i 
 - `underhall_text` – Texten som är ifylld efter "Underhåll inbetalt för all framtid den". Om inget datum är ifyllt, lämna tomt.
 - `underhall_overstruket` – `true` om orden "för all framtid" är överstrukna.
 - `gravplats_nr` – Gravplatsnumret (ofta nere till vänster, t.ex. "24 Ser XXII"). Om ett nummer är överstruket och ersatt, använd det senaste. Notera det gamla i `kommentar`: `"Tidigare gravplats_nr: 24 Ser XXII"`.
+- `utfardat_den` – Datumet längst **nere till höger** på kortets framsida (inte texten "Utfärdat den" som är en etikett). Tolka formatet enligt datumreglerna nedan.
 
 ### gravsatta (lista, max 10 poster)
 Varje post:
@@ -84,10 +85,12 @@ Varje post:
 
 - `position` – löpande 1, 2, 3… baserat på ordningen på kortet (se **Icke-sekventiell ordning** nedan).
 - `ar_beteckning` – Sätt `true` om raden är en familjegravbeteckning (t.ex. "Molin Carl Familjegrav"). Då ska `efternamn` innehålla hela beteckningstexten och `fornamn` vara `""`.
-- `urna` – En av: `"urna"` | `"kista"` | `"okant"` | `""`.
+- `urna` – Sätt `"urna"` **endast** om ordet "urna" uttryckligen anges på raden. Sätt `"kista"` **endast** om ordet "kista" uttryckligen anges. I alla andra fall lämna som `""`. Använd **aldrig** `"okant"`.
 
 ### ocr_kommentar
 Notera **bara** saker som kan påverka datakvaliteten eller kräver manuell kontroll (t.ex. svårläst text, tvetydigt värde, ovanlig formatering). Lämna tom sträng om allt är tydligt. Kommentera inte tomma fält eller förtryckt text utan ifyllnad. Varje separat observation skrivs på **egen rad** (använd `\n` mellan punkterna).
+
+**Kommentera inte** rutinmässig datumtolkning – att `77.05.03` tolkats som `1977-05-03` eller att ett datum skrivits i ett visst format är inte en anmärkning. Kommentera bara datum om det är genuint oläsbart eller om tolkningsambivalensen kan leda till fel (t.ex. om det är oklart om `05.06` är maj eller juni).
 
 ---
 
@@ -106,7 +109,7 @@ Lagras som **sträng** i ett av tre format: `"YYYY"`, `"YYYY-MM"` eller `"YYYY-M
 
 ## Viktiga regler
 
-**Flicknamn:** `"Andersson Maja Kristina f. Winqvist"` → `fornamn: "Maja Kristina"`, `efternamn: "Andersson f. Winqvist"`. Flicknamnet läggs alltså i `efternamn`, inte i `kommentar`.
+**Flicknamn:** `"Andersson Maja Kristina f. Winqvist"` → `fornamn: "Maja Kristina"`, `efternamn: "Andersson f. Winqvist"`. Flicknamnet läggs alltså i `efternamn`, inte i `kommentar`. Det ska också alltid skrivas som `f.` och inte bara `f`.
 
 **Icke-sekventiell ordning:** Om kortets positioner inte är ifyllda i följd (t.ex. 1–3 ifyllda, 4–5 tomma, 6–7 ifyllda) numreras de faktiskt ifyllda löpande 1, 2, 3, 4… i utdatan. Det ursprungliga numret noteras i `kommentar`: `"Inför på gravplats nr 6"`.
 
