@@ -699,8 +699,6 @@ async function uppdateraVy(behallInmatningState = false) {
     if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
     const sparatPanelEmpty = document.getElementById('gp-claude-sparat-panel');
     if (sparatPanelEmpty) sparatPanelEmpty.hidden = true;
-    const laddaSparatBtnEmpty = document.getElementById('gp-claude-ladda-sparat-btn');
-    if (laddaSparatBtnEmpty) laddaSparatBtnEmpty.hidden = true;
     uppdateraInmatningSparaKnapp();
     currentExtramaterial = [];
     currentHalvorUrls = [];
@@ -927,8 +925,6 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
   const sparatPanel = document.getElementById('gp-claude-sparat-panel');
   if (sparatPanel) sparatPanel.hidden = true;
-  const laddaSparatBtn = document.getElementById('gp-claude-ladda-sparat-btn');
-  if (laddaSparatBtn) laddaSparatBtn.hidden = true;
   expandAllInmatningSektioner();
   uppdateraInmatningSparaKnapp();
   uppdateraInmatningRubrikCounts();
@@ -2968,8 +2964,12 @@ function oppnaSkissModal() {
         return;
       }
       modal.hidden = true;
+      const savedInmatning = inmatningData ? { ...inmatningData } : null;
       lastInmatningGravplatsId = null;
       await ensureInmatningData();
+      if (savedInmatning && inmatningData) {
+        Object.assign(inmatningData, { ...savedInmatning, skisser: inmatningData.skisser });
+      }
       renderInmatningSektion('skiss');
     };
     setAvbrytHandler();
@@ -3939,10 +3939,8 @@ function valideraAllaDatumFalt() {
 function hamtaSparatClaudeSvar() {
   if (currentGravplatsId == null) return;
   const panel = document.getElementById('gp-claude-sparat-panel');
-  const laddaBtn = document.getElementById('gp-claude-ladda-sparat-btn');
   sparatClaudeSvar = null;
   if (panel) panel.hidden = true;
-  if (laddaBtn) laddaBtn.hidden = true;
   fetch(`${API}/ocr/gravplats/${currentGravplatsId}/svar`, { credentials: 'include' })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
@@ -3953,26 +3951,27 @@ function hamtaSparatClaudeSvar() {
     .catch(function() {});
 }
 
+function formatOcrKommentar(text) {
+  if (!text) return '';
+  var rader = text.split('\n').map(function(r) { return r.trim(); }).filter(function(r) { return r.length > 0; });
+  if (rader.length === 0) return '';
+  if (rader.length === 1) return '<span>' + rader[0].replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</span>';
+  return '<ul style="margin:0.2rem 0 0 1.1rem;padding:0">' + rader.map(function(r) {
+    return '<li>' + r.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</li>';
+  }).join('') + '</ul>';
+}
+
 function visaSparatClaudeSvar(data) {
   if (!inmatningRedigerar) return;
   const panel = document.getElementById('gp-claude-sparat-panel');
   const metaEl = document.getElementById('gp-claude-sparat-meta');
   const kommentarEl = document.getElementById('gp-claude-sparat-kommentar');
-  const laddaBtn = document.getElementById('gp-claude-ladda-sparat-btn');
   if (!panel) return;
 
   var datum = data.skapad_den ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '';
   if (metaEl) metaEl.textContent = 'Sparat Claude-svar – ' + datum + (data.username ? ' av ' + data.username : '');
-  if (kommentarEl) {
-    if (data.ocr_kommentar) {
-      kommentarEl.textContent = data.ocr_kommentar;
-      kommentarEl.hidden = false;
-    } else {
-      kommentarEl.hidden = true;
-    }
-  }
+  if (kommentarEl) kommentarEl.hidden = true;
   panel.hidden = false;
-  if (laddaBtn) laddaBtn.hidden = false;
 }
 
 function byggDiff(claudeData) {
@@ -4409,7 +4408,7 @@ document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async fu
     prefillFranClaude(data);
     gpPlayPling();
     if (data.ocr_kommentar && bannerEl) {
-      bannerEl.textContent = data.ocr_kommentar;
+      bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
       bannerEl.hidden = false;
     }
     sparatClaudeSvar = { svar_json: data, ocr_kommentar: data.ocr_kommentar || '', skapad_den: new Date().toISOString(), username: '' };
@@ -4448,8 +4447,6 @@ function toggleRedigeraVy() {
     sparatClaudeSvar = null;
     const sparatPanel = document.getElementById('gp-claude-sparat-panel');
     if (sparatPanel) sparatPanel.hidden = true;
-    const laddaBtn2 = document.getElementById('gp-claude-ladda-sparat-btn');
-    if (laddaBtn2) laddaBtn2.hidden = true;
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Redigera gravplatsen';
     expandAllInmatningSektioner();
@@ -4491,24 +4488,12 @@ document.getElementById('gp-claude-applicera-btn')?.addEventListener('click', fu
     gpPlayPling();
     const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
     if (sparatClaudeSvar.ocr_kommentar && bannerEl) {
-      bannerEl.textContent = sparatClaudeSvar.ocr_kommentar;
+      bannerEl.innerHTML = formatOcrKommentar(sparatClaudeSvar.ocr_kommentar);
       bannerEl.hidden = false;
     }
   });
 });
 
-document.getElementById('gp-claude-ladda-sparat-btn')?.addEventListener('click', function() {
-  if (!sparatClaudeSvar) return;
-  visaDiffDialog(sparatClaudeSvar.svar_json, function() {
-    prefillFranClaude(sparatClaudeSvar.svar_json);
-    gpPlayPling();
-    const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
-    if (sparatClaudeSvar.ocr_kommentar && bannerEl) {
-      bannerEl.textContent = sparatClaudeSvar.ocr_kommentar;
-      bannerEl.hidden = false;
-    }
-  });
-});
 
 document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click', async () => {
   if (!inmatningRedigerar || currentGravplatsId == null || !inmatningData) return;
@@ -4649,7 +4634,7 @@ try {
         applyInmatningSectionsOrder(inmatningSectionsOrder);
       }
       if (me && !me.claude_tillganglig) {
-        ['gp-claude-ocr-btn', 'gp-claude-avbryt-btn', 'gp-claude-ladda-sparat-btn',
+        ['gp-claude-ocr-btn', 'gp-claude-avbryt-btn',
          'gp-claude-sparat-panel', 'gp-ocr-kommentar-banner', 'gp-claude-diff-dialog'].forEach(function(id) {
           var el = document.getElementById(id);
           if (el) el.remove();
