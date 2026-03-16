@@ -2,13 +2,22 @@
 
 Samma texter visas i appen under **Hjälp** (länk på startsidan). Filerna i denna mapp och specifikationen i repo-root används både på GitHub och i hjälpvyn.
 
+## För alla användare
+
 | Fil | Innehåll |
 |-----|----------|
-| [overview.md](overview.md) | Översikt, huvudfunktioner och kom igång |
+| [overview.md](overview.md) | Översikt, roller, huvudfunktioner och kom igång |
 | [bladdring.md](bladdring.md) | Bläddring och visning av gravplatser |
-| [inmatning.md](inmatning.md) | Inmatning och transkribering |
+| [inmatning.md](inmatning.md) | Inmatning, transkribering och OCR (Tesseract + Claude) |
+| [claude-ocr.md](claude-ocr.md) | Claude OCR – enskild körning och batch |
 | [extramaterial.md](extramaterial.md) | Extramaterial |
-| [grunddata.md](grunddata.md) | Grunddata och kyrkogårdar |
+| [grunddata.md](grunddata.md) | Kyrkogårdar, yrken och prestationer |
+
+## För administratörer och systemförvaltare
+
+| Fil | Innehåll |
+|-----|----------|
+| [admin.md](admin.md) | Användarhantering, grunddatakonfiguration, Claude-inställningar, säkerhetskopior, loggar och databasunderhåll |
 
 **Specifikation** (uppdelad i allmän modell och källdata-specifik):
 

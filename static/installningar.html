@@ -84,6 +84,13 @@
         </label>
         <span id="inst-claude-instans-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
       </div>
+      <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-claude-batch-block-toggle" />
+          Blockera enskild Claude-körning för gravar i pågående batch-jobb
+        </label>
+        <span id="inst-claude-batch-block-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
     </section>
 
     <section class="inst-sektion" aria-label="API-nycklar">
@@ -122,6 +129,8 @@
 
       const instansToggle = document.getElementById('inst-claude-instans-toggle');
       const instansStatus = document.getElementById('inst-claude-instans-status');
+      const batchBlockToggle = document.getElementById('inst-claude-batch-block-toggle');
+      const batchBlockStatus = document.getElementById('inst-claude-batch-block-status');
 
       instansToggle && instansToggle.addEventListener('change', async function() {
         const aktiv = instansToggle.checked;
@@ -142,6 +151,25 @@
         }
       });
 
+      batchBlockToggle && batchBlockToggle.addEventListener('change', async function() {
+        const blockera = batchBlockToggle.checked;
+        batchBlockStatus.textContent = 'Sparar…';
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ claude_batch_block_enskild: blockera }),
+          });
+          if (!res.ok) throw new Error();
+          batchBlockStatus.textContent = blockera ? 'Aktiverat.' : 'Inaktiverat.';
+          setTimeout(() => { batchBlockStatus.textContent = ''; }, 2500);
+        } catch (_) {
+          batchBlockStatus.textContent = 'Kunde inte spara.';
+          batchBlockToggle.checked = !blockera; // återställ
+        }
+      });
+
       async function laddaStatus() {
         try {
           const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
@@ -157,6 +185,7 @@
             taBortBtn.hidden = true;
           }
           if (instansToggle) instansToggle.checked = d.claude_aktiv_instans !== false;
+          if (batchBlockToggle) batchBlockToggle.checked = d.claude_batch_block_enskild !== false;
         } catch (_) {
           statusEl.textContent = 'Kunde inte hämta status.';
         }

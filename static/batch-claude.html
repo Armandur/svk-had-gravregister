@@ -42,6 +42,10 @@
     .batch-jobb-status-pausad { background: #fef9c3; color: #854d0e; }
     .batch-jobb-status-kor { background: #dbeafe; color: #1e40af; }
     .batch-jobb-status-avbruten { background: #fee2e2; color: #991b1b; }
+    .batch-jobb-status-vantar-svar { background: #ede9fe; color: #5b21b6; }
+    .batch-jobb-typ { font-size: 0.75rem; padding: 0.1rem 0.45rem; border-radius: 999px; font-weight: 600; margin-left: 0.1rem; }
+    .batch-jobb-typ-realtid { background: #dbeafe; color: #1e40af; }
+    .batch-jobb-typ-batch { background: #fef3c7; color: #92400e; }
     .batch-knappar { display: flex; gap: 0.4rem; flex-wrap: wrap; }
     .batch-jobb-fellog { width: 100%; margin-top: 0.5rem; }
     .batch-jobb-fellog summary { font-size: 0.85rem; color: #b91c1c; cursor: pointer; }
@@ -49,8 +53,42 @@
     .batch-jobb-fellog-rad { padding: 0.2rem 0; border-bottom: 1px solid #fee2e2; display: flex; gap: 0.5rem; }
     .batch-jobb-fellog-nr { color: #64748b; white-space: nowrap; }
     .batch-jobb-fellog-msg { color: #991b1b; }
+    .batch-jobb-poster { width: 100%; margin-top: 0.5rem; }
+    .batch-jobb-poster-tabell { width: 100%; border-collapse: collapse; font-size: 0.83rem; margin-top: 0.4rem; }
+    .batch-jobb-poster-tabell th { text-align: left; font-weight: 600; padding: 0.25rem 0.5rem; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+    .batch-jobb-poster-tabell td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    .batch-jobb-poster-tabell tr:last-child td { border-bottom: none; }
+    .batch-jobb-poster-tabell tbody tr:hover td { background: #f8fafc; }
+    .batch-post-status { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+    .batch-post-status-vantar { background: #f1f5f9; color: #475569; }
+    .batch-post-status-klar { background: #dcfce7; color: #166534; }
+    .batch-post-status-fel { background: #fee2e2; color: #991b1b; }
+    .batch-post-status-hoppad { background: #fef9c3; color: #854d0e; }
+    .batch-jobb-poster-paginering { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.83rem; }
+    .batch-jobb-poster-paginering button { padding: 0.2rem 0.65rem; font-size: 0.82rem; cursor: pointer; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; font-family: inherit; }
+    .batch-jobb-poster-paginering button:disabled { opacity: 0.4; cursor: default; }
+    .batch-jobb-poster-paginering .batch-poster-sidonr { color: #64748b; }
     #batch-aktiv-wrap { border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem 1.25rem; background: #eff6ff; }
     #batch-aktiv-namn { font-weight: 600; margin-bottom: 0.5rem; }
+    #batch-anthropic-wrap { border: 1px solid #c4b5fd; border-radius: 8px; padding: 1rem 1.25rem; background: #f5f3ff; }
+    #batch-anthropic-namn { font-weight: 600; margin-bottom: 0.4rem; }
+    .batch-anthropic-status { font-size: 0.9rem; color: #5b21b6; margin: 0.4rem 0; }
+    .batch-anthropic-spinner { display: inline-block; width: 0.9rem; height: 0.9rem; border: 2px solid #c4b5fd; border-top-color: #7c3aed; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.4rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Infobox om API-typ */
+    .batch-typ-info { border-radius: 6px; padding: 0.7rem 1rem; font-size: 0.88rem; margin: 0.75rem 0; display: flex; gap: 0.6rem; align-items: flex-start; }
+    .batch-typ-info-realtid { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .batch-typ-info-batch { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
+    .batch-typ-info-icon { font-size: 1.1rem; line-height: 1.4; flex-shrink: 0; }
+
+    /* Info-sektion om API-typerna */
+    .batch-forklaring { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.88rem; color: #334155; }
+    .batch-forklaring h3 { font-size: 0.95rem; margin: 0 0 0.6rem; color: #1e293b; }
+    .batch-forklaring table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
+    .batch-forklaring th { text-align: left; font-weight: 600; padding: 0.3rem 0.75rem; background: #f1f5f9; font-size: 0.83rem; }
+    .batch-forklaring td { padding: 0.3rem 0.75rem; border-top: 1px solid #e2e8f0; font-size: 0.83rem; vertical-align: top; }
+    .batch-forklaring td:first-child { font-weight: 500; white-space: nowrap; }
 
     /* Statistikstaplar (samma som startsidan) */
     .batch-stapel-wrap { margin: 0.75rem 0 0; }
@@ -79,6 +117,43 @@
     <h1>Batch Claude OCR</h1>
     <p style="color:#64748b;font-size:0.95rem">Kör Claude OCR automatiskt på ett urval gravplatser och granska sedan resultaten.</p>
 
+    <!-- Förklaring om de två API-lägena -->
+    <div class="batch-forklaring batch-avsnitt">
+      <h3>Två lägen beroende på urvalets storlek</h3>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Realtid (Messages API)</th>
+            <th>Batch API (Anthropic)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Storlek</td>
+            <td>Färre än 100 gravplatser</td>
+            <td>100 gravplatser eller fler</td>
+          </tr>
+          <tr>
+            <td>Svarstid</td>
+            <td>Resultat direkt – progress visas i realtid</td>
+            <td>Asynkront – vanligtvis 1–2 timmar, upp till 24 h</td>
+          </tr>
+          <tr>
+            <td>Kostnad</td>
+            <td>Normalpris + rabatt på systemprompten via prompt caching</td>
+            <td><strong>50 % lägre pris</strong> på alla tokens</td>
+          </tr>
+          <tr>
+            <td>Flöde</td>
+            <td>Körs direkt i webbläsaren, kan pausas</td>
+            <td>Skickas till Anthropic, kontrolleras med "Kontrollera status"-knappen</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Aktivt realtidsjobb -->
     <div class="batch-avsnitt" id="batch-aktiv-wrap" hidden>
       <div id="batch-aktiv-namn"></div>
       <div class="batch-progress-wrap">
@@ -101,6 +176,17 @@
       </div>
     </div>
 
+    <!-- Aktivt Anthropic Batch-jobb (skickar/väntar) -->
+    <div class="batch-avsnitt" id="batch-anthropic-wrap" hidden>
+      <div id="batch-anthropic-namn"></div>
+      <div class="batch-anthropic-status" id="batch-anthropic-status"></div>
+      <div class="batch-knappar" style="margin-top:0.75rem">
+        <button type="button" class="batch-btn batch-btn-sec" id="batch-anthropic-poll-btn" hidden>Kontrollera status</button>
+        <button type="button" class="batch-btn batch-btn-prim" id="batch-anthropic-granska-btn" hidden>Granska</button>
+      </div>
+      <div id="batch-anthropic-fel" class="batch-fel" hidden></div>
+    </div>
+
     <div class="batch-avsnitt">
       <h2>Skapa nytt jobb</h2>
 
@@ -118,12 +204,22 @@
         <span class="batch-rad-hint">Lämna tomt för alla gravplatser i urvalet</span>
       </div>
 
+      <!-- Dynamisk info om vilket API-läge som kommer användas -->
+      <div id="batch-typ-info" class="batch-typ-info batch-typ-info-realtid" style="display:none">
+        <span class="batch-typ-info-icon" id="batch-typ-info-icon"></span>
+        <span id="batch-typ-info-text"></span>
+      </div>
+
       <div id="batch-statistik-wrap" class="batch-stapel-wrap" hidden></div>
 
       <div class="batch-rad" style="margin-top:0.75rem">
         <label>Filter</label>
         <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-transkriberade" checked /> Hoppa över färdigtranskriberade</label>
         <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-korda" checked /> Hoppa över redan Claude-körda</label>
+      </div>
+      <div class="batch-rad">
+        <label>API-läge</label>
+        <label class="batch-label-check"><input type="checkbox" id="batch-tvinga-batch" /> Tvinga Batch API (för testning – använder Anthropics asynkrona kö oavsett antal)</label>
       </div>
       <div class="batch-rad">
         <label for="batch-namn">Namn (valfritt)</label>
@@ -137,7 +233,7 @@
     </div>
 
     <div class="batch-avsnitt">
-      <h2>Tidigare jobb</h2>
+      <h2>Pågående och tidigare jobb</h2>
       <div id="batch-jobb-tom" style="color:#64748b;font-size:0.95rem" hidden>Inga jobb ännu.</div>
       <ul class="batch-jobb-lista" id="batch-jobb-lista"></ul>
     </div>
@@ -146,11 +242,13 @@
   <script>
 (function() {
   const API = '/api';
+  const BATCH_GRANS = 100;  // måste spegla ANTHROPIC_BATCH_GRANS i main.py
   let aktivtJobbId = null;
   let aktivtJobbPausad = false;
   let aktivtJobbTotalt = 0;
   let aktivtAntal = 3;
   let statistikData = null;
+  let anthropicPollTimer = null;  // auto-poll timer för väntar_svar-jobb
 
   gpEnsureAuth().then(function(ok) {
     if (!ok) return;
@@ -224,7 +322,6 @@
     }
 
     if (valdKvarter) {
-      // Visa enskild kvarter per gravplats
       var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
       var kv = kg && (kg.kvarter || []).find(function(k) { return k.kvarter === valdKvarter; });
       if (kv) {
@@ -240,7 +337,6 @@
         html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + label + '</div><div class="batch-stapel">' + inner + '</div></div>';
       }
     } else if (valdKyrkogard) {
-      // Visa kvarter inom vald kyrkogård
       var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
       if (kg) {
         var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + Math.round((kg.fardiga / Math.max(kg.total,1)) * 100) + '%)</span>';
@@ -261,7 +357,6 @@
         });
       }
     } else {
-      // Visa alla kyrkogårdar
       kyrkogardar.forEach(function(kg, kgi) {
         var pct = Math.round((kg.fardiga / Math.max(kg.total,1)) * 100);
         var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + pct + '%)</span>';
@@ -273,6 +368,41 @@
     wrap.innerHTML = html;
     wrap.hidden = !html;
   }
+
+  /* ── Dynamisk typ-info vid skapande ─────────────────────────── */
+  function uppdateraTypInfo() {
+    const antalVal = document.getElementById('batch-antal').value;
+    const antal = antalVal ? parseInt(antalVal) : null;
+    const tvingas = document.getElementById('batch-tvinga-batch').checked;
+    const infoEl = document.getElementById('batch-typ-info');
+    const iconEl = document.getElementById('batch-typ-info-icon');
+    const textEl = document.getElementById('batch-typ-info-text');
+    const btnEl = document.getElementById('batch-skapa-btn');
+
+    const anvandBatch = tvingas || (antal !== null && !isNaN(antal) && antal >= BATCH_GRANS);
+
+    if (!tvingas && (antal === null || isNaN(antal))) {
+      infoEl.style.display = 'none';
+      btnEl.textContent = 'Skapa och kör';
+      return;
+    }
+    infoEl.style.display = 'flex';
+    if (!anvandBatch) {
+      infoEl.className = 'batch-typ-info batch-typ-info-realtid';
+      iconEl.textContent = '\u26A1';
+      textEl.innerHTML = '<strong>Realtid (Messages API)</strong> &ndash; ' + antal + ' gravplatser körs direkt med progress i realtid. Kan pausas när som helst.';
+      btnEl.textContent = 'Skapa och kör';
+    } else {
+      infoEl.className = 'batch-typ-info batch-typ-info-batch';
+      iconEl.textContent = '\u23F3';
+      const antalText = antal !== null && !isNaN(antal) ? antal + ' gravplatser' : 'Gravplatserna';
+      textEl.innerHTML = '<strong>Anthropic Batch API</strong> &ndash; ' + antalText + ' skickas till Anthropics asynkrona kötjänst. <strong>50&thinsp;% lägre kostnad</strong>, men resultaten kan dröja upp till 24 timmar (vanligtvis 1–2 h). Du kontrollerar statusen via knappen i jobblistan.' + (tvingas ? ' <em>(Batch tvingat via testläge)</em>' : '');
+      btnEl.textContent = 'Skapa och skicka till Anthropic';
+    }
+  }
+
+  document.getElementById('batch-antal').addEventListener('input', uppdateraTypInfo);
+  document.getElementById('batch-tvinga-batch').addEventListener('change', uppdateraTypInfo);
 
   /* ── Jobblistning ────────────────────────────────────────────── */
   async function laddaJobb() {
@@ -288,34 +418,83 @@
     const lista = document.getElementById('batch-jobb-lista');
     const tom = document.getElementById('batch-jobb-tom');
     lista.innerHTML = '';
+
+    // Rensa eventuell gammal auto-poll för anthropic-jobb
+    if (anthropicPollTimer) { clearInterval(anthropicPollTimer); anthropicPollTimer = null; }
+
     if (jobb.length === 0) { tom.hidden = false; return; }
     tom.hidden = true;
+
+    var harVantarSvar = false;
+
     jobb.forEach(function(j) {
       const li = document.createElement('li');
       li.className = 'batch-jobb-li';
       const datum = j.skapad_den ? new Date(j.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '';
-      const statusKlass = {'klar':'klar', 'pausad':'pausad', 'kör':'kor', 'avbruten':'avbruten'}[j.status] || 'klar';
+
+      const statusKlass = {
+        'klar': 'klar', 'pausad': 'pausad', 'kör': 'kor',
+        'avbruten': 'avbruten', 'väntar_svar': 'vantar-svar',
+      }[j.status] || 'klar';
+
+      const statusEtikett = {
+        'klar': 'klar', 'pausad': 'pausad', 'kör': 'kör',
+        'avbruten': 'avbruten', 'väntar_svar': 'väntar svar',
+      }[j.status] || j.status;
+
       const pct = j.totalt > 0 ? Math.round((j.klara / j.totalt) * 100) : 0;
       const harKlara = j.klara > 0;
-      // En knapp som varierar beroende på status: Återuppta (pausad) eller Stoppa (kör)
-      const statusKnapp = j.status === 'pausad'
-        ? '<button type="button" class="batch-btn batch-btn-sec batch-aterta-btn" data-id="' + j.id + '" data-totalt="' + j.totalt + '" data-namn="' + escAttr(j.namn) + '">Återuppta</button>'
-        : j.status === 'kör'
-          ? '<button type="button" class="batch-btn batch-btn-danger batch-stoppa-lista-btn" data-id="' + j.id + '">Stoppa</button>'
-          : '';
+      const arBatch = j.jobb_typ === 'anthropic_batch';
+
+      if (j.status === 'väntar_svar') harVantarSvar = true;
+
+      // Typ-badge
+      const typBadge = arBatch
+        ? '<span class="batch-jobb-typ batch-jobb-typ-batch" title="Asynkront via Anthropics Batch API – 50 % rabatt">Batch API</span>'
+        : '<span class="batch-jobb-typ batch-jobb-typ-realtid" title="Realtid via Messages API">Realtid</span>';
+
+      // Åtgärdsknappar – skiljer sig åt beroende på typ och status
+      let statusKnapp = '';
+      if (!arBatch) {
+        if (j.status === 'pausad') {
+          statusKnapp = '<button type="button" class="batch-btn batch-btn-sec batch-aterta-btn" data-id="' + j.id + '" data-totalt="' + j.totalt + '" data-namn="' + escAttr(j.namn) + '">Återuppta</button>';
+        } else if (j.status === 'kör') {
+          statusKnapp = '<button type="button" class="batch-btn batch-btn-danger batch-stoppa-lista-btn" data-id="' + j.id + '">Stoppa</button>';
+        }
+      } else {
+        if (j.status === 'väntar_svar') {
+          statusKnapp = '<button type="button" class="batch-btn batch-btn-sec batch-poll-btn" data-id="' + j.id + '" data-namn="' + escAttr(j.namn) + '" data-totalt="' + j.totalt + '">Kontrollera status</button>';
+        } else if (j.status === 'fel') {
+          statusKnapp = '<button type="button" class="batch-btn batch-btn-sec batch-forsok-igen-btn" data-id="' + j.id + '" data-namn="' + escAttr(j.namn) + '" data-totalt="' + j.totalt + '">Försök igen</button>';
+        }
+      }
+
       li.innerHTML =
-        '<span class="batch-jobb-namn">' + escHtml(j.namn || ('Jobb ' + j.id)) + '</span>' +
+        '<span class="batch-jobb-namn">' + escHtml(j.namn || ('Jobb ' + j.id)) + typBadge + '</span>' +
         '<span class="batch-jobb-info">' + datum + ' &nbsp;&middot;&nbsp; ' + j.klara + '/' + j.totalt + ' klara (' + pct + '%)' + (j.fel > 0 ? ' &nbsp;&middot;&nbsp; ' + j.fel + ' fel' : '') + '</span>' +
-        '<span class="batch-jobb-status batch-jobb-status-' + statusKlass + '">' + escHtml(j.status) + '</span>' +
+        '<span class="batch-jobb-status batch-jobb-status-' + statusKlass + '">' + escHtml(statusEtikett) + '</span>' +
         '<span class="batch-knappar">' +
         statusKnapp +
         (harKlara ? '<button type="button" class="batch-btn batch-btn-prim batch-granska-btn" data-id="' + j.id + '">Granska</button>' : '') +
         (j.fel > 0 ? '<button type="button" class="batch-btn batch-btn-sec batch-fellog-btn" data-id="' + j.id + '">Visa fel (' + j.fel + ')</button>' : '') +
+        '<button type="button" class="batch-btn batch-btn-sec batch-poster-btn" data-id="' + j.id + '" data-totalt="' + j.totalt + '">Visa gravplatser</button>' +
         '<button type="button" class="batch-btn batch-btn-danger batch-ta-bort-btn" data-id="' + j.id + '">Ta bort</button>' +
         '</span>' +
-        '<div class="batch-jobb-fellog" id="batch-fellog-' + j.id + '" hidden></div>';
+        '<div class="batch-jobb-fellog" id="batch-fellog-' + j.id + '" hidden></div>' +
+        '<div class="batch-jobb-poster" id="batch-poster-' + j.id + '" hidden></div>';
       lista.appendChild(li);
     });
+
+    // Auto-poll var 60:e sekund om det finns jobb som väntar på Anthropic-svar
+    if (harVantarSvar) {
+      anthropicPollTimer = setInterval(function() {
+        // Hitta alla jobb med status väntar_svar och poll dem tyst
+        document.querySelectorAll('.batch-poll-btn').forEach(function(btn) {
+          pollAnthropicJobb(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt), true);
+        });
+      }, 60000);
+    }
+
     lista.querySelectorAll('.batch-granska-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { oppnaGranskning(btn.dataset.id); });
     });
@@ -329,6 +508,16 @@
           await fetch(API + '/batch-claude/jobb/' + btn.dataset.id + '/avbryt', { method: 'POST', credentials: 'include' });
           laddaJobb();
         } catch(e) {}
+      });
+    });
+    lista.querySelectorAll('.batch-poll-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        pollAnthropicJobb(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt), false);
+      });
+    });
+    lista.querySelectorAll('.batch-forsok-igen-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        skickaAnthropicJobb(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt));
       });
     });
     lista.querySelectorAll('.batch-fellog-btn').forEach(function(btn) {
@@ -372,6 +561,65 @@
         } catch(e) {}
       });
     });
+    lista.querySelectorAll('.batch-poster-btn').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        const jobbId = btn.dataset.id;
+        const wrap = document.getElementById('batch-poster-' + jobbId);
+        if (!wrap) return;
+        if (!wrap.hidden) {
+          wrap.hidden = true;
+          btn.textContent = 'Visa gravplatser';
+          return;
+        }
+        btn.textContent = 'Dölj gravplatser';
+        await laddaPosterSida(jobbId, 1, wrap);
+      });
+    });
+  }
+
+  /* ── Gravplatslista per jobb ─────────────────────────────────── */
+  async function laddaPosterSida(jobbId, sida, wrap) {
+    wrap.innerHTML = '<p style="font-size:0.83rem;color:#64748b;margin:0.3rem 0">Laddar…</p>';
+    wrap.hidden = false;
+    try {
+      const res = await fetch(API + '/batch-claude/jobb/' + jobbId + '/poster?sida=' + sida + '&per_sida=25', { credentials: 'include' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      const statusEtikett = { 'väntar': 'väntar', 'klar': 'klar', 'fel': 'fel', 'hoppad': 'hoppad' };
+      const statusKlass = { 'väntar': 'vantar', 'klar': 'klar', 'fel': 'fel', 'hoppad': 'hoppad' };
+      var html = '<table class="batch-jobb-poster-tabell"><thead><tr>' +
+        '<th>#</th><th>Kyrkogård</th><th>Kvarter</th><th>Gravplatsnr</th><th>Status</th>' +
+        '</tr></thead><tbody>';
+      d.poster.forEach(function(p) {
+        var beteckning = [p.kyrkogard, p.kvarter, p.gravplatsnummer].filter(Boolean).join(' ') || String(p.gravplats_id);
+        var slug = encodeURIComponent(beteckning);
+        var statusk = statusKlass[p.status] || 'vantar';
+        var etikett = statusEtikett[p.status] || p.status;
+        var felTips = p.fel_meddelande ? ' title="' + escAttr(p.fel_meddelande) + '"' : '';
+        var href = '/gravplatser/' + slug;
+        html += '<tr style="cursor:pointer" onclick="window.open(\'' + href + '\', \'_blank\')">' +
+          '<td style="color:#94a3b8">' + escHtml(String(p.ordning + 1)) + '</td>' +
+          '<td>' + escHtml(p.kyrkogard || '–') + '</td>' +
+          '<td>' + escHtml(p.kvarter || '–') + '</td>' +
+          '<td>' + escHtml(p.gravplatsnummer || String(p.gravplats_id)) + '</td>' +
+          '<td' + felTips + '><span class="batch-post-status batch-post-status-' + statusk + '">' + escHtml(etikett) + '</span></td>' +
+          '</tr>';
+      });
+      html += '</tbody></table>';
+      html += '<div class="batch-jobb-poster-paginering">' +
+        '<button type="button" ' + (d.sida <= 1 ? 'disabled' : '') + ' data-jobb="' + jobbId + '" data-sida="' + (d.sida - 1) + '" class="batch-poster-navi">← Föregående</button>' +
+        '<span class="batch-poster-sidonr">Sida ' + d.sida + ' av ' + d.sidor + ' (' + d.totalt + ' gravplatser)</span>' +
+        '<button type="button" ' + (d.sida >= d.sidor ? 'disabled' : '') + ' data-jobb="' + jobbId + '" data-sida="' + (d.sida + 1) + '" class="batch-poster-navi">Nästa →</button>' +
+        '</div>';
+      wrap.innerHTML = html;
+      wrap.querySelectorAll('.batch-poster-navi').forEach(function(navBtn) {
+        navBtn.addEventListener('click', function() {
+          laddaPosterSida(navBtn.dataset.jobb, parseInt(navBtn.dataset.sida), wrap);
+        });
+      });
+    } catch(e) {
+      wrap.innerHTML = '<p style="font-size:0.85rem;color:#b91c1c;margin:0.3rem 0">Kunde inte hämta gravplatser: ' + escHtml(e.message || 'okänt fel') + '</p>';
+    }
   }
 
   /* ── Granskning ──────────────────────────────────────────────── */
@@ -387,7 +635,7 @@
     } catch(e) { alert('Fel: ' + (e.message || 'okänt')); }
   }
 
-  /* ── Körning ─────────────────────────────────────────────────── */
+  /* ── Realtidskörning ─────────────────────────────────────────── */
   function startaKorning(jobbId, namn, totalt) {
     aktivtJobbId = jobbId;
     aktivtJobbPausad = false;
@@ -400,6 +648,7 @@
     document.getElementById('batch-progress-fel').hidden = true;
     document.getElementById('batch-granska-aktiv-btn').hidden = true;
     document.getElementById('batch-pausa-btn').textContent = 'Pausa';
+    document.getElementById('batch-pausa-btn').disabled = false;
     wrap.hidden = false;
     wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     korNasta();
@@ -471,6 +720,111 @@
     if (id) oppnaGranskning(id);
   });
 
+  /* ── Anthropic Batch-flöde ───────────────────────────────────── */
+  let anthropicAktivtJobbId = null;
+
+  function visaAnthropicPanel(jobbId, namn) {
+    anthropicAktivtJobbId = jobbId;
+    const wrap = document.getElementById('batch-anthropic-wrap');
+    document.getElementById('batch-anthropic-namn').textContent = namn || ('Jobb ' + jobbId);
+    document.getElementById('batch-anthropic-fel').hidden = true;
+    document.getElementById('batch-anthropic-granska-btn').hidden = true;
+    document.getElementById('batch-anthropic-poll-btn').hidden = true;
+    wrap.hidden = false;
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function skickaAnthropicJobb(jobbId, namn, totalt) {
+    visaAnthropicPanel(jobbId, namn);
+    const statusEl = document.getElementById('batch-anthropic-status');
+    const felEl = document.getElementById('batch-anthropic-fel');
+    statusEl.innerHTML = '<span class="batch-anthropic-spinner"></span>Förbereder bilder och skickar ' + totalt + ' gravplatser till Anthropic\u2026 (kan ta upp till en minut)';
+
+    try {
+      const res = await fetch(API + '/batch-claude/jobb/' + jobbId + '/skicka-anthropic', {
+        method: 'POST', credentials: 'include',
+      });
+      const rawText = await res.text();
+      let data;
+      try { data = JSON.parse(rawText); } catch(e) {
+        throw new Error('Servern svarade med ogiltigt format (HTTP ' + res.status + '). Kontrollera serverloggen.');
+      }
+      if (!res.ok) throw new Error(data.detail || 'Kunde inte skicka till Anthropic');
+
+      statusEl.innerHTML = 'Skickat! ' + data.skickade + ' gravplatser bearbetas av Anthropic. Resultaten är klara om 1–2 timmar (upp till 24 h). Sidan uppdateras automatiskt var 60:e sekund.';
+      document.getElementById('batch-anthropic-poll-btn').hidden = false;
+      document.getElementById('batch-anthropic-poll-btn').dataset.id = jobbId;
+      document.getElementById('batch-anthropic-poll-btn').dataset.namn = namn || '';
+      document.getElementById('batch-anthropic-poll-btn').dataset.totalt = totalt;
+      laddaJobb();
+    } catch(e) {
+      statusEl.textContent = '';
+      felEl.textContent = e.message || 'Fel vid sändning';
+      felEl.hidden = false;
+      laddaJobb();
+    }
+  }
+
+  async function pollAnthropicJobb(jobbId, namn, totalt, tyst) {
+    if (!tyst) {
+      visaAnthropicPanel(jobbId, namn);
+      document.getElementById('batch-anthropic-status').innerHTML = '<span class="batch-anthropic-spinner"></span>Kontrollerar status hos Anthropic\u2026';
+    }
+    try {
+      const res = await fetch(API + '/batch-claude/jobb/' + jobbId + '/poll-anthropic', {
+        method: 'POST', credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Kontroll misslyckades');
+
+      if (data.processing_status === 'ended') {
+        if (!tyst) {
+          const statusEl = document.getElementById('batch-anthropic-status');
+          statusEl.innerHTML = 'Klart! ' + (data.klara || 0) + ' av ' + (data.totalt || totalt) + ' gravplatser bearbetade.' + (data.fel > 0 ? ' ' + data.fel + ' fel.' : '');
+          if (data.klara > 0) {
+            document.getElementById('batch-anthropic-granska-btn').hidden = false;
+            document.getElementById('batch-anthropic-granska-btn').dataset.id = jobbId;
+          }
+          document.getElementById('batch-anthropic-poll-btn').hidden = true;
+        }
+        laddaJobb();
+        laddaStatistik();
+      } else {
+        const rc = data.request_counts || {};
+        const bearbetat = (rc.succeeded || 0) + (rc.errored || 0) + (rc.canceled || 0) + (rc.expired || 0);
+        const totaltRc = (rc.processing || 0) + bearbetat;
+        if (!tyst) {
+          document.getElementById('batch-anthropic-status').innerHTML =
+            'Anthropic bearbetar fortfarande\u2026 ' +
+            (totaltRc > 0 ? bearbetat + ' av ' + totaltRc + ' klara.' : '') +
+            ' Prova igen om ett tag.';
+          const pollBtnEl = document.getElementById('batch-anthropic-poll-btn');
+          pollBtnEl.hidden = false;
+          pollBtnEl.dataset.id = jobbId;
+          pollBtnEl.dataset.namn = namn || '';
+          pollBtnEl.dataset.totalt = totalt;
+        }
+      }
+    } catch(e) {
+      if (!tyst) {
+        document.getElementById('batch-anthropic-fel').textContent = e.message || 'Fel';
+        document.getElementById('batch-anthropic-fel').hidden = false;
+        document.getElementById('batch-anthropic-status').textContent = '';
+      }
+    }
+  }
+
+  document.getElementById('batch-anthropic-poll-btn').addEventListener('click', function() {
+    const id = parseInt(this.dataset.id);
+    pollAnthropicJobb(id, this.dataset.namn, parseInt(this.dataset.totalt || 0), false);
+  });
+
+  document.getElementById('batch-anthropic-granska-btn').addEventListener('click', function() {
+    const id = this.dataset.id;
+    if (id) oppnaGranskning(id);
+  });
+
+  /* ── Skapa jobb ──────────────────────────────────────────────── */
   document.getElementById('batch-skapa-btn').addEventListener('click', async function() {
     const btn = this;
     const felEl = document.getElementById('batch-skapa-fel');
@@ -486,6 +840,7 @@
       antal: antalVal ? parseInt(antalVal) : null,
       ej_transkriberade: document.getElementById('batch-filter-ej-transkriberade').checked,
       ej_claude_korda: document.getElementById('batch-filter-ej-korda').checked,
+      tvinga_batch: document.getElementById('batch-tvinga-batch').checked,
     };
     try {
       const res = await fetch(API + '/batch-claude/jobb', {
@@ -498,7 +853,12 @@
       infoEl.textContent = data.totalt + ' gravplatser valda';
       btn.disabled = false;
       await laddaJobb();
-      startaKorning(data.id, data.namn, data.totalt);
+
+      if (data.jobb_typ === 'anthropic_batch') {
+        skickaAnthropicJobb(data.id, data.namn, data.totalt);
+      } else {
+        startaKorning(data.id, data.namn, data.totalt);
+      }
     } catch(e) {
       felEl.textContent = e.message || 'Fel';
       felEl.hidden = false;

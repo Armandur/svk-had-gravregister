@@ -40,6 +40,7 @@ Sätt miljövariabeln `DATA_DIR` till sökvägen till denna katalog i containern
 | `DATABASE_PATH` | Full sökväg till SQLite-databasfilen (default i image: `/data/gravregister.db`). Sätt t.ex. `/data/gravregister-dev.db` i en dev-container för att använda samma källdatamapp men en egen databas. |
 | `SESSION_SECRET_KEY` | Hemlig nyckel för session-cookies. **Sätt i produktion** (t.ex. lång slumpsträng). |
 | `ADMIN_INITIAL_PASSWORD` | Valfritt: om databasen är tom skapas användaren `admin` med detta lösenord vid första start. |
+| `ANTHROPIC_API_KEY` | Valfritt: Anthropic API-nyckel för Claude OCR. Har prioritet framför nyckeln som sparas i `api_keys.json` via Inställningar i appen. |
 
 ## Exempel: docker run
 

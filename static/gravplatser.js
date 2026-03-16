@@ -35,6 +35,8 @@ let inmatningDirty = false;
 /** true = visa formulärfält (redigera), false = visa läsvy (layout). */
 let inmatningRedigerar = false;
 let sparatClaudeSvar = null; // { svar_json, ocr_kommentar, skapad_den, username }
+let _gravplatsHarBatchPagar = false;   // om aktuell gravplats är i pågående batch
+let _claudeBatchBlockEnskild = true;   // inställning: blockera enskild körning
 /** Ordning på inmatningssektioner för aktuell användare. */
 let inmatningSectionsOrder = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
 
@@ -670,12 +672,54 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
 }
 
 /**
+ * Hämtar info om huruvida gravplatsen ingår i ett pågående batch-jobb och visar banner om så är fallet.
+ */
+async function hamtaBatchPagarInfo() {
+  _gravplatsHarBatchPagar = false;
+  const banner = document.getElementById('gp-batch-pagar-banner');
+  if (banner) { banner.hidden = true; banner.innerHTML = ''; }
+  if (currentGravplatsId == null) return;
+  try {
+    const [batchRes, settingsRes] = await Promise.all([
+      fetch(`${API}/batch-claude/gravplats/${currentGravplatsId}/pagar`, { credentials: 'include' }),
+      fetch(`${API}/settings/api-keys`, { credentials: 'include' }),
+    ]);
+    if (settingsRes.ok) {
+      const s = await settingsRes.json();
+      _claudeBatchBlockEnskild = s.claude_batch_block_enskild !== false;
+    }
+    if (!batchRes.ok) return;
+    const data = await batchRes.json();
+    if (!data.pagar) return;
+    _gravplatsHarBatchPagar = true;
+    // Uppdatera knappens tillstånd
+    const ocrBtn = document.getElementById('gp-claude-ocr-btn');
+    if (ocrBtn) ocrBtn.disabled = _claudeBatchBlockEnskild;
+    if (banner) {
+      const datum = data.skapad_den
+        ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
+        : '';
+      const jobbLank = document.createElement('a');
+      jobbLank.href = '/batch-claude';
+      jobbLank.textContent = data.jobb_namn || ('Jobb ' + data.jobb_id);
+      banner.appendChild(document.createTextNode('Gravplatsen ingår i batch-jobbet '));
+      banner.appendChild(jobbLank);
+      if (datum) banner.appendChild(document.createTextNode(` (startat ${datum})`));
+      banner.appendChild(document.createTextNode(' och väntar på svar från Anthropic.'));
+      banner.hidden = false;
+    }
+  } catch (_) { /* nätverksfel – visa ingenting */ }
+}
+
+/**
  * Uppdaterar vy (halvor, extramaterial, dolda).
  * @param {boolean} [behallInmatningState=false] – om true nollställs inte inmatningsläge (redigera/osparat); använd vid t.ex. Dölj/Visa igen.
  */
 async function uppdateraVy(behallInmatningState = false) {
   const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
   if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
+  const batchBanner = document.getElementById('gp-batch-pagar-banner');
+  if (batchBanner) { batchBanner.hidden = true; batchBanner.innerHTML = ''; }
   const rubrikEl = document.getElementById('gp-rubrik');
   const halvorEl = document.getElementById('gp-halvor');
   const btnTillbaka = document.getElementById('gp-btn-tillbaka');
@@ -4442,6 +4486,9 @@ let _claudeOcrAbortController = null;
 
 document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async function () {
   if (currentGravplatsId == null) return;
+  if (_gravplatsHarBatchPagar && !_claudeBatchBlockEnskild) {
+    if (!confirm('Gravplatsen ingår i ett pågående batch-jobb. Vill du ändå köra en enskild körning nu?')) return;
+  }
   const btn = document.getElementById('gp-claude-ocr-btn');
   const avbrytBtn = document.getElementById('gp-claude-avbryt-btn');
   const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
@@ -4504,6 +4551,11 @@ function toggleRedigeraVy() {
     sparatClaudeSvar = null;
     const sparatPanel = document.getElementById('gp-claude-sparat-panel');
     if (sparatPanel) sparatPanel.hidden = true;
+    const batchBannerClose = document.getElementById('gp-batch-pagar-banner');
+    if (batchBannerClose) { batchBannerClose.hidden = true; batchBannerClose.innerHTML = ''; }
+    _gravplatsHarBatchPagar = false;
+    const ocrBtnClose = document.getElementById('gp-claude-ocr-btn');
+    if (ocrBtnClose) ocrBtnClose.disabled = false;
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Redigera gravplatsen';
     expandAllInmatningSektioner();
@@ -4520,6 +4572,7 @@ function toggleRedigeraVy() {
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = false;
     hamtaSparatClaudeSvar();
+    hamtaBatchPagarInfo();
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Sluta redigera gravplats';
     expandAllInmatningSektioner();
