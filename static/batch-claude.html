@@ -203,6 +203,10 @@
         <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-korda" checked /> Hoppa över redan Claude-körda</label>
       </div>
       <div class="batch-rad">
+        <label>API-läge</label>
+        <label class="batch-label-check"><input type="checkbox" id="batch-tvinga-batch" /> Tvinga Batch API (för testning – använder Anthropics asynkrona kö oavsett antal)</label>
+      </div>
+      <div class="batch-rad">
         <label for="batch-namn">Namn (valfritt)</label>
         <input type="text" id="batch-namn" placeholder="T.ex. Kvarter XII mars 2026" style="min-width:20rem" />
       </div>
@@ -354,19 +358,21 @@
   function uppdateraTypInfo() {
     const antalVal = document.getElementById('batch-antal').value;
     const antal = antalVal ? parseInt(antalVal) : null;
+    const tvingas = document.getElementById('batch-tvinga-batch').checked;
     const infoEl = document.getElementById('batch-typ-info');
     const iconEl = document.getElementById('batch-typ-info-icon');
     const textEl = document.getElementById('batch-typ-info-text');
     const btnEl = document.getElementById('batch-skapa-btn');
 
-    if (antal === null || isNaN(antal)) {
-      // Ingen specifik siffra – kan bli antingen; dölj info
+    const anvandBatch = tvingas || (antal !== null && !isNaN(antal) && antal >= BATCH_GRANS);
+
+    if (!tvingas && (antal === null || isNaN(antal))) {
       infoEl.style.display = 'none';
       btnEl.textContent = 'Skapa och kör';
       return;
     }
     infoEl.style.display = 'flex';
-    if (antal < BATCH_GRANS) {
+    if (!anvandBatch) {
       infoEl.className = 'batch-typ-info batch-typ-info-realtid';
       iconEl.textContent = '\u26A1';
       textEl.innerHTML = '<strong>Realtid (Messages API)</strong> &ndash; ' + antal + ' gravplatser körs direkt med progress i realtid. Kan pausas när som helst.';
@@ -374,12 +380,14 @@
     } else {
       infoEl.className = 'batch-typ-info batch-typ-info-batch';
       iconEl.textContent = '\u23F3';
-      textEl.innerHTML = '<strong>Anthropic Batch API</strong> &ndash; ' + antal + ' gravplatser skickas till Anthropics asynkrona kötjänst. <strong>50&thinsp;% lägre kostnad</strong>, men resultaten kan dröja upp till 24 timmar (vanligtvis 1–2 h). Du kontrollerar statusen via knappen i jobblistan.';
+      const antalText = antal !== null && !isNaN(antal) ? antal + ' gravplatser' : 'Gravplatserna';
+      textEl.innerHTML = '<strong>Anthropic Batch API</strong> &ndash; ' + antalText + ' skickas till Anthropics asynkrona kötjänst. <strong>50&thinsp;% lägre kostnad</strong>, men resultaten kan dröja upp till 24 timmar (vanligtvis 1–2 h). Du kontrollerar statusen via knappen i jobblistan.' + (tvingas ? ' <em>(Batch tvingat via testläge)</em>' : '');
       btnEl.textContent = 'Skapa och skicka till Anthropic';
     }
   }
 
   document.getElementById('batch-antal').addEventListener('input', uppdateraTypInfo);
+  document.getElementById('batch-tvinga-batch').addEventListener('change', uppdateraTypInfo);
 
   /* ── Jobblistning ────────────────────────────────────────────── */
   async function laddaJobb() {
@@ -441,6 +449,8 @@
       } else {
         if (j.status === 'väntar_svar') {
           statusKnapp = '<button type="button" class="batch-btn batch-btn-sec batch-poll-btn" data-id="' + j.id + '" data-namn="' + escAttr(j.namn) + '" data-totalt="' + j.totalt + '">Kontrollera status</button>';
+        } else if (j.status === 'fel') {
+          statusKnapp = '<button type="button" class="batch-btn batch-btn-sec batch-forsok-igen-btn" data-id="' + j.id + '" data-namn="' + escAttr(j.namn) + '" data-totalt="' + j.totalt + '">Försök igen</button>';
         }
       }
 
@@ -486,6 +496,11 @@
     lista.querySelectorAll('.batch-poll-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         pollAnthropicJobb(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt), false);
+      });
+    });
+    lista.querySelectorAll('.batch-forsok-igen-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        skickaAnthropicJobb(parseInt(btn.dataset.id), btn.dataset.namn, parseInt(btn.dataset.totalt));
       });
     });
     lista.querySelectorAll('.batch-fellog-btn').forEach(function(btn) {
@@ -653,7 +668,11 @@
       const res = await fetch(API + '/batch-claude/jobb/' + jobbId + '/skicka-anthropic', {
         method: 'POST', credentials: 'include',
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data;
+      try { data = JSON.parse(rawText); } catch(e) {
+        throw new Error('Servern svarade med ogiltigt format (HTTP ' + res.status + '). Kontrollera serverloggen.');
+      }
       if (!res.ok) throw new Error(data.detail || 'Kunde inte skicka till Anthropic');
 
       statusEl.innerHTML = 'Skickat! ' + data.skickade + ' gravplatser bearbetas av Anthropic. Resultaten är klara om 1–2 timmar (upp till 24 h). Sidan uppdateras automatiskt var 60:e sekund.';
@@ -741,6 +760,7 @@
       antal: antalVal ? parseInt(antalVal) : null,
       ej_transkriberade: document.getElementById('batch-filter-ej-transkriberade').checked,
       ej_claude_korda: document.getElementById('batch-filter-ej-korda').checked,
+      tvinga_batch: document.getElementById('batch-tvinga-batch').checked,
     };
     try {
       const res = await fetch(API + '/batch-claude/jobb', {

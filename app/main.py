@@ -4951,6 +4951,20 @@ def _collect_png_images_for_gravplats(gravplats_id: int, db: Session) -> list[by
     return png_images
 
 
+def _collect_all_batch_images_sync(post_data: list[tuple[int, int]]) -> dict[int, list[bytes]]:
+    """Samla PNG-bilder för en lista (post_id, gravplats_id) i en bakgrundstråd med egen DB-session.
+    Körs via asyncio.to_thread så att händelseloopen inte blockeras under bildrendering.
+    """
+    result: dict[int, list[bytes]] = {}
+    with SessionLocal() as db:
+        for post_id, gravplats_id in post_data:
+            try:
+                result[post_id] = _collect_png_images_for_gravplats(gravplats_id, db)
+            except Exception:
+                result[post_id] = []
+    return result
+
+
 def _require_claude_batch(current_user: User) -> None:
     """Kasta 403 om batch-Claude inte är tillgängligt för användaren."""
     if not _get_claude_instans_aktiv():
@@ -4970,6 +4984,7 @@ class BatchJobbBody(BaseModel):
     antal: int | None = None  # max antal gravplatser att inkludera (None = alla)
     ej_transkriberade: bool = True
     ej_claude_korda: bool = True
+    tvinga_batch: bool = False  # om True: använd Anthropic Batch API oavsett antal
 
 
 @app.post("/api/batch-claude/jobb")
@@ -5019,7 +5034,7 @@ async def skapa_batch_jobb(
         + " " + datetime.now().strftime("%Y-%m-%d")
     ).strip()
 
-    jobb_typ = "anthropic_batch" if len(gravplatser) >= ANTHROPIC_BATCH_GRANS else "realtid"
+    jobb_typ = "anthropic_batch" if (len(gravplatser) >= ANTHROPIC_BATCH_GRANS or body.tvinga_batch) else "realtid"
     jobb = ClaudeBatchJobb(
         user_id=current_user.id,
         namn=namn,
@@ -5131,6 +5146,15 @@ async def batch_skicka_anthropic(
     if not api_key:
         raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas")
 
+    # Återställ eventuella hoppad-poster från ett tidigare misslyckat försök
+    if jobb.status == "fel":
+        db.query(ClaudeBatchJobbPost).filter(
+            ClaudeBatchJobbPost.jobb_id == jobb_id,
+            ClaudeBatchJobbPost.status == "hoppad",
+        ).update({"status": "väntar", "fel_meddelande": None})
+        jobb.fel = 0
+        db.commit()
+
     poster = (
         db.query(ClaudeBatchJobbPost)
         .filter(ClaudeBatchJobbPost.jobb_id == jobb_id, ClaudeBatchJobbPost.status == "väntar")
@@ -5143,12 +5167,13 @@ async def batch_skicka_anthropic(
     jobb.status = "kör"
     db.commit()
 
+    # Rendera bilder i bakgrundstråd – blockar inte händelseloopen
+    post_data = [(p.id, p.gravplats_id) for p in poster]
+    images_by_post_id = await asyncio.to_thread(_collect_all_batch_images_sync, post_data)
+
     batch_requests = []
     for post in poster:
-        try:
-            png_images = _collect_png_images_for_gravplats(post.gravplats_id, db)
-        except Exception:
-            png_images = []
+        png_images = images_by_post_id.get(post.id, [])
         if not png_images:
             post.status = "hoppad"
             post.fel_meddelande = "Inga bilder hittades för gravplatsen"
