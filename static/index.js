@@ -65,7 +65,7 @@
     return div.innerHTML;
   }
 
-  function visaForslag(lista) {
+  function visaForslag(lista, query) {
     sokForslag = lista || [];
     aktivIndex = -1;
     listEl.innerHTML = '';
@@ -87,6 +87,18 @@
       li.addEventListener('click', function () { valjForslag(i); });
       listEl.appendChild(li);
     });
+    if (sokForslag.length >= 25) {
+      const li = document.createElement('li');
+      li.className = 'startsida-sok-item startsida-sok-visa-fler';
+      li.role = 'option';
+      const q = query || (inputEl ? inputEl.value.trim() : '');
+      const a = document.createElement('a');
+      a.href = '/gravplatser-sok?q=' + encodeURIComponent(q);
+      a.textContent = 'Visa fler träffar →';
+      li.appendChild(a);
+      li.addEventListener('click', function () { window.location.href = a.href; });
+      listEl.appendChild(li);
+    }
   }
 
   function valjForslag(index) {
@@ -115,8 +127,8 @@
     }
     fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' })
       .then(function (res) { return res.json(); })
-      .then(function (data) { visaForslag(data.gravplatser || []); })
-      .catch(function () { visaForslag([]); });
+      .then(function (data) { visaForslag(data.gravplatser || [], t); })
+      .catch(function () { visaForslag([], t); });
   }
 
   function onInput() {

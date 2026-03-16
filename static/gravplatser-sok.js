@@ -794,3 +794,13 @@ function arFranDatumstr(s) {
   const m = t.match(/^(\d{4})/);
   return m ? parseInt(m[1], 10) : null;
 }
+
+// Pre-fyll sökinput från URL-param ?q=
+(function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const q = urlParams.get('q');
+  if (q && inputEl) {
+    inputEl.value = q;
+    hamtaForslag(q);
+  }
+})();
