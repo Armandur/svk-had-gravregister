@@ -22,17 +22,21 @@ Namn, adress, födelse (år, månad, dag, föd.nr), död (år, månad, dag, död
 
 Endast de fält som ofta förekommer i källmaterialet är obligatoriska; övriga kan lämnas tomma.
 
-## Claude OCR – automatisk transkribering
-
-När du är i redigeringsläge visas knappen **Hämta från Claude** i formulärrubriken. Klicka på den för att skicka alla tre bilddelar för den aktuella gravplatsen till Claude (AI), som analyserar bilderna och föreslår ifyllnad av alla fält. Resultatet visas i en panel under knappen; klicka **Ladda in i formuläret** för att se en diff med föreslagna ändringar och sedan applicera dem. Du kan alltid kontrollera och justera värdena innan du sparar.
-
-> **OBS:** Claude-funktioner kräver att en Anthropic API-nyckel är konfigurerad och att Claude-åtkomst är aktiverad för instansen (görs under **Inställningar**). Om gravplatsen ingår i ett pågående batch-jobb kan enskild körning vara blockerad (inställning under **Inställningar → Claude OCR**).
-
-Se även [Claude OCR – enskild och batch](claude-ocr.md) för detaljer om batch-körning.
-
 ## OCR-hjälp (fältmarkering)
 
-Du kan också markera ett område direkt på den visade PDF-delen så fylls motsvarande fält i. Du kan välja "Efternamn först" / "Förnamn först" och "f. (född)" (namn som ogift) för namn, samt "Adress" för att fylla gatuadress, postnummer och postort från en adressrad.
+Du kan markera ett område direkt på den visade PDF-delen så fylls motsvarande fält i. Textextrahering sker med **Tesseract.js** (version 4, svenska + engelska) som laddas och körs direkt i din webbläsare – ingen data skickas till någon extern tjänst och det krävs ingen API-nyckel.
+
+Du kan välja "Efternamn först" / "Förnamn först" och "f. (född)" (namn som ogift) för namn, samt "Adress" för att fylla gatuadress, postnummer och postort från en adressrad.
+
+> **Tips:** Eftersom Tesseract är en generell OCR-motor (till skillnad från Claude som förstår dokumentets struktur) kan extraherad text ibland behöva rättas. Läs alltid igenom förslaget och korrigera stavning, siffror och bindestreck innan du sparar – var extra noggrann med namn, datum och adresser.
+
+## Claude OCR – automatisk transkribering (valfritt)
+
+Om Claude-åtkomst är aktiverad av administratören visas knappen **Hämta från Claude** i formulärrubriken när du är i redigeringsläge. Klicka på den för att skicka alla tre bilddelar till Claude (AI), som analyserar bilderna och föreslår ifyllnad av alla fält. Resultatet visas i en panel; klicka **Ladda in i formuläret** för att se en diff med föreslagna ändringar och sedan applicera dem. Du kan alltid kontrollera och justera värdena innan du sparar.
+
+> Om gravplatsen ingår i ett pågående batch-jobb kan enskild körning vara blockerad – en lila banner visas i så fall i redigeringsläge.
+
+Se [Claude OCR – enskild och batch](claude-ocr.md) för mer information. Admins hittar inställningar i [administratörsdokumentationen](admin.md).
 
 ## Kommentarer
 
