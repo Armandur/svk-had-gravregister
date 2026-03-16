@@ -28,10 +28,14 @@ async def list_loggar_gravplatser(
     limit: int = 500,
     offset: int = 0,
     anvandare: str | None = None,
+    gravplats_id: int | None = None,
+    gravplats: str | None = None,
 ):
     """
     Lista redigeringslogg för gravplatser – kronologisk ordning (senaste först). Endast admin.
     anvandare: filtrera på användarnamn (delsträng).
+    gravplats_id: filtrera på specifik gravplats (exakt ID).
+    gravplats: filtrera på gravplatsidentifierare (delsträng på fullständigt, t.ex. "HKG A 12").
     """
     q = (
         db.query(GravplatsRedigeringslogg, Gravplats, MappConfig.namn, User.username)
@@ -41,6 +45,13 @@ async def list_loggar_gravplatser(
     )
     if anvandare and anvandare.strip():
         q = q.filter(User.username.ilike("%" + anvandare.strip() + "%"))
+    if gravplats_id is not None:
+        q = q.filter(GravplatsRedigeringslogg.gravplats_id == gravplats_id)
+    if gravplats and gravplats.strip():
+        sok = "%" + gravplats.strip() + "%"
+        q = q.filter(
+            (Gravplats.kyrkogard + " " + Gravplats.kvarter + " " + Gravplats.gravplatsnummer).ilike(sok)
+        )
     total = q.count()
     rows = (
         q.order_by(GravplatsRedigeringslogg.edited_at.desc())

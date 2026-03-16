@@ -11,7 +11,7 @@
     .loggar-sida a { color: var(--accent, #2563eb); text-decoration: none; }
     .loggar-sida a:hover { text-decoration: underline; }
     .loggar-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; flex-wrap: wrap; }
     .loggar-filter input { padding: 0.4rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; width: 12rem; box-sizing: border-box; }
     .loggar-filter input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
     .loggar-filter button { padding: 0.4rem 0.75rem; font-size: 0.95rem; cursor: pointer; background: var(--accent, #2563eb); color: #fff; border: none; border-radius: 6px; }
@@ -41,6 +41,7 @@
       <p class="loggar-info" id="loggar-info">Här visas sparade ändringar av gravplatser, senaste först. Klicka på en gravplats för att öppna den.</p>
       <div class="loggar-filter">
         <label>Filtrera på användare <input type="text" id="loggar-filter-anvandare" placeholder="t.ex. användarnamn" /></label>
+        <label>Filtrera på gravplats <input type="text" id="loggar-filter-gravplats" placeholder="t.ex. HKG A 12" /></label>
         <button type="button" id="loggar-filter-btn">Filtrera</button>
         <button type="button" id="loggar-rensa-btn">Rensa filter</button>
       </div>
@@ -73,6 +74,8 @@
       let currentOffset = 0;
       let totalCount = 0;
       let filterAnvandare = '';
+      let filterGravplatsId = null;
+      let filterGravplats = '';
 
       const innehall = document.getElementById('loggar-innehall');
       const ingen = document.getElementById('loggar-ingen');
@@ -83,6 +86,7 @@
       const prevBtn = document.getElementById('loggar-prev');
       const nextBtn = document.getElementById('loggar-next');
       const filterInput = document.getElementById('loggar-filter-anvandare');
+      const filterGravplatsInput = document.getElementById('loggar-filter-gravplats');
       const filterBtn = document.getElementById('loggar-filter-btn');
       const rensaBtn = document.getElementById('loggar-rensa-btn');
 
@@ -107,6 +111,8 @@
         params.set('limit', String(PAGE_SIZE));
         params.set('offset', String(currentOffset));
         if (filterAnvandare) params.set('anvandare', filterAnvandare);
+        if (filterGravplatsId != null) params.set('gravplats_id', String(filterGravplatsId));
+        else if (filterGravplats) params.set('gravplats', filterGravplats);
 
         fetch(API + '/loggar/gravplatser?' + params.toString(), { credentials: 'include' })
           .then(function(res) {
@@ -154,12 +160,17 @@
 
       if (filterBtn) filterBtn.addEventListener('click', function() {
         filterAnvandare = (filterInput && filterInput.value) ? filterInput.value.trim() : '';
+        filterGravplatsId = null;
+        filterGravplats = (filterGravplatsInput && filterGravplatsInput.value) ? filterGravplatsInput.value.trim() : '';
         currentOffset = 0;
         laddaLoggar();
       });
       if (rensaBtn) rensaBtn.addEventListener('click', function() {
         filterAnvandare = '';
+        filterGravplatsId = null;
+        filterGravplats = '';
         if (filterInput) filterInput.value = '';
+        if (filterGravplatsInput) filterGravplatsInput.value = '';
         currentOffset = 0;
         laddaLoggar();
       });
@@ -175,6 +186,11 @@
       });
 
       (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var gpIdParam = urlParams.get('gravplats_id');
+        if (gpIdParam && !isNaN(parseInt(gpIdParam, 10))) {
+          filterGravplatsId = parseInt(gpIdParam, 10);
+        }
         laddaLoggar();
       });
     })();

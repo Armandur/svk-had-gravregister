@@ -25,6 +25,8 @@ let visarHelaSidor = false;
 let vertikalVy = true;
 /** true = bläddrar användares registreringar (admin); Föregående/Nästa utan kvarterbyten. */
 let granskaAnvandareMode = false;
+/** true om inloggad användare är admin – sätts vid auth-init. */
+let currentUserIsAdmin = false;
 let granskaAnvandareId = null;
 let batchJobbMode = false;
 let batchJobbId = null;
@@ -4181,6 +4183,66 @@ function visaDiffDialog(claudeData, onApplicera) {
   dialog.showModal();
 }
 
+/** Öppna historik-modal och hämta redigeringshistorik för aktuell gravplats. */
+async function oppnaHistorikModal() {
+  if (!currentUserIsAdmin || currentGravplatsId == null) return;
+  const modal = document.getElementById('gp-historik-modal');
+  if (!modal) return;
+
+  const rubrik = document.getElementById('gp-historik-modal-rubrik');
+  const laddar = document.getElementById('gp-historik-laddar');
+  const tabell = document.getElementById('gp-historik-tabell');
+  const tbody = document.getElementById('gp-historik-tbody');
+  const tom = document.getElementById('gp-historik-tom');
+  const fel = document.getElementById('gp-historik-fel');
+  const loggLank = document.getElementById('gp-historik-logg-lank');
+
+  if (rubrik) rubrik.textContent = 'Redigeringshistorik' + (currentGravplatsId ? '' : '');
+  if (laddar) laddar.hidden = false;
+  if (tabell) tabell.hidden = true;
+  if (tom) tom.hidden = true;
+  if (fel) { fel.hidden = true; fel.textContent = ''; }
+  if (tbody) tbody.innerHTML = '';
+  if (loggLank) loggLank.href = '/loggar?gravplats_id=' + currentGravplatsId;
+
+  modal.showModal();
+
+  try {
+    const res = await fetch(`${API}/loggar/gravplatser?gravplats_id=${currentGravplatsId}&limit=50`, { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const loggar = data.loggar || [];
+    if (laddar) laddar.hidden = true;
+    if (loggar.length === 0) {
+      if (tom) tom.hidden = false;
+    } else {
+      loggar.forEach(function(r) {
+        const tr = document.createElement('tr');
+        const datum = document.createElement('td');
+        const anvandare = document.createElement('td');
+        datum.style.whiteSpace = 'nowrap';
+        datum.textContent = r.edited_at ? new Date(r.edited_at).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '–';
+        anvandare.textContent = r.username || '–';
+        tr.appendChild(datum);
+        tr.appendChild(anvandare);
+        tbody.appendChild(tr);
+      });
+      if (tabell) tabell.hidden = false;
+    }
+  } catch (e) {
+    if (laddar) laddar.hidden = true;
+    if (fel) { fel.textContent = 'Kunde inte hämta historik: ' + (e.message || 'nätverksfel'); fel.hidden = false; }
+  }
+}
+
+document.getElementById('gp-btn-historik')?.addEventListener('click', oppnaHistorikModal);
+document.getElementById('gp-historik-modal-stang')?.addEventListener('click', function() {
+  document.getElementById('gp-historik-modal')?.close();
+});
+document.getElementById('gp-historik-modal')?.addEventListener('click', function(e) {
+  if (e.target === e.currentTarget) e.currentTarget.close();
+});
+
 /**
  * Fyll i formuläret med data från Claude OCR-svar.
  * Ersätter inmatningData och ritar om alla öppna sektioner.
@@ -4810,6 +4872,11 @@ try {
           var el = document.getElementById(id);
           if (el) el.remove();
         });
+      }
+      if (me && me.is_admin) {
+        currentUserIsAdmin = true;
+        const historikBtn = document.getElementById('gp-btn-historik');
+        if (historikBtn) historikBtn.hidden = false;
       }
     })
     .catch(() => {

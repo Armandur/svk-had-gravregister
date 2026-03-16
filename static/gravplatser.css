@@ -801,6 +801,19 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   filter: brightness(1.1);
 }
 
+.gp-inmatning-btn-historik {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.9rem;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gp-inmatning-btn-historik:hover {
+  background: #e2e8f0;
+}
+
 /* Senast redigerad – samma rad som gravplatsnummer, längst till höger */
 .gp-senast-redigerad {
   margin: 0;
@@ -1973,6 +1986,76 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 #gp-claude-diff-applicera:hover { background: #1d4ed8; }
 #gp-claude-diff-avbryt { background: #f1f5f9; }
 #gp-claude-diff-avbryt:hover { background: #e2e8f0; }
+
+/* Redigeringshistorik-modal */
+.gp-historik-modal {
+  max-width: 28rem;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.gp-historik-modal::backdrop {
+  background: rgba(0,0,0,0.35);
+}
+.gp-historik-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+.gp-historik-modal-rubrik {
+  margin: 0;
+  font-size: 1rem;
+}
+.gp-historik-modal-stang {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #64748b;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+.gp-historik-modal-stang:hover { background: #f1f5f9; }
+.gp-historik-modal-innehall {
+  max-height: 20rem;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+.gp-historik-laddar { color: #64748b; font-style: italic; font-size: 0.9rem; margin: 0; }
+.gp-historik-tom { color: #64748b; font-style: italic; font-size: 0.9rem; margin: 0; }
+.gp-historik-fel { color: #b91c1c; font-size: 0.9rem; margin: 0; }
+.gp-historik-tabell {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.gp-historik-tabell th,
+.gp-historik-tabell td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #f1f5f9;
+}
+.gp-historik-tabell th {
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+.gp-historik-tabell tbody tr:last-child td { border-bottom: none; }
+.gp-historik-tabell tbody tr:hover { background: #f8fafc; }
+.gp-historik-modal-footer {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.75rem;
+  font-size: 0.88rem;
+}
+.gp-historik-logg-lank {
+  color: var(--accent, #2563eb);
+  text-decoration: none;
+}
+.gp-historik-logg-lank:hover { text-decoration: underline; }
 
 /* Rapportutskrift-modal */
 .gp-rapport-modal {
