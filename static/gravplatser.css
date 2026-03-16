@@ -1873,6 +1873,25 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   font-size: 0.9rem;
   color: #92400e;
 }
+.gp-batch-pagar-banner {
+  margin: 0.5rem 0 0.2rem;
+  padding: 0.5rem 0.85rem;
+  background: #f5f3ff;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: #4c1d95;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.gp-batch-pagar-banner a {
+  color: #6d28d9;
+  font-weight: 600;
+  text-decoration: none;
+}
+.gp-batch-pagar-banner a:hover { text-decoration: underline; }
 .gp-claude-sparat-panel {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
