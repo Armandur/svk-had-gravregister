@@ -14,6 +14,6 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 8 | Prestanda i achievements.py – SQL-queries i loopar | Kod | ✅ Klar |
 | 9 | Claude-priser konfigurerbart via env-variabel (constants.py) | Kod | ✅ Klar |
 | 10 | Tillgänglighet (ARIA) i OCR-läget | UX | ✅ Klar |
-| 11 | Dra-och-släpp för formulärordning | UX | ⬜ |
+| 11 | Dra-och-släpp för formulärordning | UX | ✅ Klar |
 | 12 | Samla globala variabler i state-objekt i gravplatser.js | Kod | ⬜ |
 | 13 | Se över tangentbordskommandon – konflikter och täckning (t.ex. modalers effekt på globala genvägar) | UX | ⬜ |
