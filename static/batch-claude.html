@@ -722,7 +722,11 @@
             'Anthropic bearbetar fortfarande\u2026 ' +
             (totaltRc > 0 ? bearbetat + ' av ' + totaltRc + ' klara.' : '') +
             ' Prova igen om ett tag.';
-          document.getElementById('batch-anthropic-poll-btn').hidden = false;
+          const pollBtnEl = document.getElementById('batch-anthropic-poll-btn');
+          pollBtnEl.hidden = false;
+          pollBtnEl.dataset.id = jobbId;
+          pollBtnEl.dataset.namn = namn || '';
+          pollBtnEl.dataset.totalt = totalt;
         }
       }
     } catch(e) {
