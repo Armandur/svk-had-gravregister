@@ -239,7 +239,14 @@ async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Dep
         height=max(0, min(1, body.height)),
         sort_order=sort_order,
     )
+    now_iso = datetime.now(timezone.utc).isoformat()
     db.add(s)
+    db.add(GravplatsRedigeringslogg(
+        gravplats_id=gravplats_id,
+        user_id=current_user.id,
+        edited_at=now_iso,
+        inmatning_snapshot=json.dumps({"_skiss_event": "tillagd"}),
+    ))
     db.commit()
     db.refresh(s)
     return {
@@ -283,6 +290,13 @@ async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(g
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Skissen hittades inte")
+    now_iso = datetime.now(timezone.utc).isoformat()
     db.delete(row)
+    db.add(GravplatsRedigeringslogg(
+        gravplats_id=gravplats_id,
+        user_id=current_user.id,
+        edited_at=now_iso,
+        inmatning_snapshot=json.dumps({"_skiss_event": "bortagen"}),
+    ))
     db.commit()
     return {"ok": True}

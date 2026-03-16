@@ -4304,6 +4304,39 @@ async function oppnaHistorikModal() {
         tHead.innerHTML = '<th scope="col">Datum och tid</th><th scope="col">Användare</th>' +
           (harSnapshots ? '<th scope="col">Ändringar</th>' : '');
       }
+      // Helper: find the next regular (non-skiss-event) snapshot entry at index > i
+      function finnNastaRegular(i) {
+        for (let j = i + 1; j < loggar.length; j++) {
+          const snap = loggar[j].inmatning_snapshot;
+          if (snap && !snap._skiss_event) return j;
+        }
+        return -1;
+      }
+
+      function byggChipDetaljer(diffData, colSpan) {
+        const detaljTd = document.createElement('td');
+        detaljTd.colSpan = colSpan;
+        if (diffData && diffData.items.length > 0) {
+          const ul = document.createElement('ul');
+          ul.className = 'gp-historik-andring-lista';
+          diffData.items.forEach(function(item) {
+            const li = document.createElement('li');
+            const chip = document.createElement('span');
+            chip.className = 'gp-historik-chip gp-historik-chip-' + item.typ;
+            chip.textContent = item.text;
+            li.appendChild(chip);
+            ul.appendChild(li);
+          });
+          detaljTd.appendChild(ul);
+        } else {
+          const ingen = document.createElement('span');
+          ingen.className = 'gp-historik-chip-ingen';
+          ingen.textContent = 'Inga detaljerade ändringar registrerades';
+          detaljTd.appendChild(ingen);
+        }
+        return detaljTd;
+      }
+
       let expandCounter = 0;
       loggar.forEach(function(r, i) {
         const tr = document.createElement('tr');
@@ -4316,10 +4349,22 @@ async function oppnaHistorikModal() {
         tr.appendChild(anvandare);
         if (harSnapshots) {
           const andringarTd = document.createElement('td');
-          const harForegaende = r.inmatning_snapshot && i < loggar.length - 1 && loggar[i + 1].inmatning_snapshot;
-          const arForsta = r.inmatning_snapshot && i === loggar.length - 1;
+          const skissEvent = r.inmatning_snapshot && r.inmatning_snapshot._skiss_event;
+          if (skissEvent) {
+            // Skiss-händelse – enkel chip-rad, ej expanderbar
+            const chip = document.createElement('span');
+            chip.className = 'gp-historik-chip ' + (skissEvent === 'tillagd' ? 'gp-historik-chip-tillagg' : 'gp-historik-chip-borttagning');
+            chip.textContent = skissEvent === 'tillagd' ? 'Skiss tillagd' : 'Skiss borttagen';
+            andringarTd.appendChild(chip);
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            return;
+          }
+          const nastaRegularIdx = finnNastaRegular(i);
+          const harForegaende = r.inmatning_snapshot && nastaRegularIdx !== -1;
+          const arForsta = r.inmatning_snapshot && nastaRegularIdx === -1;
           if (harForegaende) {
-            const diffData = _historikDiffData(r.inmatning_snapshot, loggar[i + 1].inmatning_snapshot);
+            const diffData = _historikDiffData(r.inmatning_snapshot, loggar[nastaRegularIdx].inmatning_snapshot);
             const detaljId = 'gp-historik-detalj-' + (expandCounter++);
             tr.classList.add('gp-historik-rad-expanderbar');
             tr.setAttribute('aria-expanded', 'false');
@@ -4334,32 +4379,11 @@ async function oppnaHistorikModal() {
             samm.textContent = diffData ? diffData.sammanfattning : 'Inga ändringar';
             andringarTd.appendChild(samm);
             andringarTd.appendChild(chevron);
-            // Detail row
             const detaljTr = document.createElement('tr');
             detaljTr.id = detaljId;
             detaljTr.className = 'gp-historik-detalj-rad';
             detaljTr.hidden = true;
-            const detaljTd = document.createElement('td');
-            detaljTd.colSpan = 3;
-            if (diffData && diffData.items.length > 0) {
-              const ul = document.createElement('ul');
-              ul.className = 'gp-historik-andring-lista';
-              diffData.items.forEach(function(item) {
-                const li = document.createElement('li');
-                const chip = document.createElement('span');
-                chip.className = 'gp-historik-chip gp-historik-chip-' + item.typ;
-                chip.textContent = item.text;
-                li.appendChild(chip);
-                ul.appendChild(li);
-              });
-              detaljTd.appendChild(ul);
-            } else {
-              const ingen = document.createElement('span');
-              ingen.className = 'gp-historik-chip-ingen';
-              ingen.textContent = 'Inga detaljerade ändringar registrerades';
-              detaljTd.appendChild(ingen);
-            }
-            detaljTr.appendChild(detaljTd);
+            detaljTr.appendChild(byggChipDetaljer(diffData, 3));
             function toggleExpand() {
               const expanded = tr.getAttribute('aria-expanded') === 'true';
               tr.setAttribute('aria-expanded', expanded ? 'false' : 'true');
