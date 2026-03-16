@@ -212,6 +212,7 @@
         if (!kyrkogard) return;
         var params = new URLSearchParams();
         params.set('kyrkogard', kyrkogard);
+        gotoBtn.disabled = true;
         fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
           .then(function (res) {
             if (res.status === 404) {
@@ -229,6 +230,9 @@
           })
           .catch(function (err) {
             alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          })
+          .finally(function () {
+            gotoBtn.disabled = false;
           });
         return;
       }
@@ -242,6 +246,7 @@
         var params = new URLSearchParams();
         params.set('kyrkogard', kyrkogard);
         params.set('kvarter', kvarter);
+        gotoKvarter.disabled = true;
         fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
           .then(function (res) {
             if (res.status === 404) {
@@ -259,6 +264,9 @@
           })
           .catch(function (err) {
             alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          })
+          .finally(function () {
+            gotoKvarter.disabled = false;
           });
         return;
       }

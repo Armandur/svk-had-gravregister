@@ -907,6 +907,7 @@ async function uppdateraVy(behallInmatningState = false) {
         const segmentIndex = btn.dataset.segmentIndex != null ? parseInt(btn.dataset.segmentIndex, 10) : null;
         const halva = btn.dataset.halva;
         if (isNaN(contentSida) || (segmentIndex == null && !halva) || currentGravplatsId == null) return;
+        btn.disabled = true;
         try {
           const body = { content_sida: contentSida };
           if (segmentIndex != null) body.segment_index = segmentIndex;
@@ -920,6 +921,7 @@ async function uppdateraVy(behallInmatningState = false) {
           if (!res.ok) throw new Error('Kunde inte uppdatera');
           await uppdateraVy(true);
         } catch (err) {
+          btn.disabled = false;
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
       });
@@ -1094,6 +1096,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
       const emId = btn.dataset.emId;
       const redanHalva = btn.dataset.redanHalva === '1';
       if (!emId || !currentExtramaterialMapp) return;
+      btn.disabled = true;
       try {
         const res = await fetch(`${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/extramaterial/${emId}`, {
           method: 'PATCH',
@@ -1104,6 +1107,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
         if (!res.ok) throw new Error('Kunde inte uppdatera');
         await uppdateraVy(true);
       } catch (err) {
+        btn.disabled = false;
         alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
       }
     });
@@ -1172,6 +1176,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
         const contentSida = parseInt(btn.dataset.contentSida, 10);
         const halva = btn.dataset.halva;
         if (isNaN(contentSida) || !halva || currentGravplatsId == null) return;
+        btn.disabled = true;
         try {
           const res = await fetch(
             `${API}/gravplats/${currentGravplatsId}/dold-halva?content_sida=${contentSida}&halva=${encodeURIComponent(halva)}`,
@@ -1180,11 +1185,13 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           if (!res.ok) throw new Error('Kunde inte uppdatera');
           await uppdateraVy(true);
         } catch (err) {
+          btn.disabled = false;
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
       } else {
         const emId = btn.dataset.emId;
         if (!emId || !currentExtramaterialMapp) return;
+        btn.disabled = true;
         try {
           const res = await fetch(`${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/extramaterial/${emId}`, {
             method: 'PATCH',
@@ -1195,6 +1202,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           if (!res.ok) throw new Error('Kunde inte uppdatera');
           await uppdateraVy(true);
         } catch (err) {
+          btn.disabled = false;
           alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
         }
       }
@@ -3054,12 +3062,19 @@ function oppnaSkissModal() {
         width: currentRect.w,
         height: currentRect.h,
       };
-      const res = await fetch(`${API}/gravplats/${currentGravplatsId}/skisser`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        credentials: 'include',
-      });
+      const sparaBtn = document.getElementById('gp-skiss-spara');
+      if (sparaBtn) sparaBtn.disabled = true;
+      let res;
+      try {
+        res = await fetch(`${API}/gravplats/${currentGravplatsId}/skisser`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          credentials: 'include',
+        });
+      } finally {
+        if (sparaBtn) sparaBtn.disabled = false;
+      }
       if (!res.ok) {
         alert('Kunde inte spara skiss.');
         return;
@@ -3397,18 +3412,21 @@ function renderInmatningSektion(sektion) {
     });
     bindSkissDragDrop(listEl);
     innehall.querySelectorAll('.gp-skiss-ta-bort').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const rad = btn.closest('.gp-skiss-rad');
         const id = rad?.dataset.skissId;
         if (id && currentGravplatsId != null) {
-          fetch(`${API}/gravplats/${currentGravplatsId}/skisser/${id}`, { method: 'DELETE', credentials: 'include' })
-            .then((res) => {
-              if (res.ok) {
-                lastInmatningGravplatsId = null;
-                return ensureInmatningData();
-              }
-            })
-            .then((ok) => { if (ok) renderInmatningSektion('skiss'); });
+          btn.disabled = true;
+          try {
+            const res = await fetch(`${API}/gravplats/${currentGravplatsId}/skisser/${id}`, { method: 'DELETE', credentials: 'include' });
+            if (res.ok) {
+              lastInmatningGravplatsId = null;
+              await ensureInmatningData();
+              renderInmatningSektion('skiss');
+            }
+          } finally {
+            btn.disabled = false;
+          }
         }
       });
     });
@@ -4257,6 +4275,8 @@ async function sparaInmatning() {
   if (!valideraAllaDatumFalt()) return;
   const payload = samlaInmatningData();
   if (!payload) return;
+  const sparaKnapp = document.getElementById('gp-inmatning-spara');
+  if (sparaKnapp) sparaKnapp.disabled = true;
   let achievementsBefore = null;
   try {
     const beforeRes = await fetch(`${API}/me/achievements`, { credentials: 'include' });
@@ -4296,6 +4316,8 @@ async function sparaInmatning() {
     visaSparToasts(achievementsBefore, data);
   } catch (e) {
     visaSparStatus('Kunde inte spara: ' + e.message, false);
+  } finally {
+    uppdateraInmatningSparaKnapp();
   }
 }
 
@@ -4609,6 +4631,8 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
   if (!inmatningRedigerar || currentGravplatsId == null || !inmatningData) return;
   inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
   uppdateraFardigtranskriberadKnapp();
+  const fardigBtn = document.getElementById('gp-btn-fardigtranskriberad');
+  if (fardigBtn) fardigBtn.disabled = true;
 
   let achievementsBefore = null;
   try {
@@ -4618,7 +4642,7 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
 
   await ensureInmatningData();
   const payload = samlaInmatningData();
-  if (!payload) return;
+  if (!payload) { if (fardigBtn) fardigBtn.disabled = false; return; }
   try {
     const res = await fetch(`${API}/gravplats/${currentGravplatsId}/inmatning`, {
       method: 'PUT',
@@ -4655,6 +4679,8 @@ document.getElementById('gp-btn-fardigtranskriberad')?.addEventListener('click',
     inmatningData.fardigtranskriberad = !inmatningData.fardigtranskriberad;
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Kunde inte spara: ' + (e && e.message ? e.message : 'okänt fel'), false);
+  } finally {
+    uppdateraFardigtranskriberadKnapp();
   }
 });
 
