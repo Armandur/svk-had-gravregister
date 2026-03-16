@@ -181,6 +181,17 @@ async function oppnaHistorikModal() {
           const arForsta = r.inmatning_snapshot && nastaRegularIdx === -1;
           if (harForegaende) {
             const diffData = _historikDiffData(r.inmatning_snapshot, loggar[nastaRegularIdx].inmatning_snapshot);
+            // Färdigtranskriberad-händelse – enkel chip-rad, ej expanderbar
+            if (diffData && diffData.items.length === 1 &&
+                (diffData.items[0].text === 'Markerad som färdigtranskriberad' || diffData.items[0].text === 'Avmarkerad som färdigtranskriberad')) {
+              const chip = document.createElement('span');
+              chip.className = 'gp-historik-chip gp-historik-chip-' + diffData.items[0].typ;
+              chip.textContent = diffData.items[0].text;
+              andringarTd.appendChild(chip);
+              tr.appendChild(andringarTd);
+              tbody.appendChild(tr);
+              return;
+            }
             const detaljId = 'gp-historik-detalj-' + (expandCounter++);
             tr.classList.add('gp-historik-rad-expanderbar');
             tr.setAttribute('aria-expanded', 'false');

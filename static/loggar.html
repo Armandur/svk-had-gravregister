@@ -281,9 +281,21 @@
 
           var idx = loggar.indexOf(r);
           var nastaIdx = r.inmatning_snapshot ? finnNastaRegular(idx) : -1;
+          var d = (nastaIdx !== -1 && r.inmatning_snapshot) ? diffData(r.inmatning_snapshot, loggar[nastaIdx].inmatning_snapshot) : null;
+
+          // Färdigtranskriberad-händelse – enkel chip-rad, ej expanderbar
+          if (d && d.items.length === 1 &&
+              (d.items[0].text === 'Markerad som färdigtranskriberad' || d.items[0].text === 'Avmarkerad som färdigtranskriberad')) {
+            var chip = document.createElement('span');
+            chip.className = 'loggar-chip loggar-chip-' + d.items[0].typ;
+            chip.textContent = d.items[0].text;
+            andringarTd.appendChild(chip);
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            return;
+          }
 
           if (nastaIdx !== -1) {
-            var d = diffData(r.inmatning_snapshot, loggar[nastaIdx].inmatning_snapshot);
             var detaljId = 'loggar-detalj-' + (expandCounter++);
             tr.classList.add('loggar-rad-expanderbar');
             tr.setAttribute('aria-expanded', 'false');
