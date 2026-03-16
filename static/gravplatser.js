@@ -4183,42 +4183,88 @@ function visaDiffDialog(claudeData, onApplicera) {
   dialog.showModal();
 }
 
-const _HISTORIK_FALT = {
-  storlek: 'Storlek', underhall_text: 'Underhållstext', underhall_overstruket: 'Underhåll överstruket',
-  gravrattstid: 'Gravrattstid', monument: 'Monument', gravens_utformning: 'Gravens utformning',
-  karta_nr: 'Kartnr', gravbrev_nr: 'Gravbrevnr', utfordat_den: 'Utfärdat den',
-  kommentar: 'Kommentar', fardigtranskriberad: 'Färdigtranskriberad',
-};
-
-function _historikDiffText(ny, gammal) {
+/**
+ * Beräknar diff mellan två inmatningssnapshots.
+ * Returnerar { items: [{typ, text}], sammanfattning } där typ är 'andring'|'tillagg'|'borttagning'.
+ */
+function _historikDiffData(ny, gammal) {
   if (!ny || !gammal) return null;
-  const rader = [];
-  for (const [key, etikett] of Object.entries(_HISTORIK_FALT)) {
-    const a = gammal[key] ?? null, b = ny[key] ?? null;
-    const aStr = a === null || a === '' ? null : String(a);
-    const bStr = b === null || b === '' ? null : String(b);
-    if (aStr !== bStr) {
-      if (!aStr) rader.push('+ ' + etikett + ': ' + bStr);
-      else if (!bStr) rader.push('– ' + etikett + ' borttagen');
-      else rader.push(etikett + ': ' + aStr + ' → ' + bStr);
+  const items = [];
+
+  // Skalära textfält
+  const SKALARER = {
+    storlek: 'Storlek', underhall_text: 'Underhållstext',
+    gravrattstid: 'Gravrattstid', monument: 'Monument',
+    gravens_utformning: 'Gravens utformning', karta_nr: 'Kartnr',
+    gravbrev_nr: 'Gravbrevnr', utfordat_den: 'Utfärdat den', kommentar: 'Kommentar',
+  };
+  for (const [key, etikett] of Object.entries(SKALARER)) {
+    const a = (gammal[key] ?? '').toString().trim();
+    const b = (ny[key] ?? '').toString().trim();
+    if (a !== b) {
+      if (!a) items.push({ typ: 'tillagg', text: etikett + ': ' + b });
+      else if (!b) items.push({ typ: 'borttagning', text: etikett + ' borttagen' });
+      else items.push({ typ: 'andring', text: etikett + ': ' + a + ' → ' + b });
     }
   }
-  function namnInnehavare(x) { return ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?'; }
+
+  // Booleanska fält med läsbar svenska
+  if ((!!ny.fardigtranskriberad) !== (!!gammal.fardigtranskriberad)) {
+    if (ny.fardigtranskriberad) items.push({ typ: 'tillagg', text: 'Markerad som färdigtranskriberad' });
+    else items.push({ typ: 'borttagning', text: 'Avmarkerad som färdigtranskriberad' });
+  }
+  if ((!!ny.underhall_overstruket) !== (!!gammal.underhall_overstruket)) {
+    if (ny.underhall_overstruket) items.push({ typ: 'andring', text: 'Underhåll markerat som överstruket' });
+    else items.push({ typ: 'andring', text: 'Underhåll – överstruket avmarkerat' });
+  }
+
+  // Djupjämförelse av listfält: detekterar tillagda, borttagna och ändrade poster
+  function namnKey(x) { return ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?'; }
+  function diffListaDjup(nylista, gamallista, namnFn, etikett, extraFalt) {
+    const gaMap = new Map((gamallista || []).map((x) => [namnFn(x), x]));
+    const naMap = new Map((nylista || []).map((x) => [namnFn(x), x]));
+    for (const [n] of naMap) if (!gaMap.has(n)) items.push({ typ: 'tillagg', text: etikett + ' tillagd: ' + n });
+    for (const [n] of gaMap) if (!naMap.has(n)) items.push({ typ: 'borttagning', text: etikett + ' borttagen: ' + n });
+    for (const [n, nyX] of naMap) {
+      if (!gaMap.has(n)) continue;
+      const gaX = gaMap.get(n);
+      for (const [falt, faltEtikett] of Object.entries(extraFalt)) {
+        const a = (gaX[falt] ?? '').toString().trim();
+        const b = (nyX[falt] ?? '').toString().trim();
+        if (a !== b) {
+          if (!a) items.push({ typ: 'tillagg', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + b });
+          else if (!b) items.push({ typ: 'borttagning', text: etikett + ' ' + n + ' – ' + faltEtikett + ' borttagen' });
+          else items.push({ typ: 'andring', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + a + ' → ' + b });
+        }
+      }
+    }
+  }
+  diffListaDjup(ny.innehavare, gammal.innehavare, namnKey, 'Innehavare',
+    { yrke: 'yrke', gatuadress: 'adress', postnummer: 'postnr', postort: 'postort', kommentar: 'kommentar' });
+  diffListaDjup(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnKey, 'Anhörig',
+    { yrke: 'yrke', adress: 'adress', kommentar: 'kommentar' });
   function namnGravsatt(x) {
-    const n = ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?';
+    const n = namnKey(x);
     const ar = [x.fodelse_ar, x.dods_ar].filter(Boolean).join('–');
     return ar ? n + ' (' + ar + ')' : n;
   }
-  function diffLista(nylista, gamallista, namnFn, etikett) {
-    const ga = new Set((gamallista || []).map(namnFn));
-    const na = new Set((nylista || []).map(namnFn));
-    for (const n of na) if (!ga.has(n)) rader.push('+ ' + etikett + ': ' + n);
-    for (const n of ga) if (!na.has(n)) rader.push('– ' + etikett + ' borttagen: ' + n);
-  }
-  diffLista(ny.innehavare, gammal.innehavare, namnInnehavare, 'Innehavare');
-  diffLista(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnInnehavare, 'Anhörig');
-  diffLista(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt');
-  return rader.length ? rader.join('\n') : 'Inga textändringar';
+  diffListaDjup(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt',
+    { yrke: 'yrke', kommentar: 'kommentar' });
+
+  // Skisser (antal)
+  const nyS = (ny.skisser || []).length, gaS = (gammal.skisser || []).length;
+  if (nyS > gaS) items.push({ typ: 'tillagg', text: 'Skiss tillagd (' + nyS + ' totalt)' });
+  else if (nyS < gaS) items.push({ typ: 'borttagning', text: 'Skiss borttagen (' + nyS + ' kvar)' });
+
+  // Sammanfattning
+  const nA = items.filter((x) => x.typ === 'andring').length;
+  const nT = items.filter((x) => x.typ === 'tillagg').length;
+  const nB = items.filter((x) => x.typ === 'borttagning').length;
+  const delar = [];
+  if (nA) delar.push(nA + (nA === 1 ? ' ändring' : ' ändringar'));
+  if (nT) delar.push(nT + (nT === 1 ? ' tillägg' : ' tillägg'));
+  if (nB) delar.push(nB + (nB === 1 ? ' borttagning' : ' borttagningar'));
+  return { items, sammanfattning: delar.length ? delar.join(', ') : 'Inga ändringar' };
 }
 
 /** Öppna historik-modal och hämta redigeringshistorik för aktuell gravplats. */
@@ -4258,6 +4304,7 @@ async function oppnaHistorikModal() {
         tHead.innerHTML = '<th scope="col">Datum och tid</th><th scope="col">Användare</th>' +
           (harSnapshots ? '<th scope="col">Ändringar</th>' : '');
       }
+      let expandCounter = 0;
       loggar.forEach(function(r, i) {
         const tr = document.createElement('tr');
         const datum = document.createElement('td');
@@ -4269,15 +4316,65 @@ async function oppnaHistorikModal() {
         tr.appendChild(anvandare);
         if (harSnapshots) {
           const andringarTd = document.createElement('td');
-          andringarTd.style.fontSize = '0.82rem';
-          andringarTd.style.color = '#475569';
-          if (r.inmatning_snapshot && i < loggar.length - 1 && loggar[i + 1].inmatning_snapshot) {
-            const diffText = _historikDiffText(r.inmatning_snapshot, loggar[i + 1].inmatning_snapshot);
-            andringarTd.style.whiteSpace = 'pre-line';
-            andringarTd.textContent = diffText;
-          } else if (r.inmatning_snapshot && i === loggar.length - 1) {
+          const harForegaende = r.inmatning_snapshot && i < loggar.length - 1 && loggar[i + 1].inmatning_snapshot;
+          const arForsta = r.inmatning_snapshot && i === loggar.length - 1;
+          if (harForegaende) {
+            const diffData = _historikDiffData(r.inmatning_snapshot, loggar[i + 1].inmatning_snapshot);
+            const detaljId = 'gp-historik-detalj-' + (expandCounter++);
+            tr.classList.add('gp-historik-rad-expanderbar');
+            tr.setAttribute('aria-expanded', 'false');
+            tr.setAttribute('role', 'button');
+            tr.setAttribute('tabindex', '0');
+            tr.setAttribute('aria-controls', detaljId);
+            const chevron = document.createElement('span');
+            chevron.className = 'gp-historik-chevron';
+            chevron.textContent = ' ▶';
+            const samm = document.createElement('span');
+            samm.className = 'gp-historik-sammanfattning';
+            samm.textContent = diffData ? diffData.sammanfattning : 'Inga ändringar';
+            andringarTd.appendChild(samm);
+            andringarTd.appendChild(chevron);
+            // Detail row
+            const detaljTr = document.createElement('tr');
+            detaljTr.id = detaljId;
+            detaljTr.className = 'gp-historik-detalj-rad';
+            detaljTr.hidden = true;
+            const detaljTd = document.createElement('td');
+            detaljTd.colSpan = 3;
+            if (diffData && diffData.items.length > 0) {
+              const ul = document.createElement('ul');
+              ul.className = 'gp-historik-andring-lista';
+              diffData.items.forEach(function(item) {
+                const li = document.createElement('li');
+                const chip = document.createElement('span');
+                chip.className = 'gp-historik-chip gp-historik-chip-' + item.typ;
+                chip.textContent = item.text;
+                li.appendChild(chip);
+                ul.appendChild(li);
+              });
+              detaljTd.appendChild(ul);
+            } else {
+              const ingen = document.createElement('span');
+              ingen.className = 'gp-historik-chip-ingen';
+              ingen.textContent = 'Inga detaljerade ändringar registrerades';
+              detaljTd.appendChild(ingen);
+            }
+            detaljTr.appendChild(detaljTd);
+            function toggleExpand() {
+              const expanded = tr.getAttribute('aria-expanded') === 'true';
+              tr.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+              detaljTr.hidden = expanded;
+              chevron.textContent = expanded ? ' ▶' : ' ▼';
+            }
+            tr.addEventListener('click', toggleExpand);
+            tr.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(); } });
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            tbody.appendChild(detaljTr);
+            return;
+          } else if (arForsta) {
+            andringarTd.className = 'gp-historik-forsta';
             andringarTd.textContent = '(första sparande)';
-            andringarTd.style.fontStyle = 'italic';
           } else {
             andringarTd.textContent = '–';
           }
