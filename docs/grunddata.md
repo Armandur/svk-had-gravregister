@@ -2,19 +2,16 @@
 
 ## Kyrkogårdar
 
-Kyrkogårdar (t.ex. HKG, HKN) konfigureras i **Grunddatahantering → Kyrkogårdar**. De används vid val av mapp (kyrkogård och gravkvarter) och i sökningar. Listan över tillgängliga kyrkogårdar kan styras via konfiguration (miljövariabeln `KYRKOGARDAR`).
+Kyrkogårdar (t.ex. HKG, HKN) och gravkvarter konfigureras av en administratör. De styr vilka val som är tillgängliga när du väljer mapp (kyrkogård och gravkvarter) vid bläddring.
 
-## Användare och roller
+## Yrken
 
-- **Admin:** Kan hantera användare (Användarhantering), grunddata, loggar och databasunderhåll.
-- **Vanlig användare:** Kan bläddra, söka, mata in och redigera gravplatser enligt sina rättigheter.
+Under **Yrken** (länk från sidan **Prestationer**) visas en lista med alla unika yrken som registrerats i systemet. Ger en översikt av yrkesvariationen i hela gravregistret.
 
-Första användaren skapas som admin. I produktion ska du sätta `SESSION_SECRET_KEY` och eventuellt `ADMIN_INITIAL_PASSWORD` vid första start.
+## Prestationer
 
-## Databasunderhåll
+Under **Prestationer** (länk i sidhuvudet på gravplatssidan) kan du följa din egen transkriberings­statistik: antal sparade registreringar, färdigtranskriberade gravplatser, gravsatta, skisser och unika yrken. Du kan också låsa upp utmärkelser (brons/silver/guld) baserat på antal registreringar och unika yrken.
 
-Under **Databasunderhåll** (admin) finns verktyg för att t.ex. hitta gravplatser som saknar postnummer/ort och andra underhållsåtgärder. Använd dessa enligt instruktionerna i gränssnittet.
-
-## Loggar
-
-**Loggar** visar redigeringslogg för gravplatser (vem ändrade vad och när). Användbart för spårbarhet och granskning.
+Här kan du också ställa in:
+- **Roliga saker** – toast och ljud vid nytt unikt yrke eller utmärkelse
+- **Ordning på inmatnings­sektioner** – välj i vilken ordning formulärets block visas för dig

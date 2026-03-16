@@ -61,6 +61,8 @@
     <nav class="hjalp-sidebar" aria-label="Hjälpmeny">
       <h2>Dokumentation</h2>
       <ul id="hjalp-lista-dokumentation" class="hjalp-meny-lista"></ul>
+      <h2 class="hjalp-meny-sektion" id="hjalp-admin-rubrik" hidden>Administration</h2>
+      <ul id="hjalp-lista-admin" class="hjalp-meny-lista" hidden></ul>
       <h2 class="hjalp-meny-sektion">Specifikationer</h2>
       <ul id="hjalp-lista-specifikationer" class="hjalp-meny-lista hjalp-meny-undergrupp"></ul>
     </nav>
@@ -74,6 +76,8 @@
     (function() {
       const API = '/api';
       const listaDokEl = document.getElementById('hjalp-lista-dokumentation');
+      const listaAdminEl = document.getElementById('hjalp-lista-admin');
+      const adminRubrikEl = document.getElementById('hjalp-admin-rubrik');
       const listaSpecEl = document.getElementById('hjalp-lista-specifikationer');
       const innehallEl = document.getElementById('hjalp-innehall');
       const statusEl = document.getElementById('hjalp-status');
@@ -139,25 +143,41 @@
           });
       }
 
-      fetch(`${API}/hjalp`, { credentials: 'include' })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
+      Promise.all([
+        fetch(`${API}/hjalp`, { credentials: 'include' }).then(function(r) { return r.json(); }),
+        fetch(`${API}/me`, { credentials: 'include' }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+      ]).then(function(results) {
+          var data = results[0];
+          var me = results[1];
+          var isAdmin = me && me.is_admin;
           const dokument = data.dokument || [];
           if (dokument.length === 0) {
             statusEl.textContent = 'Inga hjälpdokument tillgängliga.';
             return;
           }
-          var docSlugs = ['overview', 'bladdring', 'inmatning', 'extramaterial', 'grunddata'];
+          var docSlugs = ['overview', 'bladdring', 'inmatning', 'claude-ocr', 'extramaterial', 'grunddata'];
+          var adminSlugs = ['admin'];
           var specSlugs = ['specifikation', 'specifikation-generell', 'specifikation-harnosand-skandix'];
           var docMap = {};
+          var adminMap = {};
           var specMap = {};
           dokument.forEach(function(d) {
             if (docSlugs.indexOf(d.slug) !== -1) docMap[d.slug] = d;
+            if (adminSlugs.indexOf(d.slug) !== -1) adminMap[d.slug] = d;
             if (specSlugs.indexOf(d.slug) !== -1) specMap[d.slug] = d;
           });
           docSlugs.forEach(function(slug) {
             if (docMap[slug]) addMenyLank(listaDokEl, docMap[slug]);
           });
+          if (isAdmin) {
+            adminSlugs.forEach(function(slug) {
+              if (adminMap[slug]) addMenyLank(listaAdminEl, adminMap[slug]);
+            });
+            if (listaAdminEl.children.length > 0) {
+              listaAdminEl.hidden = false;
+              adminRubrikEl.hidden = false;
+            }
+          }
           specSlugs.forEach(function(slug) {
             if (specMap[slug]) addMenyLank(listaSpecEl, specMap[slug]);
           });
