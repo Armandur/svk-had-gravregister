@@ -58,8 +58,7 @@
     .batch-jobb-poster-tabell th { text-align: left; font-weight: 600; padding: 0.25rem 0.5rem; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
     .batch-jobb-poster-tabell td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
     .batch-jobb-poster-tabell tr:last-child td { border-bottom: none; }
-    .batch-jobb-poster-tabell a { color: var(--accent, #2563eb); text-decoration: none; }
-    .batch-jobb-poster-tabell a:hover { text-decoration: underline; }
+    .batch-jobb-poster-tabell tbody tr:hover td { background: #f8fafc; }
     .batch-post-status { font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 999px; font-weight: 600; white-space: nowrap; }
     .batch-post-status-vantar { background: #f1f5f9; color: #475569; }
     .batch-post-status-klar { background: #dcfce7; color: #166534; }
@@ -589,7 +588,7 @@
       const statusEtikett = { 'väntar': 'väntar', 'klar': 'klar', 'fel': 'fel', 'hoppad': 'hoppad' };
       const statusKlass = { 'väntar': 'vantar', 'klar': 'klar', 'fel': 'fel', 'hoppad': 'hoppad' };
       var html = '<table class="batch-jobb-poster-tabell"><thead><tr>' +
-        '<th>#</th><th>Kyrkogård</th><th>Kvarter</th><th>Gravplatsnr</th><th>Mapp</th><th>Status</th>' +
+        '<th>#</th><th>Kyrkogård</th><th>Kvarter</th><th>Gravplatsnr</th><th>Status</th>' +
         '</tr></thead><tbody>';
       d.poster.forEach(function(p) {
         var beteckning = [p.kyrkogard, p.kvarter, p.gravplatsnummer].filter(Boolean).join(' ') || String(p.gravplats_id);
@@ -597,12 +596,12 @@
         var statusk = statusKlass[p.status] || 'vantar';
         var etikett = statusEtikett[p.status] || p.status;
         var felTips = p.fel_meddelande ? ' title="' + escAttr(p.fel_meddelande) + '"' : '';
-        html += '<tr>' +
+        var href = '/gravplatser/' + slug;
+        html += '<tr style="cursor:pointer" onclick="window.open(\'' + href + '\', \'_blank\')">' +
           '<td style="color:#94a3b8">' + escHtml(String(p.ordning + 1)) + '</td>' +
           '<td>' + escHtml(p.kyrkogard || '–') + '</td>' +
           '<td>' + escHtml(p.kvarter || '–') + '</td>' +
-          '<td><a href="/gravplatser/' + slug + '" target="_blank">' + escHtml(p.gravplatsnummer || String(p.gravplats_id)) + '</a></td>' +
-          '<td style="color:#64748b">' + escHtml(p.mapp_namn || '–') + '</td>' +
+          '<td>' + escHtml(p.gravplatsnummer || String(p.gravplats_id)) + '</td>' +
           '<td' + felTips + '><span class="batch-post-status batch-post-status-' + statusk + '">' + escHtml(etikett) + '</span></td>' +
           '</tr>';
       });
