@@ -26,7 +26,13 @@ from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import KÄLLDATA_DIR, SESSION_SECRET_KEY, BACKUP_DIR, DATABASE_PATH, API_KEYS_PATH
-from app.services.ocr_service import ocr_gravplats_from_images
+from app.services.ocr_service import (
+    ocr_gravplats_from_images,
+    bygg_batch_request,
+    skicka_anthropic_batch,
+    poll_anthropic_batch,
+    hamta_anthropic_batch_resultat,
+)
 from app.database import (
     SessionLocal,
     User,
@@ -67,6 +73,10 @@ CACHE_HEADERS = {"Cache-Control": "private, max-age=3600"}
 
 # Priser för claude-sonnet-4-6 (USD per miljon tokens)
 _CLAUDE_PRIS = {"input": 3.00, "output": 15.00, "cache_creation": 3.75, "cache_read": 0.30}
+
+# Gräns: jobb med färre gravar än detta körs som realtid (Messages API),
+# övriga skickas till Anthropics asynkrona Batch API (50 % rabatt, upp till 24 h).
+ANTHROPIC_BATCH_GRANS = 100
 
 
 def _ledande_tal(nr: str) -> int:
@@ -5009,6 +5019,7 @@ async def skapa_batch_jobb(
         + " " + datetime.now().strftime("%Y-%m-%d")
     ).strip()
 
+    jobb_typ = "anthropic_batch" if len(gravplatser) >= ANTHROPIC_BATCH_GRANS else "realtid"
     jobb = ClaudeBatchJobb(
         user_id=current_user.id,
         namn=namn,
@@ -5018,6 +5029,7 @@ async def skapa_batch_jobb(
         klara=0,
         fel=0,
         filter_json=json.dumps({"kyrkogard": body.kyrkogard, "kvarter": body.kvarter, "antal": body.antal, "ej_transkriberade": body.ej_transkriberade, "ej_claude_korda": body.ej_claude_korda}, ensure_ascii=False),
+        jobb_typ=jobb_typ,
     )
     db.add(jobb)
     db.flush()
@@ -5025,7 +5037,7 @@ async def skapa_batch_jobb(
         db.add(ClaudeBatchJobbPost(jobb_id=jobb.id, gravplats_id=gp.id, ordning=i, status="väntar"))
     db.commit()
     db.refresh(jobb)
-    return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt}
+    return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt, "jobb_typ": jobb_typ}
 
 
 @app.get("/api/batch-claude/jobb")
@@ -5036,7 +5048,7 @@ async def lista_batch_jobb(
     """Lista användarens batch-jobb."""
     _require_claude_batch(current_user)
     jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.user_id == current_user.id).order_by(ClaudeBatchJobb.skapad_den.desc()).all()
-    return {"jobb": [{"id": j.id, "namn": j.namn, "skapad_den": j.skapad_den, "status": j.status, "totalt": j.totalt, "klara": j.klara, "fel": j.fel} for j in jobb]}
+    return {"jobb": [{"id": j.id, "namn": j.namn, "skapad_den": j.skapad_den, "status": j.status, "totalt": j.totalt, "klara": j.klara, "fel": j.fel, "jobb_typ": j.jobb_typ} for j in jobb]}
 
 
 @app.get("/api/batch-claude/jobb/{jobb_id:int}")
@@ -5077,6 +5089,7 @@ async def hamta_batch_jobb(
     return {
         "id": jobb.id, "namn": jobb.namn, "skapad_den": jobb.skapad_den,
         "status": jobb.status, "totalt": jobb.totalt, "klara": jobb.klara, "fel": jobb.fel,
+        "jobb_typ": jobb.jobb_typ,
         "poster": poster_data,
     }
 
@@ -5096,6 +5109,209 @@ async def ta_bort_batch_jobb(
     db.delete(jobb)
     db.commit()
     return {"ok": True}
+
+
+@app.post("/api/batch-claude/jobb/{jobb_id:int}/skicka-anthropic")
+async def batch_skicka_anthropic(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Samla bilder för alla gravar i jobbet och skicka en batch till Anthropics Batch API."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    if jobb.jobb_typ != "anthropic_batch":
+        raise HTTPException(status_code=400, detail="Jobbet är inte av typ anthropic_batch")
+    if jobb.status not in ("klar", "fel"):
+        raise HTTPException(status_code=400, detail=f"Jobbet har fel status: {jobb.status}")
+
+    api_key = _get_anthropic_api_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas")
+
+    poster = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(ClaudeBatchJobbPost.jobb_id == jobb_id, ClaudeBatchJobbPost.status == "väntar")
+        .order_by(ClaudeBatchJobbPost.ordning)
+        .all()
+    )
+    if not poster:
+        raise HTTPException(status_code=400, detail="Inga väntande poster i jobbet")
+
+    jobb.status = "kör"
+    db.commit()
+
+    batch_requests = []
+    for post in poster:
+        try:
+            png_images = _collect_png_images_for_gravplats(post.gravplats_id, db)
+        except Exception:
+            png_images = []
+        if not png_images:
+            post.status = "hoppad"
+            post.fel_meddelande = "Inga bilder hittades för gravplatsen"
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+            db.commit()
+            continue
+        batch_requests.append(bygg_batch_request(f"post-{post.id}", png_images))
+
+    if not batch_requests:
+        jobb.status = "fel"
+        db.commit()
+        raise HTTPException(status_code=400, detail="Inga gravar med bilder kunde förberedas")
+
+    try:
+        anthropic_batch_id = await skicka_anthropic_batch(batch_requests, api_key)
+    except Exception as exc:
+        jobb.status = "fel"
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"Kunde inte skicka till Anthropic: {exc}")
+
+    jobb.anthropic_batch_id = anthropic_batch_id
+    jobb.status = "väntar_svar"
+    db.commit()
+
+    return {"anthropic_batch_id": anthropic_batch_id, "skickade": len(batch_requests)}
+
+
+@app.post("/api/batch-claude/jobb/{jobb_id:int}/poll-anthropic")
+async def batch_poll_anthropic(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kontrollera status för ett Anthropic-batch-jobb. Hämtar och sparar resultat om klart."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    if jobb.jobb_typ != "anthropic_batch":
+        raise HTTPException(status_code=400, detail="Jobbet är inte av typ anthropic_batch")
+    if not jobb.anthropic_batch_id:
+        raise HTTPException(status_code=400, detail="Batch-ID saknas – har jobbet skickats?")
+
+    api_key = _get_anthropic_api_key()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas")
+
+    try:
+        status_info = await poll_anthropic_batch(jobb.anthropic_batch_id, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Kunde inte kontrollera Anthropic-status: {exc}")
+
+    processing_status = status_info.get("processing_status")
+    request_counts = status_info.get("request_counts", {})
+
+    if processing_status != "ended":
+        return {
+            "processing_status": processing_status,
+            "request_counts": request_counts,
+            "klara": jobb.klara,
+            "totalt": jobb.totalt,
+            "status": jobb.status,
+        }
+
+    # Batch är klar – hämta och spara resultat
+    try:
+        resultat = await hamta_anthropic_batch_resultat(jobb.anthropic_batch_id, api_key)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Kunde inte hämta resultat från Anthropic: {exc}")
+
+    # Bygg upp post-id → post-objekt för snabb uppslagning
+    poster_map = {
+        p.id: p
+        for p in db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == jobb_id).all()
+    }
+
+    for rad in resultat:
+        custom_id = rad.get("custom_id", "")
+        result = rad.get("result", {})
+        # custom_id format: "post-{post_id}"
+        try:
+            post_id = int(custom_id.split("-", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        post = poster_map.get(post_id)
+        if not post:
+            continue
+
+        if result.get("type") != "succeeded":
+            post.status = "fel"
+            post.fel_meddelande = result.get("error", {}).get("message", "Okänt fel från Anthropic")
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+            db.commit()
+            continue
+
+        message = result.get("message", {})
+        text = "".join(
+            b["text"] for b in message.get("content", []) if b.get("type") == "text"
+        ).strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            post.status = "fel"
+            post.fel_meddelande = "Kunde inte parsa JSON från Anthropic-svar"
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
+            db.commit()
+            continue
+
+        usage = message.get("usage", {})
+        inp = usage.get("input_tokens", 0)
+        out = usage.get("output_tokens", 0)
+        cache_create = usage.get("cache_creation_input_tokens", 0)
+        cache_read = usage.get("cache_read_input_tokens", 0)
+        kostnad = (
+            inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"]
+            + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]
+        ) / 1_000_000
+        # Batch API ger 50 % rabatt
+        kostnad *= 0.5
+
+        db.add(ClaudeAnropslogg(
+            user_id=current_user.id,
+            gravplats_id=post.gravplats_id,
+            anropad_den=datetime.now(timezone.utc).isoformat(),
+            input_tokens=inp, output_tokens=out,
+            cache_creation_tokens=cache_create, cache_read_tokens=cache_read,
+            kostnad_usd=round(kostnad, 6),
+        ))
+
+        svar_json_str = json.dumps({k: v for k, v in parsed.items() if k != "_ocr_usage"}, ensure_ascii=False)
+        existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == post.gravplats_id).first()
+        if existing_svar:
+            existing_svar.user_id = current_user.id
+            existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
+            existing_svar.svar_json = svar_json_str
+            existing_svar.ocr_kommentar = parsed.get("ocr_kommentar", "")
+        else:
+            db.add(ClaudeOcrSvar(
+                gravplats_id=post.gravplats_id, user_id=current_user.id,
+                skapad_den=datetime.now(timezone.utc).isoformat(),
+                svar_json=svar_json_str, ocr_kommentar=parsed.get("ocr_kommentar", ""),
+            ))
+
+        post.status = "klar"
+        post.fel_meddelande = None
+        db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
+        db.commit()
+
+    db.refresh(jobb)
+    jobb.status = "klar"
+    db.commit()
+
+    return {
+        "processing_status": "ended",
+        "request_counts": request_counts,
+        "klara": jobb.klara,
+        "totalt": jobb.totalt,
+        "fel": jobb.fel,
+        "status": jobb.status,
+    }
 
 
 @app.post("/api/batch-claude/jobb/{jobb_id:int}/nasta")
