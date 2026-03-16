@@ -114,8 +114,8 @@
             // Länkar till andra hjälpdokument (docs/*.md) ska öppna dokumentet i appen istället för filsökväg
             var slugFromHref = function(href) {
               if (!href) return null;
-              var m = href.match(/specifikation-generell\.md$/) || href.match(/specifikation-harnosand-skandix\.md$/);
-              if (m) return m[0].replace('.md', '');
+              var m = href.match(/([a-z0-9-]+)\.md$/);
+              if (m) return m[1];
               return null;
             };
             markdownEl.querySelectorAll('a[href]').forEach(function(a) {
