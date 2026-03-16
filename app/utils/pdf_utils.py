@@ -1,11 +1,17 @@
-"""PDF-bearbetningshjälpfunktioner: sidrendering, klippning, tomma sidor."""
+"""PDF-bearbetningshjälpfunktioner: sidrendering, klippning, tomma sidor, mapphantering."""
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import fitz  # PyMuPDF
+from fastapi import HTTPException
+from sqlalchemy import update
+from sqlalchemy.orm import Session
 
 from app.config import KÄLLDATA_DIR
-from fastapi import HTTPException
+
+if TYPE_CHECKING:
+    pass
 
 
 def _mapp_path(mapp_namn: str) -> Path:
@@ -70,7 +76,6 @@ def _clip_rect_for_segment(
 def _mapp_config_andelar(row, position: int | None = None) -> list[float]:
     """Returnera andelar från mapp_config. position 1,2,3 = position i block (standard_3_sidor).
     Om position anges och andelar_per_position finns används den; annars andelar; annars klassiska default (727/1597, 870/1595)."""
-    # Klassiska default för standard 3-sidors layout (sida 1 och 3: 727/1597, sida 2: 870/1595)
     CLASSIC_1_3 = [727 / 1597]
     CLASSIC_2 = [870 / 1595]
     if not row:
@@ -118,3 +123,170 @@ def _mapp_config_andelar_per_position(row) -> dict[str, list[float]] | None:
     except (TypeError, ValueError):
         pass
     return None
+
+
+# ── Databasberoende hjälpfunktioner ──────────────────────────────────────────
+
+def _sorted_pdf_names(mapp_namn: str) -> list[str]:
+    """Sorterad lista av PDF-filnamn i mappen (efter sidnummer)."""
+    mapp = _mapp_path(mapp_namn)
+    if not mapp.exists():
+        return []
+    paths = sorted(
+        [f for f in mapp.iterdir() if f.suffix.lower() == ".pdf"],
+        key=lambda f: _pdf_sidnummer(f.name),
+    )
+    return [f.name for f in paths]
+
+
+def _ordered_pdf_names(mapp_namn: str, db: Session) -> list[str]:
+    """PDF-filnamn i ordning: anpassad ordning (MappFilOrdning) om sådan finns, annars naturlig sortering."""
+    from app.database import MappConfig, MappFilOrdning
+    base = _sorted_pdf_names(mapp_namn)
+    if not base:
+        return []
+    mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
+    if not mapp_config:
+        return base
+    order_rows = (
+        db.query(MappFilOrdning)
+        .filter(MappFilOrdning.mapp_id == mapp_config.id)
+        .order_by(MappFilOrdning.position)
+        .all()
+    )
+    if not order_rows:
+        return base
+    ordered = [r.filnamn for r in order_rows if r.filnamn in base]
+    seen = set(ordered)
+    for n in base:
+        if n not in seen:
+            ordered.append(n)
+    return ordered
+
+
+def _expanded_effective_list(
+    mapp_namn: str, excluded: set[str], db: Session
+) -> list[dict]:
+    """
+    Lista av innehållsposter: antingen {"t": "f", "v": filnamn} eller {"t": "b", "id": id}.
+    Blanka sidor infogas efter den fil som anges i InfogadTomSida.efter_filnamn.
+    """
+    from app.database import MappConfig, InfogadTomSida
+    names = _ordered_pdf_names(mapp_namn, db)
+    names = [n for n in names if n not in excluded]
+    mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
+    blanks_after: dict[str, list[int]] = {}
+    if mapp_config:
+        for row in (
+            db.query(InfogadTomSida)
+            .filter(InfogadTomSida.mapp_id == mapp_config.id)
+            .order_by(InfogadTomSida.id)
+            .all()
+        ):
+            blanks_after.setdefault(row.efter_filnamn, []).append(row.id)
+    out: list[dict] = []
+    for filnamn in names:
+        out.append({"t": "f", "v": filnamn})
+        for bid in blanks_after.get(filnamn, []):
+            out.append({"t": "b", "id": bid})
+    return out
+
+
+def _effective_filer_names(mapp_namn: str, excluded: set[str]) -> list[str]:
+    """Innehållsfiler (sorterade) exkl. exkluderade filnamn. Används där expanded list inte behövs."""
+    names = _sorted_pdf_names(mapp_namn)
+    return [n for n in names if n not in excluded]
+
+
+def _content_page_1based_in_expanded(filnamn: str, expanded: list[dict]) -> int | None:
+    """1-baserat innehållssidanummer för första förekomsten av filnamn i expanded list."""
+    for i, item in enumerate(expanded):
+        if item.get("t") == "f" and item.get("v") == filnamn:
+            return i + 1
+    return None
+
+
+def _content_page_to_item(
+    mapp_namn: str,
+    excluded: set[str],
+    sida_nummer: int,
+    db: Session,
+) -> tuple[str, Path | int] | None:
+    """
+    Mappa 1-baserat innehållssida till post. Returnerar ("file", Path) eller ("blank", id) eller None.
+    """
+    expanded = _expanded_effective_list(mapp_namn, excluded, db)
+    if sida_nummer < 1 or sida_nummer > len(expanded):
+        return None
+    item = expanded[sida_nummer - 1]
+    if item["t"] == "b":
+        return ("blank", item["id"])
+    mapp = _mapp_path(mapp_namn)
+    path = mapp / item["v"]
+    if not path.is_file():
+        return None
+    return ("file", path)
+
+
+def _content_page_1based(filnamn: str, effective_names: list[str]) -> int | None:
+    """1-baserat innehållssidanummer för filnamn i listan, eller None om inte med."""
+    try:
+        i = effective_names.index(filnamn)
+        return i + 1
+    except ValueError:
+        return None
+
+
+def _excluded_filenames_for_mapp(db: Session, mapp_namn: str) -> set[str]:
+    """Set med filnamn som är extramaterial i denna mapp."""
+    from app.database import MappConfig, Extramaterial
+    mapp_config = db.query(MappConfig).filter(MappConfig.namn == mapp_namn).first()
+    if not mapp_config:
+        return set()
+    return {em.filnamn for em in db.query(Extramaterial).filter(Extramaterial.mapp_id == mapp_config.id).all()}
+
+
+def _redan_halva_filenames_for_mapp(db: Session, mapp_config_id: int | None) -> set[str]:
+    """Set med filnamn som är markerade som 'redan halva' i flödet."""
+    from app.database import MappSidaRedanHalva
+    if not mapp_config_id:
+        return set()
+    return {
+        r.filnamn
+        for r in db.query(MappSidaRedanHalva).filter(MappSidaRedanHalva.mapp_id == mapp_config_id).all()
+    }
+
+
+def _parse_exclude_param(exclude: str | None) -> set[str]:
+    """Temporärt urklipp från frontend – kommaseparerade filnamn som ska exkluderas från flödet."""
+    if not exclude or not exclude.strip():
+        return set()
+    return {x.strip() for x in exclude.split(",") if x.strip()}
+
+
+def _shift_grav_start_efter_tillagg(db: Session, mapp_config_id: int, efter_sida: int) -> None:
+    """Minska grav_start_sida med 1 för alla extramaterial i mappen som har grav_start_sida > efter_sida."""
+    from app.database import Extramaterial
+    db.execute(
+        update(Extramaterial)
+        .where(
+            Extramaterial.mapp_id == mapp_config_id,
+            Extramaterial.grav_start_sida.isnot(None),
+            Extramaterial.grav_start_sida > efter_sida,
+        )
+        .values(grav_start_sida=Extramaterial.grav_start_sida - 1)
+    )
+
+
+def _shift_grav_start_efter_borttag(db: Session, mapp_config_id: int, fran_och_med_sida: int) -> None:
+    """Öka grav_start_sida med 1 för alla extramaterial i mappen som har grav_start_sida >= fran_och_med_sida."""
+    from app.database import Extramaterial
+    db.execute(
+        update(Extramaterial)
+        .where(
+            Extramaterial.mapp_id == mapp_config_id,
+            Extramaterial.grav_start_sida.isnot(None),
+            Extramaterial.grav_start_sida >= fran_och_med_sida,
+        )
+        .values(grav_start_sida=Extramaterial.grav_start_sida + 1)
+    )
