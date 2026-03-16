@@ -8,9 +8,9 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 2 | Redigeringshistorik i UI (data finns i DB) | UX | ✅ Klar |
 | 3 | Paginering i sök-vy (index + avancerad sökning) | UX | ✅ Klar |
 | 4 | Dela upp gravplatser.js i moduler | Kod | ✅ Klar |
-| 5 | Gemensam utils.js med escapeHtml | Kod | ⬜ |
-| 6 | Inkonsekvent felhantering i fetch-anrop | Kod | ⬜ |
-| 7 | Felhantering/loggning i except-block (auth.py:48, auth.py:80) | Kod | ⬜ |
+| 5 | Gemensam utils.js med escapeHtml | Kod | ✅ Klar |
+| 6 | Inkonsekvent felhantering i fetch-anrop | Kod | ✅ Klar |
+| 7 | Felhantering/loggning i except-block (auth.py:48, auth.py:80) | Kod | ✅ Klar |
 | 8 | Prestanda i achievements.py – SQL-queries i loopar | Kod | ⬜ |
 | 9 | Claude-priser konfigurerbart via env-variabel (constants.py) | Kod | ⬜ |
 | 10 | Tillgänglighet (ARIA) i OCR-läget | UX | ⬜ |
