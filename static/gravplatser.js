@@ -670,12 +670,45 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
 }
 
 /**
+ * Hämtar info om huruvida gravplatsen ingår i ett pågående batch-jobb och visar banner om så är fallet.
+ */
+async function hamtaBatchPagarInfo() {
+  const banner = document.getElementById('gp-batch-pagar-banner');
+  if (!banner) return;
+  banner.hidden = true;
+  banner.textContent = '';
+  if (currentGravplatsId == null) return;
+  try {
+    const res = await fetch(`${API}/batch-claude/gravplats/${currentGravplatsId}/pagar`, { credentials: 'include' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.pagar) return;
+    const datum = data.skapad_den
+      ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
+      : '';
+    const namnEl = document.createElement('strong');
+    namnEl.textContent = data.jobb_namn || ('Jobb ' + data.jobb_id);
+    banner.appendChild(document.createTextNode('Gravplatsen ingår i batch-jobbet '));
+    banner.appendChild(namnEl);
+    if (datum) banner.appendChild(document.createTextNode(` (startat ${datum})`));
+    banner.appendChild(document.createTextNode(' och väntar på svar från Anthropic. '));
+    const lank = document.createElement('a');
+    lank.href = '/batch-claude';
+    lank.textContent = 'Gå till Batch Claude OCR';
+    banner.appendChild(lank);
+    banner.hidden = false;
+  } catch (_) { /* nätverksfel – visa ingenting */ }
+}
+
+/**
  * Uppdaterar vy (halvor, extramaterial, dolda).
  * @param {boolean} [behallInmatningState=false] – om true nollställs inte inmatningsläge (redigera/osparat); använd vid t.ex. Dölj/Visa igen.
  */
 async function uppdateraVy(behallInmatningState = false) {
   const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
   if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
+  const batchBanner = document.getElementById('gp-batch-pagar-banner');
+  if (batchBanner) { batchBanner.hidden = true; batchBanner.textContent = ''; }
   const rubrikEl = document.getElementById('gp-rubrik');
   const halvorEl = document.getElementById('gp-halvor');
   const btnTillbaka = document.getElementById('gp-btn-tillbaka');
@@ -722,6 +755,8 @@ async function uppdateraVy(behallInmatningState = false) {
 
   rubrikEl.textContent = gp.fullstandigt || [gp.kyrkogard, gp.kvarter, gp.gravplatsnummer].filter(Boolean).join(' ') || '–';
   document.title = rubrikEl.textContent || 'Gravplats';
+
+  hamtaBatchPagarInfo();
 
   await ensureTradData(gp.kyrkogard);
   const nastaKv = getNastaKvarter(gp.kyrkogard, gp.kvarter);

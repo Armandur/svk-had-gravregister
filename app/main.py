@@ -172,6 +172,15 @@ def _get_claude_instans_aktiv() -> bool:
         return True
 
 
+def _get_claude_batch_block_enskild() -> bool:
+    """Om True: blockera enskild Claude-körning för gravar i pågående batch-jobb (default: True)."""
+    try:
+        data = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        return bool(data.get("claude_batch_block_enskild", True))
+    except (OSError, json.JSONDecodeError):
+        return True
+
+
 def _set_api_keys_json(**kwargs) -> None:
     """Uppdatera ett eller flera fält i api_keys.json."""
     existing: dict = {}
@@ -327,12 +336,14 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "anthropic_api_key_preview": preview,
         "anthropic_api_key_from_env": from_env,
         "claude_aktiv_instans": _get_claude_instans_aktiv(),
+        "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
     }
 
 
 class ApiKeysBody(BaseModel):
     anthropic_api_key: str | None = None  # None = ej skickad (rör ej nyckeln), "" = ta bort
     claude_aktiv_instans: bool | None = None
+    claude_batch_block_enskild: bool | None = None
 
 
 @app.put("/api/settings/api-keys")
@@ -353,6 +364,8 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
                 existing.pop("anthropic_api_key", None)
         if body.claude_aktiv_instans is not None:
             existing["claude_aktiv_instans"] = body.claude_aktiv_instans
+        if body.claude_batch_block_enskild is not None:
+            existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
@@ -4688,6 +4701,25 @@ async def ocr_gravplats_endpoint(
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
 
+    # Kontrollera om gravplatsen ingår i ett pågående batch-jobb
+    if _get_claude_batch_block_enskild():
+        pagar_post = (
+            db.query(ClaudeBatchJobbPost)
+            .join(ClaudeBatchJobb, ClaudeBatchJobbPost.jobb_id == ClaudeBatchJobb.id)
+            .filter(
+                ClaudeBatchJobbPost.gravplats_id == gravplats_id,
+                ClaudeBatchJobbPost.status == "väntar",
+                ClaudeBatchJobb.status.in_(["väntar_svar", "kör"]),
+            )
+            .first()
+        )
+        if pagar_post:
+            jobb_namn = db.query(ClaudeBatchJobb.namn).filter(ClaudeBatchJobb.id == pagar_post.jobb_id).scalar() or ""
+            raise HTTPException(
+                status_code=409,
+                detail=f"Gravplatsen ingår i det pågående batch-jobbet \"{jobb_namn}\". Enskild körning är blockerad – ändra i Inställningar om du vill tillåta det.",
+            )
+
     mapp_config = db.query(MappConfig).filter(MappConfig.id == g.mapp_id).first()
     if not mapp_config:
         raise HTTPException(status_code=404, detail="Mapp saknas")
@@ -5053,6 +5085,35 @@ async def skapa_batch_jobb(
     db.commit()
     db.refresh(jobb)
     return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt, "jobb_typ": jobb_typ}
+
+
+@app.get("/api/batch-claude/gravplats/{gravplats_id:int}/pagar")
+async def gravplats_i_pagar_batch(
+    gravplats_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Kontrollera om en gravplats ingår i ett pågående batch-jobb (väntar_svar eller kör)."""
+    post_jobb = (
+        db.query(ClaudeBatchJobbPost, ClaudeBatchJobb)
+        .join(ClaudeBatchJobb, ClaudeBatchJobbPost.jobb_id == ClaudeBatchJobb.id)
+        .filter(
+            ClaudeBatchJobbPost.gravplats_id == gravplats_id,
+            ClaudeBatchJobbPost.status == "väntar",
+            ClaudeBatchJobb.status.in_(["väntar_svar", "kör"]),
+        )
+        .first()
+    )
+    if not post_jobb:
+        return {"pagar": False}
+    _, jobb = post_jobb
+    return {
+        "pagar": True,
+        "jobb_id": jobb.id,
+        "jobb_namn": jobb.namn,
+        "skapad_den": jobb.skapad_den,
+        "status": jobb.status,
+    }
 
 
 @app.get("/api/batch-claude/jobb")
