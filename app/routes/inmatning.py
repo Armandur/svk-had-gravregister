@@ -1,5 +1,6 @@
 """Rutter för inmatning (gravrätt, gravsatta, närmast anhöriga) och skisser."""
 import base64
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +24,7 @@ from app.database import (
 from app.auth import get_current_user
 from app.schemas import InmatningSchema, SkissCreateBody, SkissOrdningBody
 from app.utils.achievements import _compute_achievements_niva
+from app.utils.api_keys import _get_spara_redigeringslogg_snapshot
 from app.utils.gravplats_utils import _inmatning_response
 
 router = APIRouter()
@@ -163,10 +165,14 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
     row.last_edited_by_user_id = current_user.id
     row.last_edited_at = datetime.now(timezone.utc).isoformat()
     row.version = getattr(row, "version", 0) + 1
+    snapshot_json = None
+    if _get_spara_redigeringslogg_snapshot():
+        snapshot_json = body.model_dump_json(exclude={"version"})
     db.add(GravplatsRedigeringslogg(
         gravplats_id=gravplats_id,
         user_id=current_user.id,
         edited_at=row.last_edited_at,
+        inmatning_snapshot=snapshot_json,
     ))
     db.commit()
     yrken_efter = _unika_yrken_set(db)

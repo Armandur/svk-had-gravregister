@@ -188,6 +188,7 @@ class GravplatsRedigeringslogg(Base):
     gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     edited_at: Mapped[str] = mapped_column()  # ISO 8601 datetime (UTC)
+    inmatning_snapshot: Mapped[str | None] = mapped_column(nullable=True)  # JSON-snapshot av inmatningsdata vid sparande
 
 
 class ClaudeAnropslogg(Base):
@@ -341,6 +342,13 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 def init_db():
     """Skapa tabeller om de inte finns. Lägger till nya kolumner på gravplats vid behov."""
     Base.metadata.create_all(bind=engine)
+
+    # Lägg till inmatning_snapshot-kolumn på gravplats_redigeringslogg om den saknas
+    with engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(gravplats_redigeringslogg)")).fetchall()]
+        if "inmatning_snapshot" not in cols:
+            conn.execute(text("ALTER TABLE gravplats_redigeringslogg ADD COLUMN inmatning_snapshot TEXT"))
+            conn.commit()
 
     # Seed kyrkogårdar från config om tabellen är tom (behåll befintliga i databasen)
     with SessionLocal() as db:

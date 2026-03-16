@@ -62,6 +62,12 @@ async def list_loggar_gravplatser(
     loggar = []
     for logg, g, mapp_namn, username in rows:
         fullstandigt = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer)
+        snapshot = None
+        if logg.inmatning_snapshot:
+            try:
+                snapshot = json.loads(logg.inmatning_snapshot)
+            except (json.JSONDecodeError, TypeError):
+                pass
         loggar.append({
             "id": logg.id,
             "gravplats_id": logg.gravplats_id,
@@ -69,6 +75,7 @@ async def list_loggar_gravplatser(
             "mapp_namn": mapp_namn or "",
             "username": username or "",
             "edited_at": logg.edited_at,
+            "inmatning_snapshot": snapshot,
         })
     return {"loggar": loggar, "antal": len(loggar), "total": total}
 

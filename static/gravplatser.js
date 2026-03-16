@@ -4183,13 +4183,50 @@ function visaDiffDialog(claudeData, onApplicera) {
   dialog.showModal();
 }
 
+const _HISTORIK_FALT = {
+  storlek: 'Storlek', underhall_text: 'Underhållstext', underhall_overstruket: 'Underhåll överstruket',
+  gravrattstid: 'Gravrattstid', monument: 'Monument', gravens_utformning: 'Gravens utformning',
+  karta_nr: 'Kartnr', gravbrev_nr: 'Gravbrevnr', utfordat_den: 'Utfärdat den',
+  kommentar: 'Kommentar', fardigtranskriberad: 'Färdigtranskriberad',
+};
+
+function _historikDiffText(ny, gammal) {
+  if (!ny || !gammal) return null;
+  const rader = [];
+  for (const [key, etikett] of Object.entries(_HISTORIK_FALT)) {
+    const a = gammal[key] ?? null, b = ny[key] ?? null;
+    const aStr = a === null || a === '' ? null : String(a);
+    const bStr = b === null || b === '' ? null : String(b);
+    if (aStr !== bStr) {
+      if (!aStr) rader.push('+ ' + etikett + ': ' + bStr);
+      else if (!bStr) rader.push('– ' + etikett + ' borttagen');
+      else rader.push(etikett + ': ' + aStr + ' → ' + bStr);
+    }
+  }
+  function namnInnehavare(x) { return ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?'; }
+  function namnGravsatt(x) {
+    const n = ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?';
+    const ar = [x.fodelse_ar, x.dods_ar].filter(Boolean).join('–');
+    return ar ? n + ' (' + ar + ')' : n;
+  }
+  function diffLista(nylista, gamallista, namnFn, etikett) {
+    const ga = new Set((gamallista || []).map(namnFn));
+    const na = new Set((nylista || []).map(namnFn));
+    for (const n of na) if (!ga.has(n)) rader.push('+ ' + etikett + ': ' + n);
+    for (const n of ga) if (!na.has(n)) rader.push('– ' + etikett + ' borttagen: ' + n);
+  }
+  diffLista(ny.innehavare, gammal.innehavare, namnInnehavare, 'Innehavare');
+  diffLista(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnInnehavare, 'Anhörig');
+  diffLista(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt');
+  return rader.length ? rader.join('\n') : 'Inga textändringar';
+}
+
 /** Öppna historik-modal och hämta redigeringshistorik för aktuell gravplats. */
 async function oppnaHistorikModal() {
   if (!currentUserIsAdmin || currentGravplatsId == null) return;
   const modal = document.getElementById('gp-historik-modal');
   if (!modal) return;
 
-  const rubrik = document.getElementById('gp-historik-modal-rubrik');
   const laddar = document.getElementById('gp-historik-laddar');
   const tabell = document.getElementById('gp-historik-tabell');
   const tbody = document.getElementById('gp-historik-tbody');
@@ -4197,7 +4234,6 @@ async function oppnaHistorikModal() {
   const fel = document.getElementById('gp-historik-fel');
   const loggLank = document.getElementById('gp-historik-logg-lank');
 
-  if (rubrik) rubrik.textContent = 'Redigeringshistorik' + (currentGravplatsId ? '' : '');
   if (laddar) laddar.hidden = false;
   if (tabell) tabell.hidden = true;
   if (tom) tom.hidden = true;
@@ -4216,7 +4252,13 @@ async function oppnaHistorikModal() {
     if (loggar.length === 0) {
       if (tom) tom.hidden = false;
     } else {
-      loggar.forEach(function(r) {
+      const harSnapshots = loggar.some((r) => r.inmatning_snapshot != null);
+      const tHead = tabell ? tabell.querySelector('thead tr') : null;
+      if (tHead) {
+        tHead.innerHTML = '<th scope="col">Datum och tid</th><th scope="col">Användare</th>' +
+          (harSnapshots ? '<th scope="col">Ändringar</th>' : '');
+      }
+      loggar.forEach(function(r, i) {
         const tr = document.createElement('tr');
         const datum = document.createElement('td');
         const anvandare = document.createElement('td');
@@ -4225,6 +4267,22 @@ async function oppnaHistorikModal() {
         anvandare.textContent = r.username || '–';
         tr.appendChild(datum);
         tr.appendChild(anvandare);
+        if (harSnapshots) {
+          const andringarTd = document.createElement('td');
+          andringarTd.style.fontSize = '0.82rem';
+          andringarTd.style.color = '#475569';
+          if (r.inmatning_snapshot && i < loggar.length - 1 && loggar[i + 1].inmatning_snapshot) {
+            const diffText = _historikDiffText(r.inmatning_snapshot, loggar[i + 1].inmatning_snapshot);
+            andringarTd.style.whiteSpace = 'pre-line';
+            andringarTd.textContent = diffText;
+          } else if (r.inmatning_snapshot && i === loggar.length - 1) {
+            andringarTd.textContent = '(första sparande)';
+            andringarTd.style.fontStyle = 'italic';
+          } else {
+            andringarTd.textContent = '–';
+          }
+          tr.appendChild(andringarTd);
+        }
         tbody.appendChild(tr);
       });
       if (tabell) tabell.hidden = false;

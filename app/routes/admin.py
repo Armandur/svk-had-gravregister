@@ -34,7 +34,7 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv
+from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_spara_redigeringslogg_snapshot, _set_api_keys_json
 from app.utils.git_version import GIT_VERSION
 from app.utils.text import _sanitize_backup_filename_part
 
@@ -109,6 +109,7 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "anthropic_api_key_from_env": from_env,
         "claude_aktiv_instans": _get_claude_instans_aktiv(),
         "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
+        "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
     }
 
 
@@ -132,6 +133,8 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
             existing["claude_aktiv_instans"] = body.claude_aktiv_instans
         if body.claude_batch_block_enskild is not None:
             existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
+        if body.spara_redigeringslogg_snapshot is not None:
+            existing["spara_redigeringslogg_snapshot"] = body.spara_redigeringslogg_snapshot
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")

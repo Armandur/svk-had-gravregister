@@ -35,6 +35,15 @@ def _get_claude_batch_block_enskild() -> bool:
         return True
 
 
+def _get_spara_redigeringslogg_snapshot() -> bool:
+    """Om True: spara en JSON-snapshot av inmatningsdata vid varje sparande (default: True)."""
+    try:
+        data = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
+        return bool(data.get("spara_redigeringslogg_snapshot", True))
+    except (OSError, json.JSONDecodeError):
+        return True
+
+
 def _set_api_keys_json(**kwargs) -> None:
     """Uppdatera ett eller flera fält i api_keys.json."""
     existing: dict = {}
