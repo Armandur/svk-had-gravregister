@@ -1892,6 +1892,7 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   text-decoration: none;
 }
 .gp-batch-pagar-banner a:hover { text-decoration: underline; }
+.gp-batch-pagar-banner[hidden] { display: none; }
 .gp-claude-sparat-panel {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
