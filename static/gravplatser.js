@@ -1099,9 +1099,6 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-function esc(s) {
-  return (s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-}
 
 async function ensureInmatningData() {
   if (currentGravplatsId == null) return false;

@@ -45,6 +45,7 @@
     </div>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
 (function () {
   const API = '/api';
@@ -55,7 +56,6 @@
   const tbody = document.getElementById('dbuh-tbody');
   const tomEl = document.getElementById('dbuh-tom');
   const felEl = document.getElementById('dbuh-fel');
-  function escapeHtml(s) { var div = document.createElement('div'); div.textContent = s == null ? '' : String(s); return div.innerHTML; }
   function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function formateraSenastAndrad(isoDatetime) {
     if (!isoDatetime) return '–';

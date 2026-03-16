@@ -59,11 +59,6 @@
     return s ? encodeURIComponent(s) : '';
   }
 
-  function escapeHtml(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-  }
 
   function visaForslag(lista) {
     sokForslag = lista || [];
