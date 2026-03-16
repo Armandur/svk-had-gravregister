@@ -84,6 +84,7 @@ function sorteradLista(lista) {
 async function fetchTradData() {
   try {
     const res = await fetch(`${API}/gravplatser/trad`, { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     tradData = {
       kyrkogardar: data.kyrkogardar || [],
@@ -175,6 +176,7 @@ async function fyllGravplatsLista(kyrkogard, kvarter, listEl) {
     try {
       const params = new URLSearchParams({ kyrkogard: kyrkogard, kvarter: kvarter });
       const res = await fetch(`${API}/gravplatser?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       gravplatserTradCache[cacheKey] = sorteradLista(data.gravplatser || []);
     } catch (e) {
@@ -235,6 +237,7 @@ async function laddaGravplatserForKvarter(targetGravplatsnummer, tillSista) {
   try {
     const params = new URLSearchParams({ kyrkogard: valdKyrkogard, kvarter: valdKvarter });
     const res = await fetch(`${API}/gravplatser?${params}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     gravplatserLista = sorteradLista(data.gravplatser || []);
     if (targetGravplatsnummer != null && targetGravplatsnummer !== '') {

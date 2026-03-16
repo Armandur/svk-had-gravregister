@@ -109,7 +109,7 @@
       return;
     }
     fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' })
-      .then(function (res) { return res.json(); })
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (data) { visaForslag(data.gravplatser || []); })
       .catch(function () { visaForslag([]); });
   }
