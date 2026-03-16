@@ -3,9 +3,7 @@ import fitz  # PyMuPDF
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 from app.utils.pdf_utils import (
-    _gravplats_halvor_from_utils,
     _excluded_filenames_for_mapp,
     _expanded_effective_list,
     _content_page_to_item,
