@@ -1101,6 +1101,8 @@ document.addEventListener('keydown', (e) => {
   if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
   const lb = document.getElementById('gp-lightbox');
   if (lb && !lb.hidden) return;
+  const ocrModal = document.getElementById('gp-ocr-modal');
+  if (ocrModal && !ocrModal.hidden) return;
   if (e.key === 'ArrowLeft') {
     if (currentIndex > 0) tillbaka();
     e.preventDefault();

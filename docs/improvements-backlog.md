@@ -16,3 +16,4 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 10 | Tillgänglighet (ARIA) i OCR-läget | UX | ✅ Klar |
 | 11 | Dra-och-släpp för formulärordning | UX | ⬜ |
 | 12 | Samla globala variabler i state-objekt i gravplatser.js | Kod | ⬜ |
+| 13 | Se över tangentbordskommandon – konflikter och täckning (t.ex. modalers effekt på globala genvägar) | UX | ⬜ |
