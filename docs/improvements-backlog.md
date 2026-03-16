@@ -12,7 +12,7 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 6 | Inkonsekvent felhantering i fetch-anrop | Kod | ✅ Klar |
 | 7 | Felhantering/loggning i except-block (auth.py:48, auth.py:80) | Kod | ✅ Klar |
 | 8 | Prestanda i achievements.py – SQL-queries i loopar | Kod | ✅ Klar |
-| 9 | Claude-priser konfigurerbart via env-variabel (constants.py) | Kod | ⬜ |
+| 9 | Claude-priser konfigurerbart via env-variabel (constants.py) | Kod | ✅ Klar |
 | 10 | Tillgänglighet (ARIA) i OCR-läget | UX | ⬜ |
 | 11 | Dra-och-släpp för formulärordning | UX | ⬜ |
 | 12 | Samla globala variabler i state-objekt i gravplatser.js | Kod | ⬜ |

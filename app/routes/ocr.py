@@ -8,7 +8,7 @@ import fitz  # PyMuPDF
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.constants import _CLAUDE_PRIS
+from app.utils.api_keys import _get_claude_pris
 from app.database import (
     get_db,
     User,
@@ -192,11 +192,12 @@ async def ocr_gravplats_endpoint(
     out = usage.get("output_tokens", 0)
     cache_create = usage.get("cache_creation_input_tokens", 0)
     cache_read = usage.get("cache_read_input_tokens", 0)
+    pris = _get_claude_pris()
     kostnad = (
-        inp * _CLAUDE_PRIS["input"]
-        + out * _CLAUDE_PRIS["output"]
-        + cache_create * _CLAUDE_PRIS["cache_creation"]
-        + cache_read * _CLAUDE_PRIS["cache_read"]
+        inp * pris["input"]
+        + out * pris["output"]
+        + cache_create * pris["cache_creation"]
+        + cache_read * pris["cache_read"]
     ) / 1_000_000
 
     logg = ClaudeAnropslogg(

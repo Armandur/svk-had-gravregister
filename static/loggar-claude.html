@@ -38,7 +38,19 @@
     <p><a href="/installningar">← Tillbaka till inställningar</a></p>
     <p id="loggar-ingen">Endast administratörer kan se loggar.</p>
     <section id="loggar-innehall" hidden>
-      <p class="loggar-info">Varje rad är ett anrop till Claude OCR. Kostnad beräknas utifrån officiella priser för claude-sonnet-4-6.</p>
+      <p class="loggar-info">Varje rad är ett anrop till Claude OCR. Kostnad beräknas utifrån konfigurerade tokenpriser (USD per miljon tokens).</p>
+      <details id="loggar-pris-detaljer" style="margin-bottom:1rem;">
+        <summary style="cursor:pointer;font-size:0.95rem;font-weight:600;color:#475569;padding:0.4rem 0;user-select:none;">Prismodell (USD per miljon tokens)</summary>
+        <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+          <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Indata<input type="number" id="pris-input" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
+          <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Utdata<input type="number" id="pris-output" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
+          <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Cache skapad<input type="number" id="pris-cache-creation" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
+          <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Cache läst<input type="number" id="pris-cache-read" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
+          <button type="button" id="pris-spara" style="padding:0.4rem 0.85rem;font-size:0.9rem;cursor:pointer;background:var(--accent,#2563eb);color:#fff;border:none;border-radius:5px;font-family:inherit;">Spara priser</button>
+        </div>
+        <p id="pris-status" style="font-size:0.85rem;margin-top:0.4rem;" aria-live="polite"></p>
+        <p style="font-size:0.82rem;color:#94a3b8;margin-top:0.35rem;">Miljövariablerna <code>CLAUDE_PRIS_INPUT</code>, <code>CLAUDE_PRIS_OUTPUT</code>, <code>CLAUDE_PRIS_CACHE_CREATION</code>, <code>CLAUDE_PRIS_CACHE_READ</code> har prioritet om de är satta.</p>
+      </details>
       <p class="loggar-totalt" id="loggar-totalt"></p>
       <div class="loggar-filter" style="margin-bottom:0.5rem;">
         <label style="font-size:0.9rem;color:#64748b;">USD/SEK-kurs <input type="number" id="sek-kurs" value="10.5" min="0.01" step="0.1" style="width:5.5rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:6px;" /></label>
@@ -225,7 +237,57 @@
       });
       nextBtn.addEventListener('click', function() { currentOffset += PAGE_SIZE; laddaLoggar(); });
 
-      (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() { hamtaValutakurs(); });
+      var prisInputEl = document.getElementById('pris-input');
+      var prisOutputEl = document.getElementById('pris-output');
+      var prisCacheCreationEl = document.getElementById('pris-cache-creation');
+      var prisCacheReadEl = document.getElementById('pris-cache-read');
+      var prisSparaBtn = document.getElementById('pris-spara');
+      var prisStatus = document.getElementById('pris-status');
+
+      function visaPrisStatus(text, ok) {
+        prisStatus.textContent = text;
+        prisStatus.style.color = ok ? '#16a34a' : '#dc2626';
+        setTimeout(function() { prisStatus.textContent = ''; }, 3000);
+      }
+
+      function laddaPriser() {
+        fetch(API + '/settings/api-keys', { credentials: 'include' })
+          .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+          .then(function(d) {
+            var p = d.claude_pris || {};
+            var fromEnv = d.claude_pris_from_env || {};
+            if (prisInputEl) { prisInputEl.value = (p.input != null ? p.input : 3.00); prisInputEl.disabled = !!fromEnv.input; }
+            if (prisOutputEl) { prisOutputEl.value = (p.output != null ? p.output : 15.00); prisOutputEl.disabled = !!fromEnv.output; }
+            if (prisCacheCreationEl) { prisCacheCreationEl.value = (p.cache_creation != null ? p.cache_creation : 3.75); prisCacheCreationEl.disabled = !!fromEnv.cache_creation; }
+            if (prisCacheReadEl) { prisCacheReadEl.value = (p.cache_read != null ? p.cache_read : 0.30); prisCacheReadEl.disabled = !!fromEnv.cache_read; }
+            if (prisSparaBtn) prisSparaBtn.disabled = Object.values(fromEnv).every(Boolean);
+            if (Object.values(fromEnv).some(Boolean)) {
+              if (prisStatus) { prisStatus.textContent = 'Ett eller flera priser styrs av miljövariabler och kan inte ändras här.'; prisStatus.style.color = '#94a3b8'; }
+            }
+          })
+          .catch(function() {});
+      }
+
+      prisSparaBtn && prisSparaBtn.addEventListener('click', function() {
+        var body = {};
+        if (prisInputEl && !prisInputEl.disabled) body.claude_pris_input = parseFloat(prisInputEl.value);
+        if (prisOutputEl && !prisOutputEl.disabled) body.claude_pris_output = parseFloat(prisOutputEl.value);
+        if (prisCacheCreationEl && !prisCacheCreationEl.disabled) body.claude_pris_cache_creation = parseFloat(prisCacheCreationEl.value);
+        if (prisCacheReadEl && !prisCacheReadEl.disabled) body.claude_pris_cache_read = parseFloat(prisCacheReadEl.value);
+        prisSparaBtn.disabled = true;
+        fetch(API + '/settings/api-keys', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body),
+        })
+          .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function() { visaPrisStatus('Priserna har sparats.', true); })
+          .catch(function(err) { visaPrisStatus('Kunde inte spara: ' + err.message, false); })
+          .finally(function() { prisSparaBtn.disabled = false; });
+      });
+
+      (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() { laddaPriser(); hamtaValutakurs(); });
     })();
   </script>
 </body>
