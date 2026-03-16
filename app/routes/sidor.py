@@ -27,6 +27,7 @@ _HJALP_TITLAR = {
     "inmatning": "Inmatning och transkribering",
     "extramaterial": "Extramaterial",
     "grunddata": "Grunddata och kyrkogårdar",
+    "admin": "Administratörsguide",
     "specifikation-generell": "Specifikation – Allmän modell",
     "specifikation-harnosand-skandix": "Specifikation – Härnösands domkyrkoförsamling (Skandix/Remington System Sy)",
 }
@@ -59,6 +60,7 @@ async def api_hjalp_lista():
         ("inmatning", "Inmatning och transkribering"),
         ("extramaterial", "Extramaterial"),
         ("grunddata", "Grunddata och kyrkogårdar"),
+        ("admin", "Administratörsguide"),
         ("specifikation", "Specifikation (översikt)"),
         ("specifikation-generell", "Specifikation – Allmän modell"),
         ("specifikation-harnosand-skandix", "Specifikation – Härnösands domkyrkoförsamling (Skandix/Remington System Sy)"),
