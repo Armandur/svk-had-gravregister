@@ -226,11 +226,13 @@ class ClaudeBatchJobb(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     namn: Mapped[str] = mapped_column(default="")
     skapad_den: Mapped[str] = mapped_column()  # ISO 8601 UTC
-    status: Mapped[str] = mapped_column(default="klar")  # klar | kör | pausad | avbruten
+    status: Mapped[str] = mapped_column(default="klar")  # klar | kör | pausad | avbruten | väntar_svar
     totalt: Mapped[int] = mapped_column(default=0)
     klara: Mapped[int] = mapped_column(default=0)
     fel: Mapped[int] = mapped_column(default=0)
     filter_json: Mapped[str | None] = mapped_column(nullable=True)  # JSON: {"kyrkogard": ..., "kvarter": ..., "ej_transkriberade": true, ...}
+    jobb_typ: Mapped[str] = mapped_column(default="realtid")  # "realtid" | "anthropic_batch"
+    anthropic_batch_id: Mapped[str | None] = mapped_column(nullable=True)  # Batch-ID från Anthropics Batch API
 
 
 class ClaudeBatchJobbPost(Base):
@@ -1011,6 +1013,16 @@ def init_db():
         post_cols = [row[1] for row in r]
         if "fel_meddelande" not in post_cols:
             conn.execute(text("ALTER TABLE claude_batch_jobb_post ADD COLUMN fel_meddelande TEXT"))
+            conn.commit()
+
+        # ---------- Migration: claude_batch_jobb jobb_typ + anthropic_batch_id ----------
+        r = conn.execute(text("PRAGMA table_info(claude_batch_jobb)"))
+        jobb_cols = [row[1] for row in r]
+        if "jobb_typ" not in jobb_cols:
+            conn.execute(text("ALTER TABLE claude_batch_jobb ADD COLUMN jobb_typ TEXT NOT NULL DEFAULT 'realtid'"))
+            conn.commit()
+        if "anthropic_batch_id" not in jobb_cols:
+            conn.execute(text("ALTER TABLE claude_batch_jobb ADD COLUMN anthropic_batch_id TEXT"))
             conn.commit()
 
 
