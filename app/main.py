@@ -5170,6 +5170,57 @@ async def hamta_batch_jobb(
     }
 
 
+@app.get("/api/batch-claude/jobb/{jobb_id:int}/poster")
+async def hamta_batch_jobb_poster(
+    jobb_id: int,
+    sida: int = 1,
+    per_sida: int = 25,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Hämta paginerad lista av poster för ett batch-jobb."""
+    _require_claude_batch(current_user)
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    per_sida = max(1, min(100, per_sida))
+    sida = max(1, sida)
+    totalt = db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == jobb_id).count()
+    poster = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(ClaudeBatchJobbPost.jobb_id == jobb_id)
+        .order_by(ClaudeBatchJobbPost.ordning)
+        .offset((sida - 1) * per_sida)
+        .limit(per_sida)
+        .all()
+    )
+    gravplats_ids = [p.gravplats_id for p in poster]
+    gravplatser_rows = (
+        db.query(Gravplats, MappConfig.namn)
+        .join(MappConfig, Gravplats.mapp_id == MappConfig.id)
+        .filter(Gravplats.id.in_(gravplats_ids))
+        .all()
+    ) if gravplats_ids else []
+    gravplatser = {g.id: (g, mapp_namn) for g, mapp_namn in gravplatser_rows}
+    poster_data = []
+    for p in poster:
+        pair = gravplatser.get(p.gravplats_id)
+        gp, mapp_namn = pair if pair else (None, None)
+        poster_data.append({
+            "id": p.id,
+            "gravplats_id": p.gravplats_id,
+            "ordning": p.ordning,
+            "status": p.status,
+            "fel_meddelande": p.fel_meddelande or None,
+            "kyrkogard": gp.kyrkogard if gp else None,
+            "kvarter": gp.kvarter if gp else None,
+            "gravplatsnummer": gp.gravplatsnummer if gp else None,
+            "mapp_namn": mapp_namn if mapp_namn else None,
+        })
+    sidor = max(1, -(-totalt // per_sida))
+    return {"poster": poster_data, "totalt": totalt, "sida": sida, "per_sida": per_sida, "sidor": sidor}
+
+
 @app.delete("/api/batch-claude/jobb/{jobb_id:int}")
 async def ta_bort_batch_jobb(
     jobb_id: int,
