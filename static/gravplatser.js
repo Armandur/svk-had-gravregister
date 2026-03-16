@@ -1085,6 +1085,14 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeLightbox();
     else if (e.key === 'ArrowLeft') { lightboxPrev(); e.preventDefault(); }
     else if (e.key === 'ArrowRight') { lightboxNext(); e.preventDefault(); }
+    return;
+  }
+  if (e.key === 'Escape' && ocrVantarPaBild) {
+    ocrVantarPaBild = false;
+    ocrNamnLage = null;
+    ocrAdressLage = false;
+    ocrFoddenamnFalt = null;
+    uppdateraOcrKnapp();
   }
 });
 
@@ -1218,6 +1226,8 @@ function uppdateraOcrKnapp() {
   const kanStarta = !!ocrTargetElement && inmatningRedigerar && currentGravplatsId != null && harHalvor;
   const iconSynlig = ocrFaltIkonBtn && ocrFaltIkonBtn.parentElement != null;
   document.body.classList.toggle('gp-ocr-vantar-pa-bild', ocrVantarPaBild);
+  const ocrStatusEl = document.getElementById('gp-ocr-status');
+  if (ocrStatusEl) ocrStatusEl.textContent = ocrVantarPaBild ? 'Klicka och dra på bildavsnittet för att markera texten.' : '';
   if (btn) {
     btn.disabled = !kanStarta && !ocrVantarPaBild;
     btn.textContent = ocrVantarPaBild ? 'Avbryt' : 'Markera område på bild';

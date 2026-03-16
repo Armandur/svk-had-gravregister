@@ -218,6 +218,7 @@ function visaOcrIkonForFalt(input) {
   }
   ocrFaltIkonBtn.classList.remove('gp-ocr-falt-ikon-fel');
   ocrFaltIkonBtn.title = 'Markera område på bild';
+  ocrFaltIkonBtn.setAttribute('aria-label', 'Markera område på bild');
   let wrapToUnwrap = ocrFaltIkonBtn.parentElement;
   if (wrapToUnwrap?.classList?.contains('gp-ocr-falt-ikon-grupp')) wrapToUnwrap = wrapToUnwrap.parentElement;
   if (wrapToUnwrap?.classList?.contains('gp-ocr-falt-wrap')) {
@@ -478,8 +479,19 @@ function startOcrOverlay(fig, initialEvent) {
     setRect(left, top, width, height);
   }
 
+  function onEscapeOverlay(e) {
+    if (e.key === 'Escape') {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('keydown', onEscapeOverlay);
+      overlay.remove();
+    }
+  }
+  document.addEventListener('keydown', onEscapeOverlay);
+
   function onUp(e) {
     document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('keydown', onEscapeOverlay);
     const { x, y } = clientToOverlay(e.clientX, e.clientY);
     const left = Math.min(startX, x);
     const top = Math.min(startY, y);
@@ -760,6 +772,7 @@ function visaIkonSomTomExtrahering() {
   ocrFaltIkonBtn.classList.add('gp-ocr-falt-ikon-fel');
   ocrFaltIkonBtn.remove();
   ocrFaltIkonBtn.title = 'Ingen text kunde extraheras – försök igen';
+  ocrFaltIkonBtn.setAttribute('aria-label', 'Ingen text kunde extraheras – försök igen');
   const input = ocrTargetElement;
   let wrap = input.parentElement?.classList?.contains('gp-ocr-falt-wrap') ? input.parentElement : null;
   if (!wrap) {
@@ -902,6 +915,12 @@ function showOcrModalNamnSplit(text, lage, targetElement) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         applyAndClose(i);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const splits = [...namnTextEl.querySelectorAll('.gp-ocr-namn-split')];
+        const idx = splits.indexOf(e.currentTarget);
+        const next = e.key === 'ArrowRight' ? splits[idx + 1] : splits[idx - 1];
+        if (next) next.focus();
       }
     });
     namnTextEl.appendChild(splitSpan);
@@ -976,6 +995,12 @@ function showOcrModalAdressSplit(text, targetElement) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         applyAndClose(i);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const splits = [...namnTextEl.querySelectorAll('.gp-ocr-namn-split')];
+        const idx = splits.indexOf(e.currentTarget);
+        const next = e.key === 'ArrowRight' ? splits[idx + 1] : splits[idx - 1];
+        if (next) next.focus();
       }
     });
     namnTextEl.appendChild(splitSpan);
@@ -997,6 +1022,7 @@ function closeOcrModal(anvand) {
   const namnWrap = document.getElementById('gp-ocr-modal-namn');
   const rubrikEl = document.getElementById('gp-ocr-modal-rubrik');
   if (!modal || !textarea) return;
+  const returnFocusTill = ocrModalTargetElement || ocrTargetElement;
   if (ocrModalNamnLage) {
     ocrModalNamnLage = null;
     ocrNamnSplitIndex = null;
@@ -1007,6 +1033,7 @@ function closeOcrModal(anvand) {
     textarea.removeAttribute('hidden');
     document.getElementById('gp-ocr-modal-knappar')?.removeAttribute('hidden');
     modal.hidden = true;
+    if (returnFocusTill) returnFocusTill.focus();
     return;
   }
   if (ocrModalAdressLage) {
@@ -1020,6 +1047,7 @@ function closeOcrModal(anvand) {
     textarea.removeAttribute('hidden');
     document.getElementById('gp-ocr-modal-knappar')?.removeAttribute('hidden');
     modal.hidden = true;
+    if (returnFocusTill) returnFocusTill.focus();
     return;
   }
   if (anvand && ocrTargetElement) {
@@ -1028,6 +1056,7 @@ function closeOcrModal(anvand) {
       value = normaliseraUtfordatDen(value);
       if (value === '') {
         modal.hidden = true;
+        if (returnFocusTill) returnFocusTill.focus();
         return;
       }
     }
@@ -1036,4 +1065,5 @@ function closeOcrModal(anvand) {
     markInmatningDirty();
   }
   modal.hidden = true;
+  if (returnFocusTill) returnFocusTill.focus();
 }
