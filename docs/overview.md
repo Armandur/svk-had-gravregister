@@ -5,8 +5,8 @@ Gravregister är en webbapplikation för att digitalisera skannade gravregister 
 ## Huvudfunktioner
 
 - **Bläddring:** Välj mapp (kyrkogård/gravkvarter), ange försättssidor om det behövs, och bläddra mellan gravplatser. Varje gravplats visas som tre delar (gravrättsinnehavare, gravsatta 1–5, gravsatta 6–10).
-- **Inmatning:** Fyll i formulär för gravplats (storlek, skiss, underhåll, monument osv.), gravrättsinnehavare, närmast anhörig och gravsatta; data sparas i databasen och kan exporteras.
-- **Claude OCR:** Automatisk transkribering med AI – antingen för en enskild gravplats (knappen **Hämta från Claude** i redigeringsläge) eller i bulk via **Batch Claude OCR** (kör och granska ett helt gravkvarter automatiskt).
+- **Inmatning:** Fyll i formulär för gravplats (storlek, skiss, underhåll, monument osv.), gravrättsinnehavare, närmast anhörig och gravsatta; data sparas i databasen och kan exporteras. Som stöd finns **OCR-fältmarkering**: markera ett område direkt på bilden så fylls det valda fältet i automatiskt.
+- **Claude OCR (valfritt):** Kräver Anthropic API-nyckel och medför token-kostnad per körning. Erbjuder automatisk transkribering med AI – antingen för en enskild gravplats (knappen **Hämta från Claude** i redigeringsläge) eller i bulk via **Batch Claude OCR** (kör och granska ett helt gravkvarter automatiskt).
 - **Extramaterial:** PDF-sidor som inte följer den vanliga tre-sidorsstrukturen kan plockas ur och kopplas till en gravplats eller endast till mappen.
 - **Sökning:** Sök gravplatser på fullständigt nummer eller via avancerad sökning (kyrkogård, kvarter, namn m.m.).
 - **Grunddata:** Hantera kyrkogårdar och användare (admin).
