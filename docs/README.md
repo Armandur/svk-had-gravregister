@@ -7,8 +7,9 @@ Samma texter visas i appen under **Hjälp** (länk på startsidan). Filerna i de
 | [overview.md](overview.md) | Översikt, huvudfunktioner och kom igång |
 | [bladdring.md](bladdring.md) | Bläddring och visning av gravplatser |
 | [inmatning.md](inmatning.md) | Inmatning och transkribering |
+| [claude-ocr.md](claude-ocr.md) | Claude OCR – enskild körning och batch |
 | [extramaterial.md](extramaterial.md) | Extramaterial |
-| [grunddata.md](grunddata.md) | Grunddata och kyrkogårdar |
+| [grunddata.md](grunddata.md) | Grunddata, kyrkogårdar, säkerhetskopior och prestationer |
 
 **Specifikation** (uppdelad i allmän modell och källdata-specifik):
 

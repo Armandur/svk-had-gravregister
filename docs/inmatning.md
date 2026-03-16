@@ -22,9 +22,17 @@ Namn, adress, födelse (år, månad, dag, föd.nr), död (år, månad, dag, död
 
 Endast de fält som ofta förekommer i källmaterialet är obligatoriska; övriga kan lämnas tomma.
 
-## OCR-hjälp
+## Claude OCR – automatisk transkribering
 
-Vid inmatning kan du använda OCR för att extrahera text från bilden: markera ett område på den visade PDF-delen så fylls motsvarande fält i. Du kan välja "Efternamn först" / "Förnamn först" och "f. (född)" (namn som ogift) för namn, samt "Adress" för att fylla gatuadress, postnummer och postort från en adressrad.
+När du är i redigeringsläge visas knappen **Hämta från Claude** i formulärrubriken. Klicka på den för att skicka alla tre bilddelar för den aktuella gravplatsen till Claude (AI), som analyserar bilderna och föreslår ifyllnad av alla fält. Resultatet visas i en panel under knappen; klicka **Ladda in i formuläret** för att se en diff med föreslagna ändringar och sedan applicera dem. Du kan alltid kontrollera och justera värdena innan du sparar.
+
+> **OBS:** Claude-funktioner kräver att en Anthropic API-nyckel är konfigurerad och att Claude-åtkomst är aktiverad för instansen (görs under **Inställningar**). Om gravplatsen ingår i ett pågående batch-jobb kan enskild körning vara blockerad (inställning under **Inställningar → Claude OCR**).
+
+Se även [Claude OCR – enskild och batch](claude-ocr.md) för detaljer om batch-körning.
+
+## OCR-hjälp (fältmarkering)
+
+Du kan också markera ett område direkt på den visade PDF-delen så fylls motsvarande fält i. Du kan välja "Efternamn först" / "Förnamn först" och "f. (född)" (namn som ogift) för namn, samt "Adress" för att fylla gatuadress, postnummer och postort från en adressrad.
 
 ## Kommentarer
 
