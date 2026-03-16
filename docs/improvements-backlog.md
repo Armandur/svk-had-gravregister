@@ -17,3 +17,4 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 11 | Dra-och-släpp för formulärordning | UX | ✅ Klar |
 | 12 | Samla globala variabler i state-objekt i gravplatser.js | Kod | ⬜ |
 | 13 | Se över tangentbordskommandon – konflikter och täckning (t.ex. modalers effekt på globala genvägar) | UX | ⬜ |
+| 14 | Klick på färdigtranskriberat kvarter i statistikdiagrammen på startsidan ska navigera till första graven i kvarteret (inte visa felmeddelande/alert) | UX | ⬜ |
