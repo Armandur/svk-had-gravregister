@@ -25,7 +25,7 @@ Under **Inställningar → Användarhantering** (admin) kan du:
 
 - Skapa, redigera och inaktivera användarkonton.
 - Tilldela admin-rollen.
-- Styra om en enskild användare ska ha tillgång till Claude OCR (om Claude är aktiverat för instansen).
+- Styra om en enskild användare ska ha tillgång till **Claude OCR** (enskilda körningar) respektive **Claude Batch OCR** – de styrs av två separata kryssrutor ("Claude" och "Batch") per användare i listan. Båda kräver att Claude är aktiverat för hela instansen (se nedan).
 
 ## Grunddatahantering – kyrkogårdar
 
@@ -77,4 +77,7 @@ Använd verktygen enligt instruktionerna i gränssnittet. Gör alltid en säkerh
 
 ## Prestationsgränser
 
-Under **Inställningar → Justera prestationsgränser** kan du ändra vilka tröskelvärden (antal registreringar, antal yrken) som krävs för brons-, silver- och guldutmärkelser.
+Under **Inställningar → Justera prestationsgränser** kan du:
+
+- Ändra vilka tröskelvärden (antal registreringar, antal yrken m.m.) som krävs för brons-, silver- och guldutmärkelser.
+- Konfigurera **yrkesgrupper för yrkesbaserade prestationer** – dvs. vilka yrken som räknas in i en viss yrkeskategori-prestation. Ändringar gäller för alla användare.
