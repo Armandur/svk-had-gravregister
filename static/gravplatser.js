@@ -2975,7 +2975,7 @@ document.getElementById('gp-inmatning-spara')?.addEventListener('click', sparaIn
 document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async function () {
   if (state.currentGravplatsId == null) return;
   if (state._gravplatsHarBatchPagar && !state._claudeBatchBlockEnskild) {
-    if (!confirm('Gravplatsen ingår i ett pågående batch-jobb. Vill du ändå köra en enskild körning nu?')) return;
+    if (!await showConfirm('Gravplatsen ingår i ett pågående batch-jobb. Vill du ändå köra en enskild körning nu?')) return;
   }
   const btn = document.getElementById('gp-claude-ocr-btn');
   const avbrytBtn = document.getElementById('gp-claude-avbryt-btn');

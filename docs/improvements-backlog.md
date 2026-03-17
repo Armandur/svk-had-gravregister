@@ -23,11 +23,11 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 17 | Konsolidera de fyra separata `document.addEventListener('keydown')`-lyssnarna i gravplatser.js till en enda lyssnare med tydlig prioritetsordning för modal-guards – enklare att överblicka och debugga | Kod | ✅ Klar |
 | 18 | Skapa `CLAUDE.md` med projektöversikt, körinstruktioner och konventioner för AI-assisterat arbete | Kod | ✅ Klar |
 | 19 | `@app.on_event("startup")` deprecated i FastAPI ≥ 0.93 – ersatt med `lifespan` context manager | Kod | ✅ Klar |
-| 20 | `api_keys.py` läser JSON från disk vid varje anrop (4+ funktioner) – cacha innehållet i minnet med invalidering vid skrivning | Kod | 🔲 Öppen |
-| 21 | Lägg till automatiserade tester (`pytest`) – åtminstone smoke-tester för routes och OCR-service | Kod | 🔲 Öppen |
+| 20 | `api_keys.py` läser JSON från disk vid varje anrop (4+ funktioner) – cacha innehållet i minnet med invalidering vid skrivning | Kod | ✅ Klar |
+| 21 | Lägg till automatiserade tester (`pytest`) + GitHub Actions workflow – smoke-tester för routes och enhetstester för OCR-service | Kod | 🔲 Öppen |
 | 22 | Migrera SQLAlchemy-sessionen till `AsyncSession` för konsekvent async-stack (stor refaktorering – kräver genomtänkt plan) | Kod | 🔲 Öppen |
 | 23 | Exportfunktion: ladda ned transkriberade gravar som CSV/Excel (eller JSON) för vidare bearbetning i externa verktyg | Funktionalitet | 🔲 Öppen |
-| 24 | Kvarhållna `confirm()`-dialoger (destruktiva åtgärder) – uppgradera till native `<dialog>`-baserade bekräftelsemodaler för konsekvent utseende | UX | 🔲 Öppen |
+| 24 | Kvarhållna `confirm()`-dialoger (destruktiva åtgärder) – uppgradera till native `<dialog>`-baserade bekräftelsemodaler för konsekvent utseende | UX | ✅ Klar |
 | 25 | `MODEL`-konstanten i `ocr_service.py` är hårdkodad – gör den konfigurerbar via env-variabel `CLAUDE_MODEL` (med Sonnet 4.6 som default) | Kod | 🔲 Öppen |
 
 ---

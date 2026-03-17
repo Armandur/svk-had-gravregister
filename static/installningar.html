@@ -126,6 +126,7 @@
     </section>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
     (async function () {
       const me = await gpEnsureAuth();
@@ -253,7 +254,7 @@
       });
 
       taBortBtn.addEventListener('click', async () => {
-        if (!confirm('Ta bort den sparade API-nyckeln?')) return;
+        if (!await showConfirm('Ta bort den sparade API-nyckeln?')) return;
         taBortBtn.disabled = true;
         try {
           const res = await fetch('/api/settings/api-keys', {

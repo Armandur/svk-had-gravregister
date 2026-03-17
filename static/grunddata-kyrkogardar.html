@@ -85,9 +85,9 @@
           listEl.appendChild(li);
         });
         listEl.querySelectorAll('.kg-ta-bort:not([disabled])').forEach(function(btn) {
-          btn.addEventListener('click', function() {
+          btn.addEventListener('click', async function() {
             const kod = (btn.dataset.kod || '').trim();
-            if (!kod || !confirm('Ta bort kyrkogården "' + kod + '"?')) return;
+            if (!kod || !await showConfirm('Ta bort kyrkogården "' + kod + '"?')) return;
             fetch('/api/admin/kyrkogardar/' + encodeURIComponent(kod), {
               method: 'DELETE',
               credentials: 'include'

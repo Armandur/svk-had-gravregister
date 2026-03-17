@@ -186,10 +186,10 @@
               });
             });
             listEl.querySelectorAll('.admin-ta-bort:not([disabled])').forEach(function(btn) {
-              btn.addEventListener('click', function() {
+              btn.addEventListener('click', async function() {
                 const id = btn.dataset.id;
                 const username = (btn.dataset.username || '').trim();
-                if (!confirm('Vill du verkligen ta bort användaren "' + username + '"? Detta kan inte ångras.')) return;
+                if (!await showConfirm('Vill du verkligen ta bort användaren "' + username + '"? Detta kan inte ångras.')) return;
                 fetch('/api/admin/users/' + id, {
                   method: 'DELETE',
                   credentials: 'include'
