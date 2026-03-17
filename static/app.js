@@ -736,7 +736,7 @@ async function infogaTomSidaEfter(filnamn) {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte infoga tom sida: ' + e.message);
+    showToast('Kunde inte infoga tom sida: ' + e.message, 'fel');
   }
 }
 
@@ -751,7 +751,7 @@ async function taBortInfogadSida(blankId) {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte ta bort infogad sida: ' + e.message);
+    showToast('Kunde inte ta bort infogad sida: ' + e.message, 'fel');
   }
 }
 
@@ -768,7 +768,7 @@ async function flyttaSida(filnamn, riktning) {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte flytta sida: ' + e.message);
+    showToast('Kunde inte flytta sida: ' + e.message, 'fel');
   }
 }
 
@@ -786,7 +786,7 @@ async function setRedanHalvaFlode(filnamn, redanHalva) {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte uppdatera: ' + e.message);
+    showToast('Kunde inte uppdatera: ' + e.message, 'fel');
   }
 }
 
@@ -810,7 +810,7 @@ async function infogaUrklippPåGravplats() {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte infoga: ' + e.message);
+    showToast('Kunde inte infoga: ' + e.message, 'fel');
   }
 }
 
@@ -834,7 +834,7 @@ async function infogaUrklippPåMapp() {
     ogiltigförklaraBildcache();
     await refreshFiler();
   } catch (e) {
-    alert('Kunde inte infoga: ' + e.message);
+    showToast('Kunde inte infoga: ' + e.message, 'fel');
   }
 }
 
@@ -861,7 +861,7 @@ async function taBortExtramaterial(emIdOrRef) {
     await refreshFiler();
     if (mappListaSynlig) await uppdateraExtramaterialMappLista();
   } catch (e) {
-    alert('Kunde inte ta bort: ' + e.message);
+    showToast('Kunde inte ta bort: ' + e.message, 'fel');
   }
 }
 

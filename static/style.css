@@ -1036,7 +1036,7 @@ body {
   }
 }
 
-/* Toast för "roliga saker" (nytt unikt yrke m.m.) */
+/* Toast-notifikationer */
 @keyframes gp-toast-in {
   from { opacity: 0; transform: translateY(0.5rem); }
   to { opacity: 1; transform: translateY(0); }
@@ -1045,4 +1045,19 @@ body {
   from { opacity: 1; transform: translateY(0); }
   to { opacity: 0; transform: translateY(0.25rem); }
 }
+.gp-toast {
+  max-width: 22rem;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  animation: gp-toast-in 0.2s ease;
+  pointer-events: auto;
+  word-break: break-word;
+}
+.gp-toast--info  { background: #1e293b; color: #fff; }
+.gp-toast--ok    { background: #166534; color: #fff; }
+.gp-toast--fel   { background: #991b1b; color: #fff; }
+.gp-toast--ut    { animation: gp-toast-out 0.2s ease forwards; }
 

@@ -604,7 +604,7 @@ function startOcrOverlay(fig, initialEvent) {
         if (target.tagName === 'TEXTAREA') autoExpandTextarea(target);
       }
     }).catch((err) => {
-      alert('OCR misslyckades: ' + (err && err.message ? err.message : 'okänt fel'));
+      showToast('OCR misslyckades: ' + (err && err.message ? err.message : 'okänt fel'), 'fel');
     });
   }
 

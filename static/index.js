@@ -173,7 +173,7 @@
       fetch(API + '/gravplatser/nasta-ej-fardig', { credentials: 'include' })
         .then(function (res) {
           if (res.status === 404) {
-            alert('Ingen ej färdig gravplats hittades. Alla gravplatser är markerade som färdigtranskriberade.');
+            showToast('Ingen ej färdig gravplats hittades. Alla gravplatser är markerade som färdigtranskriberade.', 'info');
             return null;
           }
           if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
@@ -186,7 +186,7 @@
           }
         })
         .catch(function (err) {
-          alert('Kunde inte hämta nästa gravplats: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte hämta nästa gravplats: ' + (err.message || 'nätverksfel'), 'fel');
         })
         .finally(function () {
           nastaBtn.disabled = false;
@@ -211,7 +211,7 @@
         fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
           .then(function (res) {
             if (res.status === 404) {
-              alert('Ingen ej färdig gravplats i ' + kyrkogard + '. Alla är färdigtranskriberade.');
+              showToast('Ingen ej färdig gravplats i ' + kyrkogard + '. Alla är färdigtranskriberade.', 'info');
               return null;
             }
             if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
@@ -224,7 +224,7 @@
             }
           })
           .catch(function (err) {
-            alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+            showToast('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'), 'fel');
           })
           .finally(function () {
             gotoBtn.disabled = false;
@@ -269,7 +269,7 @@
             }
           })
           .catch(function (err) {
-            alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+            showToast('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'), 'fel');
           })
           .finally(function () {
             gotoKvarter.disabled = false;

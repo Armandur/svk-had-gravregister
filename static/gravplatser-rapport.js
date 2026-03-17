@@ -101,7 +101,7 @@ async function skapaRapportUtskrift() {
 
   const gp = state.gravplatserLista[state.currentIndex];
   if (!gp || state.currentGravplatsId == null) {
-    alert('Ingen gravplats vald.');
+    showToast('Ingen gravplats vald.', 'info');
     return;
   }
   const mappNamn = gp.mapp_namn;
@@ -109,7 +109,7 @@ async function skapaRapportUtskrift() {
 
   const ok = await ensureInmatningData();
   if (!ok) {
-    alert('Kunde inte ladda transkriberad information.');
+    showToast('Kunde inte ladda transkriberad information.', 'fel');
     return;
   }
 
@@ -129,7 +129,7 @@ async function skapaRapportUtskrift() {
     if (!halvorRes.ok) throw new Error('Kunde inte hämta bilder');
     halvorData = await halvorRes.json();
   } catch (e) {
-    alert('Kunde inte hämta gravplatsbilder: ' + (e.message || 'nätverksfel'));
+    showToast('Kunde inte hämta gravplatsbilder: ' + (e.message || 'nätverksfel'), 'fel');
     return;
   }
 

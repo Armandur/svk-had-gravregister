@@ -517,7 +517,7 @@ async function uppdateraVy(behallInmatningState = false) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       });
     });
@@ -703,7 +703,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
         await uppdateraVy(true);
       } catch (err) {
         btn.disabled = false;
-        alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+        showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
       }
     });
   });
@@ -781,7 +781,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       } else {
         const emId = btn.dataset.emId;
@@ -798,7 +798,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       }
     });
@@ -976,7 +976,7 @@ document.getElementById('gp-rapport-avbryt')?.addEventListener('click', () => {
   if (m) m.hidden = true;
 });
 document.getElementById('gp-rapport-skapa')?.addEventListener('click', () => {
-  skapaRapportUtskrift().catch((e) => alert('Rapport: ' + (e.message || 'fel')));
+  skapaRapportUtskrift().catch((e) => showToast('Rapport: ' + (e.message || 'fel'), 'fel'));
 });
 
 document.getElementById('gp-em-rubrik')?.addEventListener('click', toggleExtramaterialInnehall);
@@ -1648,7 +1648,7 @@ function oppnaSkissModal() {
 
     document.getElementById('gp-skiss-spara').onclick = async () => {
       if (currentRect.w < 0.01 || currentRect.h < 0.01) {
-        alert('Markera ett område genom att dra på bilden.');
+        showToast('Markera ett område genom att dra på bilden.', 'info');
         return;
       }
       const body = {
@@ -1677,7 +1677,7 @@ function oppnaSkissModal() {
         if (sparaBtn) sparaBtn.disabled = false;
       }
       if (!res.ok) {
-        alert('Kunde inte spara skiss.');
+        showToast('Kunde inte spara skiss.', 'fel');
         return;
       }
       modal.hidden = true;
@@ -2984,7 +2984,7 @@ document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async fu
     state.sparatClaudeSvar = { svar_json: data, ocr_kommentar: data.ocr_kommentar || '', skapad_den: new Date().toISOString(), username: '' };
   } catch (err) {
     if (err.name === 'AbortError') { /* användaren avbröt – inget felmeddelande */ }
-    else alert('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'));
+    else showToast('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'), 'fel');
   } finally {
     state._claudeOcrAbortController = null;
     btn.disabled = false;

@@ -238,6 +238,7 @@
       <ul class="batch-jobb-lista" id="batch-jobb-lista"></ul>
     </div>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
 (function() {
@@ -626,13 +627,13 @@
   async function oppnaGranskning(jobbId) {
     try {
       const res = await fetch(API + '/batch-claude/jobb/' + jobbId, { credentials: 'include' });
-      if (!res.ok) { alert('Kunde inte hämta jobbet.'); return; }
+      if (!res.ok) { showToast('Kunde inte hämta jobbet.', 'fel'); return; }
       const data = await res.json();
       const forsta = (data.poster || []).find(function(p) { return p.status === 'klar'; });
-      if (!forsta) { alert('Inga körda gravplatser i detta jobb ännu.'); return; }
+      if (!forsta) { showToast('Inga körda gravplatser i detta jobb ännu.', 'info'); return; }
       const slug = encodeURIComponent([forsta.kyrkogard, forsta.kvarter, forsta.gravplatsnummer].filter(Boolean).join(' '));
       window.location.href = '/gravplatser/' + slug + '?batch_jobb_id=' + jobbId;
-    } catch(e) { alert('Fel: ' + (e.message || 'okänt')); }
+    } catch(e) { showToast('Fel: ' + (e.message || 'okänt'), 'fel'); }
   }
 
   /* ── Realtidskörning ─────────────────────────────────────────── */
@@ -671,7 +672,7 @@
         laddaStatistik();
         return;
       }
-      if (!res.ok) { alert('Fel vid k\u00f6rning.'); laddaJobb(); return; }
+      if (!res.ok) { showToast('Fel vid körning.', 'fel'); laddaJobb(); return; }
       const data = await res.json();
       const klara = data.klara || 0;
       const totalt = aktivtJobbTotalt || data.totalt || 1;
@@ -693,7 +694,7 @@
         return;
       }
       setTimeout(korNasta, 800);
-    } catch(e) { alert('N\u00e4tverksfel: ' + (e.message || '')); laddaJobb(); }
+    } catch(e) { showToast('Nätverksfel: ' + (e.message || ''), 'fel'); laddaJobb(); }
   }
 
   document.getElementById('batch-pausa-btn').addEventListener('click', async function() {
