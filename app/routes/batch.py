@@ -97,6 +97,39 @@ async def skapa_batch_jobb(
     return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt, "jobb_typ": jobb_typ}
 
 
+@router.get("/api/batch-claude/uppskattning")
+async def uppskattning_batch_jobb(
+    kyrkogard: str | None = Query(default=None),
+    kvarter: str | None = Query(default=None),
+    antal: int | None = Query(default=None),
+    ej_transkriberade: bool = Query(default=True),
+    ej_claude_korda: bool = Query(default=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Räkna gravplatser per kvartertyp utan att skapa ett jobb – för kostnadsuppskattning."""
+    _require_claude_batch(current_user)
+    q = db.query(Gravplats)
+    if kyrkogard:
+        q = q.filter(Gravplats.kyrkogard == kyrkogard)
+    if kvarter:
+        q = q.filter(Gravplats.kvarter == kvarter)
+    if ej_transkriberade:
+        fardigtranskriberade_ids = [r[0] for r in db.query(GravplatsInmatning.gravplats_id).filter(GravplatsInmatning.fardigtranskriberad == True).all()]
+        if fardigtranskriberade_ids:
+            q = q.filter(~Gravplats.id.in_(fardigtranskriberade_ids))
+    if ej_claude_korda:
+        korda_ids = [r[0] for r in db.query(ClaudeOcrSvar.gravplats_id).all()]
+        if korda_ids:
+            q = q.filter(~Gravplats.id.in_(korda_ids))
+    gravplatser = q.with_entities(Gravplats.kvarter).all()
+    if antal is not None and antal > 0:
+        gravplatser = gravplatser[:antal]
+    allm = sum(1 for (kv,) in gravplatser if kv and "allm" in kv.lower())
+    ovriga = len(gravplatser) - allm
+    return {"allm": allm, "ovriga": ovriga, "totalt": len(gravplatser)}
+
+
 @router.get("/api/batch-claude/gravplats/{gravplats_id:int}/pagar")
 async def gravplats_i_pagar_batch(
     gravplats_id: int,

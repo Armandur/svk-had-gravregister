@@ -81,6 +81,13 @@
     .batch-typ-info-realtid { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
     .batch-typ-info-batch { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
     .batch-typ-info-icon { font-size: 1.1rem; line-height: 1.4; flex-shrink: 0; }
+    /* Kostnadsuppskattning */
+    .batch-kostnad-panel { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:0.7rem 1rem; font-size:0.88rem; margin:0.75rem 0; color:#14532d; }
+    .batch-kostnad-panel table { border-collapse:collapse; margin:0.35rem 0 0; width:100%; }
+    .batch-kostnad-panel td { padding:0.1rem 0.4rem 0.1rem 0; }
+    .batch-kostnad-panel td:last-child { text-align:right; font-variant-numeric:tabular-nums; padding-right:0; }
+    .batch-kostnad-panel .batch-kostnad-sep td { border-top:1px solid #86efac; padding-top:0.3rem; }
+    .batch-kostnad-panel .batch-kostnad-rek td { font-weight:600; }
 
     /* Info-sektion om API-typerna */
     .batch-forklaring { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.88rem; color: #334155; }
@@ -210,6 +217,11 @@
         <span id="batch-typ-info-text"></span>
       </div>
 
+      <!-- Kostnadsuppskattning -->
+      <div id="batch-kostnad-wrap" hidden>
+        <div id="batch-kostnad-panel" class="batch-kostnad-panel"></div>
+      </div>
+
       <div id="batch-statistik-wrap" class="batch-stapel-wrap" hidden></div>
 
       <div class="batch-rad" style="margin-top:0.75rem">
@@ -256,6 +268,7 @@
     laddaTrad();
     laddaStatistik();
     laddaJobb();
+    uppdateraKostnad();
   });
 
   /* ── Träddata (kyrkogård / kvarter) ─────────────────────────── */
@@ -403,7 +416,81 @@
   }
 
   document.getElementById('batch-antal').addEventListener('input', uppdateraTypInfo);
-  document.getElementById('batch-tvinga-batch').addEventListener('change', uppdateraTypInfo);
+  document.getElementById('batch-tvinga-batch').addEventListener('change', function() { uppdateraTypInfo(); uppdateraKostnad(); });
+
+  /* ── Kostnadsuppskattning ────────────────────────────────────── */
+  const KOSTNAD_ALLM = 0.033;
+  const KOSTNAD_OVRIGA = 0.020;
+  const KOSTNAD_MARGINAL = 1.20;
+  let _kostnadTimer = null;
+
+  function uppdateraKostnad() {
+    clearTimeout(_kostnadTimer);
+    _kostnadTimer = setTimeout(_hamtaKostnad, 400);
+  }
+
+  async function _hamtaKostnad() {
+    const wrap = document.getElementById('batch-kostnad-wrap');
+    const panel = document.getElementById('batch-kostnad-panel');
+    const kyrkogard = document.getElementById('batch-kyrkogard').value;
+    const kvarter = document.getElementById('batch-kvarter').value;
+    const antalVal = document.getElementById('batch-antal').value;
+    const antal = antalVal ? parseInt(antalVal) : null;
+    const ejTranskriberade = document.getElementById('batch-filter-ej-transkriberade').checked;
+    const ejKorda = document.getElementById('batch-filter-ej-korda').checked;
+
+    const params = new URLSearchParams({ ej_transkriberade: ejTranskriberade, ej_claude_korda: ejKorda });
+    if (kyrkogard) params.set('kyrkogard', kyrkogard);
+    if (kvarter) params.set('kvarter', kvarter);
+    if (antal !== null && !isNaN(antal) && antal > 0) params.set('antal', antal);
+
+    try {
+      const res = await fetch(API + '/batch-claude/uppskattning?' + params, { credentials: 'include' });
+      if (!res.ok) { wrap.hidden = true; return; }
+      const d = await res.json();
+      const tvingas = document.getElementById('batch-tvinga-batch').checked;
+      if (d.totalt === 0 || (d.totalt < BATCH_GRANS && !tvingas)) { wrap.hidden = true; return; }
+
+      const allm = d.allm || 0;
+      const ovriga = d.ovriga || 0;
+      const kostnadAllm = allm * KOSTNAD_ALLM;
+      const kostnadOvriga = ovriga * KOSTNAD_OVRIGA;
+      const delsumma = kostnadAllm + kostnadOvriga;
+      const rek = delsumma * KOSTNAD_MARGINAL;
+
+      const fmt = (v) => v < 0.01 ? '<$0.01' : '$' + v.toFixed(2);
+      const fmtRek = (v) => '$' + Math.ceil(v);
+
+      let rader = '';
+      if (allm > 0 && ovriga > 0) {
+        rader += '<tr><td>Allm-kvarteren (' + allm + ' kort)</td><td>~' + fmt(kostnadAllm) + '</td></tr>';
+        rader += '<tr><td>Övriga kvarteren (' + ovriga + ' kort)</td><td>~' + fmt(kostnadOvriga) + '</td></tr>';
+        rader += '<tr class="batch-kostnad-sep"><td>Delsumma</td><td>~' + fmt(delsumma) + '</td></tr>';
+      } else if (allm > 0) {
+        rader += '<tr><td>Allm-kvarteren (' + allm + ' kort)</td><td>~' + fmt(kostnadAllm) + '</td></tr>';
+      } else {
+        rader += '<tr><td>Övriga kvarteren (' + ovriga + ' kort)</td><td>~' + fmt(kostnadOvriga) + '</td></tr>';
+      }
+      rader += '<tr class="batch-kostnad-rek' + (allm === 0 || ovriga === 0 ? ' batch-kostnad-sep' : '') + '"><td>Rekommenderad kreditbuffert (inkl. 20\u202f% marginal)</td><td>~' + fmtRek(rek) + '</td></tr>';
+
+      panel.innerHTML = '<strong>Uppskattad kostnad</strong> &ndash; ' + d.totalt + ' gravplatser bearbetas via Batch API'
+        + '<table>' + rader + '</table>'
+        + '<div style="margin-top:0.4rem;font-size:0.82rem;opacity:0.8">Uppskattning baserad på empiriska mätvärden. Faktisk kostnad beror på textmängd och antal bilder.</div>';
+      wrap.hidden = false;
+    } catch(e) {
+      wrap.hidden = true;
+    }
+  }
+
+  ['batch-kyrkogard', 'batch-kvarter'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', uppdateraKostnad);
+  });
+  ['batch-antal'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('input', uppdateraKostnad);
+  });
+  ['batch-filter-ej-transkriberade', 'batch-filter-ej-korda'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', uppdateraKostnad);
+  });
 
   /* ── Jobblistning ────────────────────────────────────────────── */
   async function laddaJobb() {
