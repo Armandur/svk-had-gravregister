@@ -54,3 +54,12 @@ En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog me
 | `←` / `→` | Föregående / nästa bild |
 | `+` / `−` | Zooma in / ut |
 | `Esc` | Stäng |
+
+## Bildförstoring (lightbox)
+
+Klicka på en bild för att öppna den i helskärmsläge. Bilden visas initialt i fit-läge (skalas för att fylla fönstret).
+
+- **Zooma:** Scrollhjulet zoomar mot muspekaren. Knapparna `+`/`−` i zoomkontrollen zoomar mot mitten. Zoomnivå visas i procent (100% = naturlig pixelstorlek).
+- **Panorera:** Klicka och dra för att flytta runt i bilden när den är inzoomad. Fungerar även med touch (ett finger).
+- **Navigera:** Pil-knapparna (eller `←`/`→`) bläddrar mellan bilder i samma set.
+- **Stäng:** Klicka utanför bilden, tryck `Esc`, eller använd stängknappen.
