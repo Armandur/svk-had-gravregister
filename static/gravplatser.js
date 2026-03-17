@@ -1089,6 +1089,8 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeLightbox();
     else if (e.key === 'ArrowLeft') { lightboxPrev(); e.preventDefault(); }
     else if (e.key === 'ArrowRight') { lightboxNext(); e.preventDefault(); }
+    else if (e.key === '+' || e.key === '=') { lightboxZoomIn(); e.preventDefault(); }
+    else if (e.key === '-') { lightboxZoomOut(); e.preventDefault(); }
     return;
   }
   if (e.key === 'Escape' && ocrVantarPaBild) {
@@ -1113,6 +1115,35 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowRight') {
     if (state.currentIndex < state.gravplatserLista.length - 1) nasta();
     e.preventDefault();
+  } else if (e.key === 'e' || e.key === 'E') {
+    toggleRedigeraVy();
+    e.preventDefault();
+  } else if (e.key === 'h' || e.key === 'H') {
+    const helaSidorBtn = document.getElementById('gp-btn-toggle-hela');
+    if (helaSidorBtn && !helaSidorBtn.hidden) { toggleHelaSidor(); e.preventDefault(); }
+  } else if (e.key === 'v' || e.key === 'V') {
+    toggleVertikalVy();
+    e.preventDefault();
+  } else if (e.key === 'r' || e.key === 'R') {
+    openRapportModal();
+    e.preventDefault();
+  } else if (e.key === 'f' || e.key === 'F') {
+    const fardigBtn = document.getElementById('gp-btn-fardigtranskriberad');
+    if (fardigBtn && !fardigBtn.hidden && !fardigBtn.disabled) { fardigBtn.click(); e.preventDefault(); }
+  } else if (e.key === 's' || e.key === 'S') {
+    const skissBtn = document.getElementById('gp-lagg-till-skiss');
+    if (skissBtn && !skissBtn.hidden && !skissBtn.disabled) { skissBtn.click(); e.preventDefault(); }
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
+  const lb = document.getElementById('gp-lightbox');
+  if (lb && !lb.hidden) return;
+  const ocrModal = document.getElementById('gp-ocr-modal');
+  if (ocrModal && !ocrModal.hidden) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if (state.inmatningRedigerar) { sparaInmatning(); e.preventDefault(); }
   }
 });
 
