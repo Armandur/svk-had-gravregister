@@ -1062,6 +1062,7 @@ body {
 .gp-toast--ut    { animation: gp-toast-out 0.2s ease forwards; }
 
 /* Inline bekräftelsepanel vid avbryt redigering med osparade ändringar */
+.gp-avbryt-bekraftelse[hidden] { display: none; }
 .gp-avbryt-bekraftelse {
   display: flex;
   align-items: center;
