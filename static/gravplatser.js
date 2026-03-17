@@ -859,17 +859,23 @@ function toggleHelaSidor() {
   uppdateraToggleHelaKnapp();
 }
 
-/** Returnerar false och visar toast om det finns osparade ändringar, annars true. */
-function dirtyGuard() {
+/**
+ * Om det finns osparade ändringar: visa bekräftelsepanelen och lagra action att köra vid bekräftelse.
+ * Returnerar false om blockerad, true om fritt att navigera.
+ * @param {Function|null} [action] - Körs om användaren väljer "Avbryt ändå". Null = avsluta redigeringsläget.
+ */
+let _pendingNavigeringAction = null;
+function dirtyGuard(action) {
   if (state.inmatningDirty) {
-    showToast('Du har osparade ändringar – spara eller avbryt redigeringen först.', 'info');
+    _pendingNavigeringAction = action || null;
+    const panel = document.getElementById('gp-avbryt-bekraftelse');
+    if (panel) panel.hidden = false;
     return false;
   }
   return true;
 }
 
 function tillbaka() {
-  if (!dirtyGuard()) return;
   if (state.currentIndex > 0) {
     state.currentIndex--;
     uppdateraVy();
@@ -877,7 +883,6 @@ function tillbaka() {
 }
 
 function nasta() {
-  if (!dirtyGuard()) return;
   if (state.currentIndex < state.gravplatserLista.length - 1) {
     state.currentIndex++;
     uppdateraVy();
@@ -958,30 +963,24 @@ document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', ()
   window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
-  if (!dirtyGuard()) return;
-  if (state.granskaAnvandareMode || state.batchJobbMode) {
-    tillbaka();
-    return;
+  function doNav() {
+    if (state.granskaAnvandareMode || state.batchJobbMode) { tillbaka(); return; }
+    const foregaendeKv = getForegaendeKvarter();
+    if (state.currentIndex <= 0 && foregaendeKv) bytTillForegaendeKvarter();
+    else tillbaka();
   }
-  const foregaendeKv = getForegaendeKvarter();
-  if (state.currentIndex <= 0 && foregaendeKv) {
-    bytTillForegaendeKvarter();
-  } else {
-    tillbaka();
-  }
+  if (!dirtyGuard(doNav)) return;
+  doNav();
 });
 document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
-  if (!dirtyGuard()) return;
-  if (state.granskaAnvandareMode || state.batchJobbMode) {
-    nasta();
-    return;
+  function doNav() {
+    if (state.granskaAnvandareMode || state.batchJobbMode) { nasta(); return; }
+    const nastaKv = getNastaKvarter();
+    if (state.currentIndex >= state.gravplatserLista.length - 1 && nastaKv) bytTillNastaKvarter();
+    else nasta();
   }
-  const nastaKv = getNastaKvarter();
-  if (state.currentIndex >= state.gravplatserLista.length - 1 && nastaKv) {
-    bytTillNastaKvarter();
-  } else {
-    nasta();
-  }
+  if (!dirtyGuard(doNav)) return;
+  doNav();
 });
 document.getElementById('gp-btn-toggle-hela')?.addEventListener('click', toggleHelaSidor);
 document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy);
@@ -1173,12 +1172,17 @@ document.addEventListener('keydown', (e) => {
 
   // 8. Övriga genvägar (ej när inputfält har fokus – redan hanterat i steg 3)
   if (e.key === 'ArrowLeft') {
-    if (state.currentIndex > 0) tillbaka();
+    if (state.currentIndex > 0) {
+      if (!dirtyGuard(() => tillbaka())) { e.preventDefault(); return; }
+      tillbaka();
+    }
     e.preventDefault();
   } else if (e.key === 'ArrowRight') {
-    if (state.currentIndex < state.gravplatserLista.length - 1) nasta();
+    if (state.currentIndex < state.gravplatserLista.length - 1) {
+      if (!dirtyGuard(() => nasta())) { e.preventDefault(); return; }
+      nasta();
+    }
     e.preventDefault();
-  // dirtyGuard() inne i tillbaka()/nasta() hanterar toast vid osparade ändringar
   } else if (e.key === 'e' || e.key === 'E') {
     toggleRedigeraVy();
     e.preventDefault();
@@ -3026,11 +3030,19 @@ function avbrytRedigeringBekraftad() {
   const panel = document.getElementById('gp-avbryt-bekraftelse');
   if (panel) panel.hidden = true;
   state.inmatningDirty = false;
-  toggleRedigeraVy();
+  if (_pendingNavigeringAction) {
+    state.inmatningRedigerar = false;
+    const action = _pendingNavigeringAction;
+    _pendingNavigeringAction = null;
+    action();
+  } else {
+    toggleRedigeraVy();
+  }
 }
 
 document.getElementById('gp-avbryt-bekraftelse-ja')?.addEventListener('click', avbrytRedigeringBekraftad);
 document.getElementById('gp-avbryt-bekraftelse-nej')?.addEventListener('click', () => {
+  _pendingNavigeringAction = null;
   const panel = document.getElementById('gp-avbryt-bekraftelse');
   if (panel) panel.hidden = true;
 });
@@ -3038,8 +3050,7 @@ document.getElementById('gp-avbryt-bekraftelse-nej')?.addEventListener('click', 
 function toggleRedigeraVy() {
   if (state.inmatningRedigerar) {
     if (state.inmatningDirty) {
-      const panel = document.getElementById('gp-avbryt-bekraftelse');
-      if (panel) panel.hidden = false;
+      dirtyGuard(); // ingen pending action = avsluta redigeringsläget vid bekräftelse
       return;
     }
     state.inmatningRedigerar = false;
