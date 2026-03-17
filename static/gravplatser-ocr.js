@@ -96,7 +96,7 @@ function applyInmatningSectionsOrder(order) {
   allowed.forEach((s) => {
     if (unique.indexOf(s) === -1) unique.push(s);
   });
-  inmatningSectionsOrder = unique;
+  state.inmatningSectionsOrder = unique;
   const sectionsById = {};
   allowed.forEach((s) => {
     const btn = root.querySelector('.gp-sektion-rubrik[data-sektion="' + s + '"]');
@@ -176,7 +176,7 @@ function unwrapOcrFaltWrap(wrap) {
 
 /** Visar textextraheringsikonen bredvid det angivna textfältet (wrap + ikon). Anropa vid klick-fokus eller klick i redan fokuserat fält. */
 function visaOcrIkonForFalt(input) {
-  if (!inmatningRedigerar || !input.closest('#gp-inmatning')) return;
+  if (!state.inmatningRedigerar || !input.closest('#gp-inmatning')) return;
   if (input.matches('input[type="checkbox"], input[type="radio"], select')) return;
   const existingWrap = input.parentElement;
   const isNamnFalt = arNamnFaltForOcr(input);

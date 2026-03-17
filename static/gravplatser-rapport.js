@@ -99,8 +99,8 @@ async function skapaRapportUtskrift() {
   const medDolda = document.getElementById('gp-rapport-dolda')?.checked === true;
   const medExtramaterial = document.getElementById('gp-rapport-extramaterial')?.checked === true;
 
-  const gp = gravplatserLista[currentIndex];
-  if (!gp || currentGravplatsId == null) {
+  const gp = state.gravplatserLista[state.currentIndex];
+  if (!gp || state.currentGravplatsId == null) {
     alert('Ingen gravplats vald.');
     return;
   }
@@ -113,7 +113,7 @@ async function skapaRapportUtskrift() {
     return;
   }
 
-  const skisser = (inmatningData && inmatningData.skisser) || [];
+  const skisser = (state.inmatningData && state.inmatningData.skisser) || [];
   let skissDataUrls = [];
   if (skisser.length > 0) {
     skissDataUrls = await Promise.all(skisser.map((s) => loadSkissFullRes(s).catch(() => null)));
@@ -138,7 +138,7 @@ async function skapaRapportUtskrift() {
   const dolda = halvorData.dolda || [];
   const config = halvorData.config || {};
   const delaSidor = config.dela_sidor || 'hojdled';
-  const cacheQ = `_v=${cacheBust}`;
+  const cacheQ = `_v=${state.cacheBust}`;
   const base = `${API}/mappar/${encodeURIComponent(mappNamn)}/sida`;
   const split1och3 = (727 / 1597).toFixed(4);
   const split2 = (870 / 1595).toFixed(4);
@@ -169,7 +169,7 @@ async function skapaRapportUtskrift() {
 
   let html = '';
   const headerRubrik = esc(rubrik);
-  html += '<div class="gp-rapport-sida-1"><div class="gp-rapport-print-header" aria-hidden="true">' + headerRubrik + '</div>' + buildRapportInmatningHtml(inmatningData, rubrik, skissDataUrls) + '</div>';
+  html += '<div class="gp-rapport-sida-1"><div class="gp-rapport-print-header" aria-hidden="true">' + headerRubrik + '</div>' + buildRapportInmatningHtml(state.inmatningData, rubrik, skissDataUrls) + '</div>';
 
   if (medSektioner && halvorMedUrl.length > 0) {
     html += '<div class="gp-rapport-sida-sektioner"><h3 class="gp-rapport-sektion-rubrik">Gravplatsbilder (sektioner)</h3><div class="gp-rapport-sektioner">';

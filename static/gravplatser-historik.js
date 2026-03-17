@@ -85,7 +85,7 @@ function _historikDiffData(ny, gammal) {
 
 /** Öppna historik-modal och hämta redigeringshistorik för aktuell gravplats. */
 async function oppnaHistorikModal() {
-  if (!currentUserIsAdmin || currentGravplatsId == null) return;
+  if (!state.currentUserIsAdmin || state.currentGravplatsId == null) return;
   const modal = document.getElementById('gp-historik-modal');
   if (!modal) return;
 
@@ -101,12 +101,12 @@ async function oppnaHistorikModal() {
   if (tom) tom.hidden = true;
   if (fel) { fel.hidden = true; fel.textContent = ''; }
   if (tbody) tbody.innerHTML = '';
-  if (loggLank) loggLank.href = '/loggar?gravplats_id=' + currentGravplatsId;
+  if (loggLank) loggLank.href = '/loggar?gravplats_id=' + state.currentGravplatsId;
 
   modal.showModal();
 
   try {
-    const res = await fetch(`${API}/loggar/gravplatser?gravplats_id=${currentGravplatsId}&limit=50`, { credentials: 'include' });
+    const res = await fetch(`${API}/loggar/gravplatser?gravplats_id=${state.currentGravplatsId}&limit=50`, { credentials: 'include' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const loggar = data.loggar || [];

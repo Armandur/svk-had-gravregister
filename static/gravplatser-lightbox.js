@@ -21,19 +21,19 @@ function uppdateraLightboxKnappar() {
   const nextBtn = document.getElementById('gp-lightbox-next');
   const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
     : lightboxMode === 'skisser' ? lightboxSkisserList.length
-    : currentExtramaterial.length;
+    : state.currentExtramaterial.length;
   if (prevBtn) prevBtn.disabled = n <= 1;
   if (nextBtn) nextBtn.disabled = n <= 1;
 }
 
 function openLightbox(index) {
-  if (currentExtramaterial.length === 0 || !currentExtramaterialMapp) return;
+  if (state.currentExtramaterial.length === 0 || !state.currentExtramaterialMapp) return;
   lightboxMode = 'extramaterial';
-  const idx = Math.max(0, Math.min(index, currentExtramaterial.length - 1));
+  const idx = Math.max(0, Math.min(index, state.currentExtramaterial.length - 1));
   lightboxIndex = idx;
   lightboxZoom = 1;
-  const em = currentExtramaterial[idx];
-  const bildUrl = `${API}/mappar/${encodeURIComponent(currentExtramaterialMapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?_v=${cacheBust}`;
+  const em = state.currentExtramaterial[idx];
+  const bildUrl = `${API}/mappar/${encodeURIComponent(state.currentExtramaterialMapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?_v=${state.cacheBust}`;
   const lightbox = document.getElementById('gp-lightbox');
   const imgEl = document.getElementById('gp-lightbox-img');
   if (lightbox && imgEl) {
@@ -56,7 +56,7 @@ function openLightboxHalvor(index) {
   if (figures.length === 0) return;
   /* Bygg URL-lista utifrån aktuellt visningsläge (halva vs hela sida). */
   lightboxHalvorUrls = Array.from(figures).map((fig) => {
-    const useHela = visarHelaSidor && fig.dataset.kanHela === 'true';
+    const useHela = state.visarHelaSidor && fig.dataset.kanHela === 'true';
     return useHela ? (fig.dataset.helaUrl || '') : (fig.dataset.halvaUrl || '');
   }).filter(Boolean);
   if (lightboxHalvorUrls.length === 0) return;
@@ -212,7 +212,7 @@ function closeLightbox() {
 function lightboxPrev() {
   const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
     : lightboxMode === 'skisser' ? lightboxSkisserList.length
-    : currentExtramaterial.length;
+    : state.currentExtramaterial.length;
   if (n <= 1) return;
   lightboxIndex = (lightboxIndex - 1 + n) % n;
   const imgEl = document.getElementById('gp-lightbox-img');
@@ -236,7 +236,7 @@ function lightboxPrev() {
 function lightboxNext() {
   const n = lightboxMode === 'halvor' ? lightboxHalvorUrls.length
     : lightboxMode === 'skisser' ? lightboxSkisserList.length
-    : currentExtramaterial.length;
+    : state.currentExtramaterial.length;
   if (n <= 1) return;
   lightboxIndex = (lightboxIndex + 1) % n;
   const imgEl = document.getElementById('gp-lightbox-img');
