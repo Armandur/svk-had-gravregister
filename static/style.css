@@ -1036,7 +1036,7 @@ body {
   }
 }
 
-/* Toast för "roliga saker" (nytt unikt yrke m.m.) */
+/* Toast-notifikationer */
 @keyframes gp-toast-in {
   from { opacity: 0; transform: translateY(0.5rem); }
   to { opacity: 1; transform: translateY(0); }
@@ -1045,4 +1045,54 @@ body {
   from { opacity: 1; transform: translateY(0); }
   to { opacity: 0; transform: translateY(0.25rem); }
 }
+.gp-toast {
+  max-width: 22rem;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  animation: gp-toast-in 0.2s ease;
+  pointer-events: auto;
+  word-break: break-word;
+}
+.gp-toast--info  { background: #1e293b; color: #fff; }
+.gp-toast--ok    { background: #166534; color: #fff; }
+.gp-toast--fel   { background: #991b1b; color: #fff; }
+.gp-toast--ut    { animation: gp-toast-out 0.2s ease forwards; }
+
+/* Inline bekräftelsepanel vid avbryt redigering med osparade ändringar */
+.gp-avbryt-bekraftelse[hidden] { display: none; }
+.gp-avbryt-bekraftelse {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-text { flex: 1; font-weight: 500; color: #92400e; }
+.gp-avbryt-bekraftelse-ja {
+  padding: 0.3rem 0.7rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-ja:hover { background: #b91c1c; }
+.gp-avbryt-bekraftelse-nej {
+  padding: 0.3rem 0.7rem;
+  background: #e2e8f0;
+  color: #1e293b;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-nej:hover { background: #cbd5e1; }
 

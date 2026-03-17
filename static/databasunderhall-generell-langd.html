@@ -111,13 +111,13 @@
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
     var falt = getValdaFalt();
-    if (!falt) { alert('Välj minst ett fält.'); return; }
+    if (!falt) { showToast('Välj minst ett fält.', 'info'); return; }
     var minP = document.getElementById('dbuh-min-punkter');
     var maxT = document.getElementById('dbuh-max-tecken');
     var minPunkter = minP && minP.value.trim() ? parseInt(minP.value, 10) : null;
     var maxTecken = maxT && maxT.value.trim() ? parseInt(maxT.value, 10) : null;
     if ((!minPunkter || minPunkter < 1) && (!maxTecken || maxTecken < 1)) {
-      alert('Ange antingen minst antal punkter eller max antal tecken (eller båda).');
+      showToast('Ange antingen minst antal punkter eller max antal tecken (eller båda).', 'info');
       return;
     }
     var url = API + '/admin/databasunderhall/datakvalitet-generell-langd?falt=' + encodeURIComponent(falt);

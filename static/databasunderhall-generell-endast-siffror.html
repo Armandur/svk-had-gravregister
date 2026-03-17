@@ -99,7 +99,7 @@
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
     var falt = getValdaFalt();
-    if (!falt) { alert('Välj minst ett fält.'); return; }
+    if (!falt) { showToast('Välj minst ett fält.', 'info'); return; }
     var url = API + '/admin/databasunderhall/datakvalitet-generell-endast-siffror?falt=' + encodeURIComponent(falt);
     btn.disabled = true;
     innehall.hidden = false;

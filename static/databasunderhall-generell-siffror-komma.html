@@ -107,7 +107,7 @@
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
     var falt = getValdaFalt();
-    if (!falt) { alert('Välj minst ett fält.'); return; }
+    if (!falt) { showToast('Välj minst ett fält.', 'info'); return; }
     var typ = (document.querySelector('input[name="dbuh-typ"]:checked') || {}).value || 'bada';
     var url = API + '/admin/databasunderhall/datakvalitet-generell-siffror-komma?falt=' + encodeURIComponent(falt) + '&typ=' + encodeURIComponent(typ);
     btn.disabled = true;

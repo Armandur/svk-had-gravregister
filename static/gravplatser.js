@@ -336,6 +336,8 @@ async function uppdateraVy(behallInmatningState = false) {
     state.sparatClaudeSvar = null;
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = true;
+    const avbrytPanelReset = document.getElementById('gp-avbryt-bekraftelse');
+    if (avbrytPanelReset) avbrytPanelReset.hidden = true;
     const redigeraBtn = document.getElementById('gp-btn-redigera');
     if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
     const sparatPanelEmpty = document.getElementById('gp-claude-sparat-panel');
@@ -517,7 +519,7 @@ async function uppdateraVy(behallInmatningState = false) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       });
     });
@@ -570,6 +572,8 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   state.sparatClaudeSvar = null;
   const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
   if (sparaWrap) sparaWrap.hidden = true;
+  const avbrytPanelNav = document.getElementById('gp-avbryt-bekraftelse');
+  if (avbrytPanelNav) avbrytPanelNav.hidden = true;
   const redigeraBtn = document.getElementById('gp-btn-redigera');
   if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
   const sparatPanel = document.getElementById('gp-claude-sparat-panel');
@@ -703,7 +707,7 @@ function uppdateraExtramaterialSektion(extramaterial, mappNamn) {
         await uppdateraVy(true);
       } catch (err) {
         btn.disabled = false;
-        alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+        showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
       }
     });
   });
@@ -781,7 +785,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       } else {
         const emId = btn.dataset.emId;
@@ -798,7 +802,7 @@ function uppdateraDoldaSektion(dolda, mappNamn, startSida, extramaterialCount) {
           await uppdateraVy(true);
         } catch (err) {
           btn.disabled = false;
-          alert('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'));
+          showToast('Kunde inte uppdatera: ' + (err.message || 'nätverksfel'), 'fel');
         }
       }
     });
@@ -853,6 +857,22 @@ function toggleHelaSidor() {
     img.src = state.visarHelaSidor ? fig.dataset.helaUrl : fig.dataset.halvaUrl;
   });
   uppdateraToggleHelaKnapp();
+}
+
+/**
+ * Om det finns osparade ändringar: visa bekräftelsepanelen och lagra action att köra vid bekräftelse.
+ * Returnerar false om blockerad, true om fritt att navigera.
+ * @param {Function|null} [action] - Körs om användaren väljer "Avbryt ändå". Null = avsluta redigeringsläget.
+ */
+let _pendingNavigeringAction = null;
+function dirtyGuard(action) {
+  if (state.inmatningDirty && !state.batchJobbMode) {
+    _pendingNavigeringAction = action || null;
+    const panel = document.getElementById('gp-avbryt-bekraftelse');
+    if (panel) panel.hidden = false;
+    return false;
+  }
+  return true;
 }
 
 function tillbaka() {
@@ -943,28 +963,24 @@ document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', ()
   window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
-  if (state.granskaAnvandareMode || state.batchJobbMode) {
-    tillbaka();
-    return;
+  function doNav() {
+    if (state.granskaAnvandareMode || state.batchJobbMode) { tillbaka(); return; }
+    const foregaendeKv = getForegaendeKvarter();
+    if (state.currentIndex <= 0 && foregaendeKv) bytTillForegaendeKvarter();
+    else tillbaka();
   }
-  const foregaendeKv = getForegaendeKvarter();
-  if (state.currentIndex <= 0 && foregaendeKv) {
-    bytTillForegaendeKvarter();
-  } else {
-    tillbaka();
-  }
+  if (!dirtyGuard(doNav)) return;
+  doNav();
 });
 document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
-  if (state.granskaAnvandareMode || state.batchJobbMode) {
-    nasta();
-    return;
+  function doNav() {
+    if (state.granskaAnvandareMode || state.batchJobbMode) { nasta(); return; }
+    const nastaKv = getNastaKvarter();
+    if (state.currentIndex >= state.gravplatserLista.length - 1 && nastaKv) bytTillNastaKvarter();
+    else nasta();
   }
-  const nastaKv = getNastaKvarter();
-  if (state.currentIndex >= state.gravplatserLista.length - 1 && nastaKv) {
-    bytTillNastaKvarter();
-  } else {
-    nasta();
-  }
+  if (!dirtyGuard(doNav)) return;
+  doNav();
 });
 document.getElementById('gp-btn-toggle-hela')?.addEventListener('click', toggleHelaSidor);
 document.getElementById('gp-btn-vy')?.addEventListener('click', toggleVertikalVy);
@@ -976,7 +992,7 @@ document.getElementById('gp-rapport-avbryt')?.addEventListener('click', () => {
   if (m) m.hidden = true;
 });
 document.getElementById('gp-rapport-skapa')?.addEventListener('click', () => {
-  skapaRapportUtskrift().catch((e) => alert('Rapport: ' + (e.message || 'fel')));
+  skapaRapportUtskrift().catch((e) => showToast('Rapport: ' + (e.message || 'fel'), 'fel'));
 });
 
 document.getElementById('gp-em-rubrik')?.addEventListener('click', toggleExtramaterialInnehall);
@@ -1156,10 +1172,16 @@ document.addEventListener('keydown', (e) => {
 
   // 8. Övriga genvägar (ej när inputfält har fokus – redan hanterat i steg 3)
   if (e.key === 'ArrowLeft') {
-    if (state.currentIndex > 0) tillbaka();
+    if (state.currentIndex > 0) {
+      if (!dirtyGuard(() => tillbaka())) { e.preventDefault(); return; }
+      tillbaka();
+    }
     e.preventDefault();
   } else if (e.key === 'ArrowRight') {
-    if (state.currentIndex < state.gravplatserLista.length - 1) nasta();
+    if (state.currentIndex < state.gravplatserLista.length - 1) {
+      if (!dirtyGuard(() => nasta())) { e.preventDefault(); return; }
+      nasta();
+    }
     e.preventDefault();
   } else if (e.key === 'e' || e.key === 'E') {
     toggleRedigeraVy();
@@ -1648,7 +1670,7 @@ function oppnaSkissModal() {
 
     document.getElementById('gp-skiss-spara').onclick = async () => {
       if (currentRect.w < 0.01 || currentRect.h < 0.01) {
-        alert('Markera ett område genom att dra på bilden.');
+        showToast('Markera ett område genom att dra på bilden.', 'info');
         return;
       }
       const body = {
@@ -1677,7 +1699,7 @@ function oppnaSkissModal() {
         if (sparaBtn) sparaBtn.disabled = false;
       }
       if (!res.ok) {
-        alert('Kunde inte spara skiss.');
+        showToast('Kunde inte spara skiss.', 'fel');
         return;
       }
       modal.hidden = true;
@@ -2984,7 +3006,7 @@ document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async fu
     state.sparatClaudeSvar = { svar_json: data, ocr_kommentar: data.ocr_kommentar || '', skapad_den: new Date().toISOString(), username: '' };
   } catch (err) {
     if (err.name === 'AbortError') { /* användaren avbröt – inget felmeddelande */ }
-    else alert('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'));
+    else showToast('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'), 'fel');
   } finally {
     state._claudeOcrAbortController = null;
     btn.disabled = false;
@@ -3004,16 +3026,39 @@ if (gpInmatningEl) {
 }
 uppdateraInmatningSparaKnapp();
 
+function avbrytRedigeringBekraftad() {
+  const panel = document.getElementById('gp-avbryt-bekraftelse');
+  if (panel) panel.hidden = true;
+  state.inmatningDirty = false;
+  if (_pendingNavigeringAction) {
+    state.inmatningRedigerar = false;
+    const action = _pendingNavigeringAction;
+    _pendingNavigeringAction = null;
+    action();
+  } else {
+    toggleRedigeraVy();
+  }
+}
+
+document.getElementById('gp-avbryt-bekraftelse-ja')?.addEventListener('click', avbrytRedigeringBekraftad);
+document.getElementById('gp-avbryt-bekraftelse-nej')?.addEventListener('click', () => {
+  _pendingNavigeringAction = null;
+  const panel = document.getElementById('gp-avbryt-bekraftelse');
+  if (panel) panel.hidden = true;
+});
+
 function toggleRedigeraVy() {
   if (state.inmatningRedigerar) {
     if (state.inmatningDirty) {
-      if (!confirm('Du har osparade ändringar. Sluta redigera utan att spara?')) return;
-      state.inmatningDirty = false;
+      dirtyGuard(); // ingen pending action = avsluta redigeringsläget vid bekräftelse
+      return;
     }
     state.inmatningRedigerar = false;
     state.lastInmatningGravplatsId = null;
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = true;
+    const avbrytPanel = document.getElementById('gp-avbryt-bekraftelse');
+    if (avbrytPanel) avbrytPanel.hidden = true;
     state.sparatClaudeSvar = null;
     const sparatPanel = document.getElementById('gp-claude-sparat-panel');
     if (sparatPanel) sparatPanel.hidden = true;

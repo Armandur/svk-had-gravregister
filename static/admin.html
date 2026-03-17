@@ -51,6 +51,7 @@
       <ul id="admin-anvandarlista" class="admin-lista"></ul>
     </section>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
     (function() {
@@ -121,10 +122,10 @@
                   credentials: 'include'
                 }).then(function(r) {
                   if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte spara'); });
-                  alert('Lösenord uppdaterat.');
+                  showToast('Lösenord uppdaterat.', 'ok');
                   visaAnvandare();
                 }).catch(function(e) {
-                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                  showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
                 });
               });
             });
@@ -136,7 +137,7 @@
                 if (nytt == null) return;
                 const trimmed = (nytt || '').trim();
                 if (!trimmed) {
-                  alert('Användarnamn kan inte vara tomt.');
+                  showToast('Användarnamn kan inte vara tomt.', 'info');
                   return;
                 }
                 if (trimmed === gammalt) return;
@@ -148,11 +149,11 @@
                 }).then(function(r) {
                   return r.json().then(function(d) {
                     if (!r.ok) throw new Error(d.detail || 'Kunde inte byta namn');
-                    alert('Användarnamn uppdaterat till: ' + (d.username || trimmed));
+                    showToast('Användarnamn uppdaterat till: ' + (d.username || trimmed), 'ok');
                     visaAnvandare();
                   });
                 }).catch(function(e) {
-                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                  showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
                 });
               });
             });
@@ -166,7 +167,7 @@
                   body: JSON.stringify({ aktiv: aktiv }),
                   credentials: 'include',
                 }).then(function(r) {
-                  if (!r.ok) { cb.checked = !aktiv; alert('Kunde inte ändra Claude-status.'); }
+                  if (!r.ok) { cb.checked = !aktiv; showToast('Kunde inte ändra Claude-status.', 'fel'); }
                 }).catch(function() { cb.checked = !aktiv; });
               });
             });
@@ -180,7 +181,7 @@
                   body: JSON.stringify({ aktiv: aktiv }),
                   credentials: 'include',
                 }).then(function(r) {
-                  if (!r.ok) { cb.checked = !aktiv; alert('Kunde inte ändra Batch-status.'); }
+                  if (!r.ok) { cb.checked = !aktiv; showToast('Kunde inte ändra Batch-status.', 'fel'); }
                 }).catch(function() { cb.checked = !aktiv; });
               });
             });
@@ -194,10 +195,10 @@
                   credentials: 'include'
                 }).then(function(r) {
                   if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte ta bort'); });
-                  alert('Användaren borttagen.');
+                  showToast('Användaren borttagen.', 'ok');
                   visaAnvandare();
                 }).catch(function(e) {
-                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                  showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
                 });
               });
             });
@@ -250,7 +251,7 @@
                     setTimeout(function() { sparadEl.hidden = true; }, 2500);
                   }
                 }).catch(function(e) {
-                  alert('Fel: ' + (e.message || 'nätverksfel'));
+                  showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
                 });
               });
             });

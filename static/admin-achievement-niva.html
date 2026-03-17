@@ -78,6 +78,7 @@
       </p>
     </div>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
 (function () {
@@ -350,7 +351,7 @@
       setTimeout(function () { sparadEl.hidden = true; }, 3000);
     })
     .catch(function (e) {
-      alert('Kunde inte spara: ' + (e.message || 'nätverksfel'));
+      showToast('Kunde inte spara: ' + (e.message || 'nätverksfel'), 'fel');
     })
     .finally(function () {
       sparaBtn.disabled = false;
@@ -406,7 +407,7 @@
       showTestToast('Yrkesgrupper sparade.');
     })
     .catch(function (e) {
-      alert('Kunde inte spara yrkesgrupper: ' + (e.message || 'nätverksfel'));
+      showToast('Kunde inte spara yrkesgrupper: ' + (e.message || 'nätverksfel'), 'fel');
     })
     .finally(function () {
       yrkesSparaBtn.disabled = false;

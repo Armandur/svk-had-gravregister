@@ -38,6 +38,15 @@ Om Claude-åtkomst är aktiverad av administratören visas knappen **Hämta frå
 
 Se [Claude OCR – enskild och batch](claude-ocr.md) för mer information. Admins hittar inställningar i [administratörsdokumentationen](admin.md).
 
+## Osparade ändringar
+
+Om du försöker navigera till en annan gravplats (med `←`/`→`, knapparna eller kvarterbyte) eller stänga redigeringsläget medan du har osparade ändringar visas en gul bekräftelsepanel direkt i formulärhuvudet.
+
+> **Undantag – batchgranskning:** I granskningsläget för batchkörningar blockeras navigeringen *inte* av osparade ändringar. Ändringar hämtas automatiskt från Claude-svaret, och du kan bläddra fritt utan att behöva spara varje gravplats innan du går vidare.
+
+- **Avbryt ändå** – förkastar ändringarna och utför navigeringen/avslutar redigeringsläget.
+- **Fortsätt redigera** – stänger panelen och du är kvar i redigeringsläget med dina ändringar intakta.
+
 ## Kommentarer
 
 Använd kommentarsfältet för handskrivna tillägg, osäkerheter eller undantag (t.ex. "gravsatt 3 enl. övre del 13.pdf, handskriven numrering"). Kommentar kan anges per gravplats, per gravrättsinnehavare, per närmast anhörig och per gravsatt.

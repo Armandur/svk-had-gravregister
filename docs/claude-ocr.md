@@ -27,7 +27,8 @@ Applikationen kan använda Claude (Anthropic AI) för att automatiskt transkribe
 1. Välj **kyrkogård** och **gravkvarter** (eller välj "Alla kvarter").
 2. Ange **Antal** gravplatser att köra (eller lämna tomt för alla i urvalet).
 3. Välj om endast **ej påbörjade** gravplatser ska inkluderas.
-4. Klicka **Kör batch**.
+4. En **kostnadsuppskattning** visas automatiskt och uppdateras när du ändrar urval eller filter. Uppskattningen visar beräknad kostnad uppdelad per kvartertyp (Allm-kvarter resp. övriga) samt en rekommenderad kreditbuffert med 20 % marginal. Priset justeras automatiskt beroende på om realtid- eller Batch API används.
+5. Klicka **Skapa och kör** (realtid) eller **Skapa och skicka till Anthropic** (Batch API).
 
 ### Körsätt – realtid vs. Anthropic Batch API
 

@@ -118,8 +118,8 @@
     var falt = getValdaFalt();
     var tecken = (document.getElementById('dbuh-tecken') || {}).value || '';
     var regex = (document.getElementById('dbuh-regex') || {}).value || '';
-    if (!falt) { alert('Välj minst ett fält.'); return; }
-    if (!tecken.trim() && !regex.trim()) { alert('Ange antingen tecken att söka efter eller ett regex-mönster.'); return; }
+    if (!falt) { showToast('Välj minst ett fält.', 'info'); return; }
+    if (!tecken.trim() && !regex.trim()) { showToast('Ange antingen tecken att söka efter eller ett regex-mönster.', 'info'); return; }
     var url = API + '/admin/databasunderhall/datakvalitet-generell-tecken?falt=' + encodeURIComponent(falt);
     if (tecken.trim()) url += '&tecken=' + encodeURIComponent(tecken.trim());
     if (regex.trim()) url += '&regex=' + encodeURIComponent(regex.trim());

@@ -317,7 +317,7 @@ async function koraAvanceradSok(e) {
 
   const harNagonFiltret = Array.from(params.keys()).some((k) => k !== 'limit');
   if (!harNagonFiltret) {
-    alert('Ange minst ett sökvillkor (t.ex. kyrkogård, kvarter, namn eller ett datumintervall) innan du söker.');
+    showToast('Ange minst ett sökvillkor (t.ex. kyrkogård, kvarter, namn eller ett datumintervall) innan du söker.', 'info');
     return;
   }
 
