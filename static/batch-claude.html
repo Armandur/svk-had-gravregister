@@ -449,12 +449,17 @@
       if (!res.ok) { wrap.hidden = true; return; }
       const d = await res.json();
       const tvingas = document.getElementById('batch-tvinga-batch').checked;
-      if (d.totalt === 0 || (d.totalt < BATCH_GRANS && !tvingas)) { wrap.hidden = true; return; }
+      if (d.totalt === 0) { wrap.hidden = true; return; }
+
+      const anvandBatch = tvingas || d.totalt >= BATCH_GRANS;
+      // Batch API: 50 % rabatt → schablonpriser direkt; Messages API: dubbelt pris
+      const prisAllm = anvandBatch ? KOSTNAD_ALLM : KOSTNAD_ALLM * 2;
+      const prisOvriga = anvandBatch ? KOSTNAD_OVRIGA : KOSTNAD_OVRIGA * 2;
 
       const allm = d.allm || 0;
       const ovriga = d.ovriga || 0;
-      const kostnadAllm = allm * KOSTNAD_ALLM;
-      const kostnadOvriga = ovriga * KOSTNAD_OVRIGA;
+      const kostnadAllm = allm * prisAllm;
+      const kostnadOvriga = ovriga * prisOvriga;
       const delsumma = kostnadAllm + kostnadOvriga;
       const rek = delsumma * KOSTNAD_MARGINAL;
 
@@ -473,7 +478,8 @@
       }
       rader += '<tr class="batch-kostnad-rek' + (allm === 0 || ovriga === 0 ? ' batch-kostnad-sep' : '') + '"><td>Rekommenderad kreditbuffert (inkl. 20\u202f% marginal)</td><td>~' + fmtRek(rek) + '</td></tr>';
 
-      panel.innerHTML = '<strong>Uppskattad kostnad</strong> &ndash; ' + d.totalt + ' gravplatser bearbetas via Batch API'
+      const apiLabel = anvandBatch ? 'Batch API (50\u2009% rabatt)' : 'Messages API (realtid)';
+      panel.innerHTML = '<strong>Uppskattad kostnad</strong> &ndash; ' + d.totalt + ' gravplatser via ' + apiLabel
         + '<table>' + rader + '</table>'
         + '<div style="margin-top:0.4rem;font-size:0.82rem;opacity:0.8">Uppskattning baserad på empiriska mätvärden. Faktisk kostnad beror på textmängd och antal bilder.</div>';
       wrap.hidden = false;
