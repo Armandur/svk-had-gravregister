@@ -855,7 +855,17 @@ function toggleHelaSidor() {
   uppdateraToggleHelaKnapp();
 }
 
+/** Returnerar false och visar toast om det finns osparade ändringar, annars true. */
+function dirtyGuard() {
+  if (state.inmatningDirty) {
+    showToast('Du har osparade ändringar – spara eller avbryt redigeringen först.', 'info');
+    return false;
+  }
+  return true;
+}
+
 function tillbaka() {
+  if (!dirtyGuard()) return;
   if (state.currentIndex > 0) {
     state.currentIndex--;
     uppdateraVy();
@@ -863,6 +873,7 @@ function tillbaka() {
 }
 
 function nasta() {
+  if (!dirtyGuard()) return;
   if (state.currentIndex < state.gravplatserLista.length - 1) {
     state.currentIndex++;
     uppdateraVy();
@@ -943,6 +954,7 @@ document.getElementById('gp-btn-tillbaka-kvarter')?.addEventListener('click', ()
   window.location.href = '/gravplatser';
 });
 document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
+  if (!dirtyGuard()) return;
   if (state.granskaAnvandareMode || state.batchJobbMode) {
     tillbaka();
     return;
@@ -955,6 +967,7 @@ document.getElementById('gp-btn-tillbaka')?.addEventListener('click', () => {
   }
 });
 document.getElementById('gp-btn-nasta')?.addEventListener('click', () => {
+  if (!dirtyGuard()) return;
   if (state.granskaAnvandareMode || state.batchJobbMode) {
     nasta();
     return;
@@ -1161,6 +1174,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'ArrowRight') {
     if (state.currentIndex < state.gravplatserLista.length - 1) nasta();
     e.preventDefault();
+  // dirtyGuard() inne i tillbaka()/nasta() hanterar toast vid osparade ändringar
   } else if (e.key === 'e' || e.key === 'E') {
     toggleRedigeraVy();
     e.preventDefault();
@@ -3004,11 +3018,25 @@ if (gpInmatningEl) {
 }
 uppdateraInmatningSparaKnapp();
 
+function avbrytRedigeringBekraftad() {
+  const panel = document.getElementById('gp-avbryt-bekraftelse');
+  if (panel) panel.hidden = true;
+  state.inmatningDirty = false;
+  toggleRedigeraVy();
+}
+
+document.getElementById('gp-avbryt-bekraftelse-ja')?.addEventListener('click', avbrytRedigeringBekraftad);
+document.getElementById('gp-avbryt-bekraftelse-nej')?.addEventListener('click', () => {
+  const panel = document.getElementById('gp-avbryt-bekraftelse');
+  if (panel) panel.hidden = true;
+});
+
 function toggleRedigeraVy() {
   if (state.inmatningRedigerar) {
     if (state.inmatningDirty) {
-      if (!confirm('Du har osparade ändringar. Sluta redigera utan att spara?')) return;
-      state.inmatningDirty = false;
+      const panel = document.getElementById('gp-avbryt-bekraftelse');
+      if (panel) panel.hidden = false;
+      return;
     }
     state.inmatningRedigerar = false;
     state.lastInmatningGravplatsId = null;

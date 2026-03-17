@@ -1061,3 +1061,37 @@ body {
 .gp-toast--fel   { background: #991b1b; color: #fff; }
 .gp-toast--ut    { animation: gp-toast-out 0.2s ease forwards; }
 
+/* Inline bekräftelsepanel vid avbryt redigering med osparade ändringar */
+.gp-avbryt-bekraftelse {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: #fef3c7;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-text { flex: 1; font-weight: 500; color: #92400e; }
+.gp-avbryt-bekraftelse-ja {
+  padding: 0.3rem 0.7rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-ja:hover { background: #b91c1c; }
+.gp-avbryt-bekraftelse-nej {
+  padding: 0.3rem 0.7rem;
+  background: #e2e8f0;
+  color: #1e293b;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.gp-avbryt-bekraftelse-nej:hover { background: #cbd5e1; }
+
