@@ -1,5 +1,6 @@
 """Auth-routes: login, logout, /api/me, preferenser, achievements."""
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func
@@ -16,6 +17,7 @@ from app.utils.achievements import _compute_achievements_niva
 from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/login")
@@ -46,8 +48,8 @@ async def patch_me_preferences(
     if getattr(current_user, "preferences", None) and (current_user.preferences or "").strip():
         try:
             prefs = json.loads(current_user.preferences)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("Ogiltigt JSON i preferences för user_id=%s: %s", current_user.id, e)
     if body.fun_enabled is not None:
         prefs["fun_enabled"] = body.fun_enabled
     if body.toast_on_new_yrke is not None:
@@ -76,8 +78,8 @@ async def me(current_user: User = Depends(get_current_user)):
     if getattr(current_user, "preferences", None) and current_user.preferences.strip():
         try:
             prefs = json.loads(current_user.preferences)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("Ogiltigt JSON i preferences för user_id=%s: %s", current_user.id, e)
     default_sections = ["innehavare", "narmast_anhoriga", "gravplatsen", "skiss", "gravsatta"]
     sections_pref = prefs.get("inmatning_sections_order") or default_sections
     # Normalisera ordning (filtrerad + kompletterad)

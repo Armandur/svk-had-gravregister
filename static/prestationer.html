@@ -56,10 +56,14 @@
     .prestationer-laddar { color: #64748b; }
     .prestationer-fel { color: #b91c1c; }
     .prestationer-sektioner-lista { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
-    .prestationer-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0; }
-    .prestationer-sektioner-namn { font-size: 0.9rem; }
+    .prestationer-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.25rem; border-radius: 4px; }
+    .prestationer-sektioner-namn { font-size: 0.9rem; flex: 1; }
     .prestationer-sektioner-knappar { display: flex; gap: 0.25rem; }
     .prestationer-sektioner-knappar button { padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
+    .prestationer-drag-handle { cursor: grab; color: #94a3b8; font-size: 1rem; padding: 0 0.25rem 0 0; user-select: none; }
+    .prestationer-drag-handle:active { cursor: grabbing; }
+    .prestationer-sektioner-lista li.prestationer-dragging { opacity: 0.4; }
+    .prestationer-sektioner-lista li.prestationer-drag-over { background: #f0f9ff; outline: 2px solid var(--accent, #2563eb); }
   </style>
 </head>
 <body>
@@ -248,42 +252,117 @@
   }
 
   function renderSectionsOrder() {
-    const list = document.getElementById('pref-sections-list');
+    var list = document.getElementById('pref-sections-list');
     if (!list) return;
-    list.innerHTML = sectionsOrder.map(function (id, idx) {
-      const label = SECTION_LABELS[id] || id;
-      const upDisabled = idx === 0 ? ' disabled' : '';
-      const downDisabled = idx === sectionsOrder.length - 1 ? ' disabled' : '';
-      return '<li>' +
-        '<span class="prestationer-sektioner-namn">' + label + '</span>' +
-        '<span class="prestationer-sektioner-knappar">' +
-        '<button type="button" data-move="up" data-id="' + id + '"' + upDisabled + '>↑</button>' +
-        '<button type="button" data-move="down" data-id="' + id + '"' + downDisabled + '>↓</button>' +
-        '</span>' +
-        '</li>';
-    }).join('');
+    list.innerHTML = '';
+    sectionsOrder.forEach(function (id, idx) {
+      var label = SECTION_LABELS[id] || id;
+      var li = document.createElement('li');
+      li.draggable = true;
+      li.dataset.id = id;
+
+      var handle = document.createElement('span');
+      handle.className = 'prestationer-drag-handle';
+      handle.setAttribute('aria-hidden', 'true');
+      handle.textContent = '⠿';
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'prestationer-sektioner-namn';
+      nameSpan.textContent = label;
+
+      var btnWrap = document.createElement('span');
+      btnWrap.className = 'prestationer-sektioner-knappar';
+
+      var upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.dataset.move = 'up';
+      upBtn.dataset.id = id;
+      upBtn.textContent = '↑';
+      upBtn.setAttribute('aria-label', 'Flytta ' + label + ' uppåt');
+      upBtn.disabled = idx === 0;
+
+      var downBtn = document.createElement('button');
+      downBtn.type = 'button';
+      downBtn.dataset.move = 'down';
+      downBtn.dataset.id = id;
+      downBtn.textContent = '↓';
+      downBtn.setAttribute('aria-label', 'Flytta ' + label + ' nedåt');
+      downBtn.disabled = idx === sectionsOrder.length - 1;
+
+      btnWrap.appendChild(upBtn);
+      btnWrap.appendChild(downBtn);
+      li.appendChild(handle);
+      li.appendChild(nameSpan);
+      li.appendChild(btnWrap);
+      list.appendChild(li);
+    });
   }
 
-  const sectionsListEl = document.getElementById('pref-sections-list');
+  var draggingId = null;
+  var sectionsListEl = document.getElementById('pref-sections-list');
   if (sectionsListEl) {
     sectionsListEl.addEventListener('click', function (e) {
-      const btn = e.target.closest('button[data-move]');
+      var btn = e.target.closest('button[data-move]');
       if (!btn) return;
-      const dir = btn.getAttribute('data-move');
-      const id = btn.getAttribute('data-id');
-      const idx = sectionsOrder.indexOf(id);
+      var dir = btn.getAttribute('data-move');
+      var id = btn.getAttribute('data-id');
+      var idx = sectionsOrder.indexOf(id);
       if (idx === -1) return;
       if (dir === 'up' && idx > 0) {
-        const tmp = sectionsOrder[idx - 1];
+        var tmp = sectionsOrder[idx - 1];
         sectionsOrder[idx - 1] = sectionsOrder[idx];
         sectionsOrder[idx] = tmp;
       } else if (dir === 'down' && idx < sectionsOrder.length - 1) {
-        const tmp = sectionsOrder[idx + 1];
+        var tmp = sectionsOrder[idx + 1];
         sectionsOrder[idx + 1] = sectionsOrder[idx];
         sectionsOrder[idx] = tmp;
       }
       renderSectionsOrder();
       sparaPreferenser();
+    });
+
+    sectionsListEl.addEventListener('dragstart', function (e) {
+      var li = e.target.closest('li[data-id]');
+      if (!li) return;
+      draggingId = li.dataset.id;
+      li.classList.add('prestationer-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    sectionsListEl.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      var li = e.target.closest('li[data-id]');
+      sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
+      if (li && li.dataset.id !== draggingId) li.classList.add('prestationer-drag-over');
+    });
+
+    sectionsListEl.addEventListener('dragleave', function (e) {
+      if (!sectionsListEl.contains(e.relatedTarget)) {
+        sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
+      }
+    });
+
+    sectionsListEl.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var li = e.target.closest('li[data-id]');
+      sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
+      if (!li || !draggingId || li.dataset.id === draggingId) { draggingId = null; return; }
+      var fromIdx = sectionsOrder.indexOf(draggingId);
+      var toIdx = sectionsOrder.indexOf(li.dataset.id);
+      if (fromIdx === -1 || toIdx === -1) { draggingId = null; return; }
+      sectionsOrder.splice(fromIdx, 1);
+      sectionsOrder.splice(toIdx, 0, draggingId);
+      draggingId = null;
+      renderSectionsOrder();
+      sparaPreferenser();
+    });
+
+    sectionsListEl.addEventListener('dragend', function () {
+      draggingId = null;
+      sectionsListEl.querySelectorAll('li').forEach(function (el) {
+        el.classList.remove('prestationer-drag-over', 'prestationer-dragging');
+      });
     });
   }
 

@@ -59,11 +59,6 @@
     return s ? encodeURIComponent(s) : '';
   }
 
-  function escapeHtml(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-  }
 
   function visaForslag(lista) {
     sokForslag = lista || [];
@@ -114,7 +109,7 @@
       return;
     }
     fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' })
-      .then(function (res) { return res.json(); })
+      .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (data) { visaForslag(data.gravplatser || []); })
       .catch(function () { visaForslag([]); });
   }
@@ -212,6 +207,7 @@
         if (!kyrkogard) return;
         var params = new URLSearchParams();
         params.set('kyrkogard', kyrkogard);
+        gotoBtn.disabled = true;
         fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
           .then(function (res) {
             if (res.status === 404) {
@@ -229,6 +225,9 @@
           })
           .catch(function (err) {
             alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          })
+          .finally(function () {
+            gotoBtn.disabled = false;
           });
         return;
       }
@@ -242,11 +241,23 @@
         var params = new URLSearchParams();
         params.set('kyrkogard', kyrkogard);
         params.set('kvarter', kvarter);
+        gotoKvarter.disabled = true;
         fetch(API + '/gravplatser/nasta-ej-fardig?' + params.toString(), { credentials: 'include' })
           .then(function (res) {
             if (res.status === 404) {
-              alert('Ingen ej färdig gravplats i ' + kyrkogard + ' ' + kvarter + '. Alla är färdigtranskriberade.');
-              return null;
+              var listaParams = new URLSearchParams();
+              listaParams.set('kyrkogard', kyrkogard);
+              listaParams.set('kvarter', kvarter);
+              return fetch(API + '/gravplatser?' + listaParams.toString(), { credentials: 'include' })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) {
+                  var first = d && d.gravplatser && d.gravplatser[0];
+                  if (first && first.fullstandigt) {
+                    var slug = slugFromFullstandigt(first.fullstandigt);
+                    if (slug) window.location.href = '/gravplatser/' + slug;
+                  }
+                  return null;
+                });
             }
             if (!res.ok) throw new Error(res.statusText || 'Nätverksfel');
             return res.json();
@@ -259,6 +270,9 @@
           })
           .catch(function (err) {
             alert('Kunde inte hämta gravplats: ' + (err.message || 'nätverksfel'));
+          })
+          .finally(function () {
+            gotoKvarter.disabled = false;
           });
         return;
       }
@@ -468,7 +482,7 @@
               html += '<div class="startsida-transkriberingsstatus-kvarter-list" id="' + kvarterListId + '" hidden>';
               kvarterList.forEach(function (kv) {
                 var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter + ' – ' + kv.fardiga + ' av ' + kv.total + ', ' + procentStr(kv.total, kv.fardiga) + '%';
-                html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter startsida-transk-goto-nasta-kvarter" role="button" tabindex="0" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" data-kvarter="' + escapeHtml(kv.kvarter) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + ' ' + escapeHtml(kv.kvarter) + '">' +
+                html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter startsida-transk-goto-nasta-kvarter" role="button" tabindex="0" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" data-kvarter="' + escapeHtml(kv.kvarter) + '" title="Gå till ' + escapeHtml(kg.kyrkogard) + ' ' + escapeHtml(kv.kvarter) + '">' +
                   radMedStapel(escapeHtml(kvarterLabel), kvarterTillSegment(kv)) +
                   '</div>';
               });

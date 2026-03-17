@@ -21,7 +21,6 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
             GravplatsInmatning.last_edited_by_user_id == user_id
         ).distinct().subquery()
     )
-    mina_ids = [r[0] for r in db.query(mina_gravplatser_subq.c.gravplats_id).all()]
 
     antal_registreringar = (
         db.query(GravplatsRedigeringslogg).filter(GravplatsRedigeringslogg.user_id == user_id).count()
@@ -35,11 +34,7 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         .distinct()
         .count()
     )
-    antal_innehavare = 0
-    antal_narmast_anhoriga = 0
-    antal_gravsatta = 0
-    antal_skisser = 0
-    unika_yrken_set = set()
+
     # Yrkesbaserade achievements – grupper av yrken hämtas från databasen
     yrkes_grupper: dict[str, set[str]] = {}
     yrkes_rows = db.query(AchievementYrkesGrupp).all()
@@ -53,38 +48,40 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         if yrke_val:
             yrkes_grupper[key].add(yrke_val)
     yrkes_grupp_counts: dict[str, int] = {k: 0 for k in yrkes_grupper.keys()}
-    if mina_ids:
-        antal_innehavare = db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.in_(mina_ids)).count()
-        antal_narmast_anhoriga = db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_ids)).count()
-        antal_gravsatta = db.query(Gravsatt).filter(Gravsatt.gravplats_id.in_(mina_ids)).count()
-        antal_skisser = db.query(GravplatsSkiss).filter(GravplatsSkiss.gravplats_id.in_(mina_ids)).count()
-        for q in (
-            db.query(GravplatsInnehavare.yrke).filter(GravplatsInnehavare.gravplats_id.in_(mina_ids)),
-            db.query(GravplatsNarmastAnhorig.yrke).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_ids)),
-            db.query(Gravsatt.yrke).filter(Gravsatt.gravplats_id.in_(mina_ids)),
-        ):
-            for row in q.all():
-                if row[0] is not None:
-                    y = str(row[0]).strip()
-                    if not y:
-                        continue
-                    unika_yrken_set.add(y)
-                    # Räkna in yrket i alla relevanta dynamiska grupper
-                    for key, yrken in yrkes_grupper.items():
-                        if y in yrken:
-                            yrkes_grupp_counts[key] = yrkes_grupp_counts.get(key, 0) + 1
+
+    # Använd subquery direkt i IN-filter – undviker att materialisera potentiellt
+    # tusentals gravplats-id:n i Python och skicka tillbaka dem som en stor IN-lista.
+    antal_innehavare = db.query(GravplatsInnehavare).filter(GravplatsInnehavare.gravplats_id.in_(mina_gravplatser_subq)).count()
+    antal_narmast_anhoriga = db.query(GravplatsNarmastAnhorig).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_gravplatser_subq)).count()
+    antal_gravsatta = db.query(Gravsatt).filter(Gravsatt.gravplats_id.in_(mina_gravplatser_subq)).count()
+    antal_skisser = db.query(GravplatsSkiss).filter(GravplatsSkiss.gravplats_id.in_(mina_gravplatser_subq)).count()
+
+    unika_yrken_set = set()
+    for q in (
+        db.query(GravplatsInnehavare.yrke).filter(GravplatsInnehavare.gravplats_id.in_(mina_gravplatser_subq)),
+        db.query(GravplatsNarmastAnhorig.yrke).filter(GravplatsNarmastAnhorig.gravplats_id.in_(mina_gravplatser_subq)),
+        db.query(Gravsatt.yrke).filter(Gravsatt.gravplats_id.in_(mina_gravplatser_subq)),
+    ):
+        for row in q.all():
+            if row[0] is not None:
+                y = str(row[0]).strip()
+                if not y:
+                    continue
+                unika_yrken_set.add(y)
+                # Räkna in yrket i alla relevanta dynamiska grupper
+                for key, yrken in yrkes_grupper.items():
+                    if y in yrken:
+                        yrkes_grupp_counts[key] = yrkes_grupp_counts.get(key, 0) + 1
     antal_unika_yrken = len(unika_yrken_set)
 
     # Antal gravplatser med mer än 3 gravsatta (storgravar) bland användarens gravplatser
-    antal_storgravar = 0
-    if mina_ids:
-        gravsatta_per_gravplats = (
-            db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id).label("cnt"))
-            .filter(Gravsatt.gravplats_id.in_(mina_ids))
-            .group_by(Gravsatt.gravplats_id)
-            .all()
-        )
-        antal_storgravar = sum(1 for _, cnt in gravsatta_per_gravplats if (cnt or 0) > 3)
+    gravsatta_per_gravplats = (
+        db.query(Gravsatt.gravplats_id, func.count(Gravsatt.id).label("cnt"))
+        .filter(Gravsatt.gravplats_id.in_(mina_gravplatser_subq))
+        .group_by(Gravsatt.gravplats_id)
+        .all()
+    )
+    antal_storgravar = sum(1 for _, cnt in gravsatta_per_gravplats if (cnt or 0) > 3)
 
     niva_rows = db.query(AchievementNiva).order_by(AchievementNiva.achievement_key, AchievementNiva.threshold).all()
     key_to_thresholds = {}

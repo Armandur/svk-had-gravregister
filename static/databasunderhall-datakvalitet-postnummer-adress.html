@@ -27,6 +27,7 @@
     </div>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
 (function () {
   const API = '/api';
@@ -37,7 +38,6 @@
   const tomEl = document.getElementById('dbuh-tom');
   const felEl = document.getElementById('dbuh-fel');
   function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
-  function escapeHtml(s) { var div = document.createElement('div'); div.textContent = s == null ? '' : String(s); return div.innerHTML; }
   function formateraSenastAndrad(isoDatetime) {
     if (!isoDatetime) return '–';
     try { var d = new Date(isoDatetime); if (isNaN(d.getTime())) return escapeHtml(isoDatetime); return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return escapeHtml(isoDatetime); }

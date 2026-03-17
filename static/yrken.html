@@ -42,6 +42,7 @@
   </main>
 
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>gpEnsureAuth();</script>
   <script>
 (function () {
@@ -55,11 +56,6 @@
     }
   });
 
-  function esc(s) {
-    const div = document.createElement('div');
-    div.textContent = s == null ? '' : String(s);
-    return div.innerHTML;
-  }
 
   const statusEl = document.getElementById('yrken-status');
   const tabellEl = document.getElementById('yrken-tabell');

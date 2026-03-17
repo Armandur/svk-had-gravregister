@@ -93,6 +93,23 @@
       </div>
     </section>
 
+    <section class="inst-sektion" aria-label="Redigeringshistorik">
+      <h2>Redigeringshistorik</h2>
+      <p style="font-size:0.9rem; color:#64748b; margin:0 0 0.75rem;">
+        När aktiverat sparas en kopia av inmatningsdata vid varje sparande. Möjliggör "Vad ändrades?" i historik-modalen på gravplatssidan.
+      </p>
+      <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-snapshot-toggle" checked />
+          Spara inmatningsdata vid varje redigering
+        </label>
+        <span id="inst-snapshot-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
+      <nav class="inst-lankgrupp" style="margin-top:0.75rem;">
+        <a href="/loggar">Redigeringslogg (vem/när)</a>
+      </nav>
+    </section>
+
     <section class="inst-sektion" aria-label="API-nycklar">
       <h2>API-nycklar</h2>
       <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
@@ -131,6 +148,8 @@
       const instansStatus = document.getElementById('inst-claude-instans-status');
       const batchBlockToggle = document.getElementById('inst-claude-batch-block-toggle');
       const batchBlockStatus = document.getElementById('inst-claude-batch-block-status');
+      const snapshotToggle = document.getElementById('inst-snapshot-toggle');
+      const snapshotStatus = document.getElementById('inst-snapshot-status');
 
       instansToggle && instansToggle.addEventListener('change', async function() {
         const aktiv = instansToggle.checked;
@@ -170,6 +189,25 @@
         }
       });
 
+      snapshotToggle && snapshotToggle.addEventListener('change', async function() {
+        const aktiv = snapshotToggle.checked;
+        snapshotStatus.textContent = 'Sparar…';
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ spara_redigeringslogg_snapshot: aktiv }),
+          });
+          if (!res.ok) throw new Error();
+          snapshotStatus.textContent = aktiv ? 'Aktiverat.' : 'Inaktiverat.';
+          setTimeout(() => { snapshotStatus.textContent = ''; }, 2500);
+        } catch (_) {
+          snapshotStatus.textContent = 'Kunde inte spara.';
+          snapshotToggle.checked = !aktiv;
+        }
+      });
+
       async function laddaStatus() {
         try {
           const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
@@ -186,6 +224,7 @@
           }
           if (instansToggle) instansToggle.checked = d.claude_aktiv_instans !== false;
           if (batchBlockToggle) batchBlockToggle.checked = d.claude_batch_block_enskild !== false;
+          if (snapshotToggle) snapshotToggle.checked = d.spara_redigeringslogg_snapshot !== false;
         } catch (_) {
           statusEl.textContent = 'Kunde inte hämta status.';
         }
