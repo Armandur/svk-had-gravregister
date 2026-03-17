@@ -21,6 +21,14 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 15 | ⌨-knapp (och ?-tangent) i menyraden på /gravplatser visar en dialog med alla kortkommandon. C-tangent för att trigga Claude-hämtning. Fix: Ctrl+S triggar inte längre skiss-knappen. | UX | ✅ Klar |
 | 16 | Ersätt webbläsarens alert()/confirm()/prompt() med lämpligare UI-komponenter – se detaljerad inventering nedan | UX | ✅ Klar |
 | 17 | Konsolidera de fyra separata `document.addEventListener('keydown')`-lyssnarna i gravplatser.js till en enda lyssnare med tydlig prioritetsordning för modal-guards – enklare att överblicka och debugga | Kod | ✅ Klar |
+| 18 | Skapa `CLAUDE.md` med projektöversikt, körinstruktioner och konventioner för AI-assisterat arbete | Kod | ✅ Klar |
+| 19 | `@app.on_event("startup")` deprecated i FastAPI ≥ 0.93 – ersatt med `lifespan` context manager | Kod | ✅ Klar |
+| 20 | `api_keys.py` läser JSON från disk vid varje anrop (4+ funktioner) – cacha innehållet i minnet med invalidering vid skrivning | Kod | 🔲 Öppen |
+| 21 | Lägg till automatiserade tester (`pytest`) – åtminstone smoke-tester för routes och OCR-service | Kod | 🔲 Öppen |
+| 22 | Migrera SQLAlchemy-sessionen till `AsyncSession` för konsekvent async-stack (stor refaktorering – kräver genomtänkt plan) | Kod | 🔲 Öppen |
+| 23 | Exportfunktion: ladda ned transkriberade gravar som CSV/Excel (eller JSON) för vidare bearbetning i externa verktyg | Funktionalitet | 🔲 Öppen |
+| 24 | Kvarhållna `confirm()`-dialoger (destruktiva åtgärder) – uppgradera till native `<dialog>`-baserade bekräftelsemodaler för konsekvent utseende | UX | 🔲 Öppen |
+| 25 | `MODEL`-konstanten i `ocr_service.py` är hårdkodad – gör den konfigurerbar via env-variabel `CLAUDE_MODEL` (med Sonnet 4.6 som default) | Kod | 🔲 Öppen |
 
 ---
 
