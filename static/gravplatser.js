@@ -1083,7 +1083,19 @@ document.getElementById('gp-ocr-modal')?.addEventListener('keydown', (e) => {
     else closeOcrModal(true);
   }
 });
+/* ── Samlad keydown-lyssnare ──────────────────────────────────────────────────
+   Prioritetsordning:
+   1. Lightbox (fångar alla tangenter när den är öppen)
+   2. Modals med Escape-hantering (OCR, skiss, rapport)
+   3. Escape i inmatningsfält → blur
+   4. OCR väntar-på-bild-läge (Escape)
+   5. Sidan är inte laddad / gömd → avbryt
+   6. Native <dialog>-modals öppna (historik, kortkommandon) → avbryt
+   7. Ctrl+S → spara
+   8. Övriga genvägar (kräver att inget inputfält har fokus)
+─────────────────────────────────────────────────────────────────────────── */
 document.addEventListener('keydown', (e) => {
+  // 1. Lightbox
   const lb = document.getElementById('gp-lightbox');
   if (lb && !lb.hidden) {
     if (e.key === 'Escape') closeLightbox();
@@ -1093,8 +1105,10 @@ document.addEventListener('keydown', (e) => {
     else if (e.key === '-') { lightboxZoomOut(); e.preventDefault(); }
     return;
   }
-  const ocrModalGlobal = document.getElementById('gp-ocr-modal');
-  if (ocrModalGlobal && !ocrModalGlobal.hidden) {
+
+  // 2. Modals med explicit Escape-hantering
+  const ocrModal = document.getElementById('gp-ocr-modal');
+  if (ocrModal && !ocrModal.hidden) {
     if (e.key === 'Escape') { closeOcrModal(false); e.preventDefault(); }
     return;
   }
@@ -1108,27 +1122,39 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { rapportModal.hidden = true; e.preventDefault(); }
     return;
   }
+
+  // 3. Escape i inmatningsfält → blur (möjliggör nästa tangenttryck som genväg)
+  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) {
+    if (e.key === 'Escape') { e.target.blur(); e.preventDefault(); }
+    return;
+  }
+
+  // 4. OCR väntar på bild-läge
   if (e.key === 'Escape' && ocrVantarPaBild) {
     ocrVantarPaBild = false;
     ocrNamnLage = null;
     ocrAdressLage = false;
     ocrFoddenamnFalt = null;
     uppdateraOcrKnapp();
-  }
-});
-
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) {
-    if (e.key === 'Escape') { e.target.blur(); e.preventDefault(); }
     return;
   }
+
+  // 5. Sidan inte laddad
   if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
-  const lb = document.getElementById('gp-lightbox');
-  if (lb && !lb.hidden) return;
-  const ocrModal = document.getElementById('gp-ocr-modal');
-  if (ocrModal && !ocrModal.hidden) return;
+
+  // 6. Native <dialog>-modals öppna → låt webbläsaren hantera Escape, blockera övriga genvägar
   const historikModal = document.getElementById('gp-historik-modal');
   if (historikModal && historikModal.open) return;
+  const kortDialog = document.getElementById('gp-kortkommandon-dialog');
+  if (kortDialog && kortDialog.open) return;
+
+  // 7. Ctrl+S → spara
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if (state.inmatningRedigerar) { sparaInmatning(); e.preventDefault(); }
+    return;
+  }
+
+  // 8. Övriga genvägar (ej när inputfält har fokus – redan hanterat i steg 3)
   if (e.key === 'ArrowLeft') {
     if (state.currentIndex > 0) tillbaka();
     e.preventDefault();
@@ -1156,17 +1182,12 @@ document.addEventListener('keydown', (e) => {
   } else if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.metaKey) {
     const historikBtn = document.getElementById('gp-btn-historik');
     if (historikBtn && !historikBtn.hidden && !historikBtn.disabled) { historikBtn.click(); e.preventDefault(); }
-  }
-});
-
-document.addEventListener('keydown', (e) => {
-  if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
-  const lb = document.getElementById('gp-lightbox');
-  if (lb && !lb.hidden) return;
-  const ocrModal = document.getElementById('gp-ocr-modal');
-  if (ocrModal && !ocrModal.hidden) return;
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    if (state.inmatningRedigerar) { sparaInmatning(); e.preventDefault(); }
+  } else if (e.key === '?') {
+    kortDialog?.showModal();
+    e.preventDefault();
+  } else if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+    const claudeBtn = document.getElementById('gp-claude-ocr-btn');
+    if (claudeBtn && !claudeBtn.hidden && !claudeBtn.disabled) { claudeBtn.click(); e.preventDefault(); }
   }
 });
 
@@ -1195,32 +1216,6 @@ document.addEventListener('keydown', (e) => {
   });
 })();
 
-document.addEventListener('keydown', (e) => {
-  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) return;
-  if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
-  const lb = document.getElementById('gp-lightbox');
-  if (lb && !lb.hidden) return;
-  const ocrModal = document.getElementById('gp-ocr-modal');
-  if (ocrModal && !ocrModal.hidden) return;
-  const skissModalG = document.getElementById('gp-skiss-modal');
-  if (skissModalG && !skissModalG.hidden) return;
-  const rapportModalG = document.getElementById('gp-rapport-modal');
-  if (rapportModalG && !rapportModalG.hidden) return;
-  const historikModalG = document.getElementById('gp-historik-modal');
-  if (historikModalG && historikModalG.open) return;
-  const kortDialog = document.getElementById('gp-kortkommandon-dialog');
-  if (kortDialog && kortDialog.open) {
-    if (e.key === 'Escape') return; // låt dialog hantera Esc självt
-    return;
-  }
-  if (e.key === '?') {
-    kortDialog?.showModal();
-    e.preventDefault();
-  } else if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
-    const claudeBtn = document.getElementById('gp-claude-ocr-btn');
-    if (claudeBtn && !claudeBtn.hidden && !claudeBtn.disabled) { claudeBtn.click(); e.preventDefault(); }
-  }
-});
 
 async function ensureInmatningData() {
   if (state.currentGravplatsId == null) return false;

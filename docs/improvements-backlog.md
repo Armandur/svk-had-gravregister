@@ -20,7 +20,7 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 14 | Klick på färdigtranskriberat kvarter i statistikdiagrammen på startsidan ska navigera till första graven i kvarteret (inte visa felmeddelande/alert) | UX | ✅ Klar |
 | 15 | ⌨-knapp (och ?-tangent) i menyraden på /gravplatser visar en dialog med alla kortkommandon. C-tangent för att trigga Claude-hämtning. Fix: Ctrl+S triggar inte längre skiss-knappen. | UX | ✅ Klar |
 | 16 | Ersätt webbläsarens alert()/confirm()/prompt() med lämpligare UI-komponenter – se detaljerad inventering nedan | UX | ⬜ |
-| 17 | Konsolidera de fyra separata `document.addEventListener('keydown')`-lyssnarna i gravplatser.js till en enda lyssnare med tydlig prioritetsordning för modal-guards – enklare att överblicka och debugga | Kod | ⬜ |
+| 17 | Konsolidera de fyra separata `document.addEventListener('keydown')`-lyssnarna i gravplatser.js till en enda lyssnare med tydlig prioritetsordning för modal-guards – enklare att överblicka och debugga | Kod | ✅ Klar |
 
 ---
 
