@@ -40,7 +40,9 @@ Se [Claude OCR – enskild och batch](claude-ocr.md) för mer information. Admin
 
 ## Osparade ändringar
 
-Om du försöker navigera till en annan gravplats (med `←`/`→`, knapparna eller kvarterbyte) eller stänga redigeringsläget medan du har osparade ändringar visas en gul bekräftelsepanel direkt i formulärhuvudet:
+Om du försöker navigera till en annan gravplats (med `←`/`→`, knapparna eller kvarterbyte) eller stänga redigeringsläget medan du har osparade ändringar visas en gul bekräftelsepanel direkt i formulärhuvudet.
+
+> **Undantag – batchgranskning:** I granskningsläget för batchkörningar blockeras navigeringen *inte* av osparade ändringar. Ändringar hämtas automatiskt från Claude-svaret, och du kan bläddra fritt utan att behöva spara varje gravplats innan du går vidare.
 
 - **Avbryt ändå** – förkastar ändringarna och utför navigeringen/avslutar redigeringsläget.
 - **Fortsätt redigera** – stänger panelen och du är kvar i redigeringsläget med dina ändringar intakta.

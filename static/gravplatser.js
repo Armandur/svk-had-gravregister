@@ -866,7 +866,7 @@ function toggleHelaSidor() {
  */
 let _pendingNavigeringAction = null;
 function dirtyGuard(action) {
-  if (state.inmatningDirty) {
+  if (state.inmatningDirty && !state.batchJobbMode) {
     _pendingNavigeringAction = action || null;
     const panel = document.getElementById('gp-avbryt-bekraftelse');
     if (panel) panel.hidden = false;
