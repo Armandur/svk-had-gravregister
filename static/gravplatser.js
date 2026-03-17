@@ -336,6 +336,8 @@ async function uppdateraVy(behallInmatningState = false) {
     state.sparatClaudeSvar = null;
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = true;
+    const avbrytPanelReset = document.getElementById('gp-avbryt-bekraftelse');
+    if (avbrytPanelReset) avbrytPanelReset.hidden = true;
     const redigeraBtn = document.getElementById('gp-btn-redigera');
     if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
     const sparatPanelEmpty = document.getElementById('gp-claude-sparat-panel');
@@ -570,6 +572,8 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   state.sparatClaudeSvar = null;
   const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
   if (sparaWrap) sparaWrap.hidden = true;
+  const avbrytPanelNav = document.getElementById('gp-avbryt-bekraftelse');
+  if (avbrytPanelNav) avbrytPanelNav.hidden = true;
   const redigeraBtn = document.getElementById('gp-btn-redigera');
   if (redigeraBtn) redigeraBtn.textContent = 'Redigera gravplatsen';
   const sparatPanel = document.getElementById('gp-claude-sparat-panel');
@@ -3042,6 +3046,8 @@ function toggleRedigeraVy() {
     state.lastInmatningGravplatsId = null;
     const sparaWrap = document.getElementById('gp-inmatning-spara-wrap');
     if (sparaWrap) sparaWrap.hidden = true;
+    const avbrytPanel = document.getElementById('gp-avbryt-bekraftelse');
+    if (avbrytPanel) avbrytPanel.hidden = true;
     state.sparatClaudeSvar = null;
     const sparatPanel = document.getElementById('gp-claude-sparat-panel');
     if (sparatPanel) sparatPanel.hidden = true;
