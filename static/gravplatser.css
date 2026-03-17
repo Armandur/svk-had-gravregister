@@ -2406,3 +2406,91 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
     page-break-inside: avoid;
   }
 }
+
+/* Kortkommandon-dialog */
+.gravplatser-btn-kortkommandon {
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.gp-kortkommandon-dialog {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  padding: 0;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+
+.gp-kortkommandon-dialog::backdrop {
+  background: rgba(0,0,0,0.4);
+}
+
+.gp-kortkommandon-inner {
+  padding: 1rem 1.25rem 1.25rem;
+}
+
+.gp-kortkommandon-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.gp-kortkommandon-rubrik {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.gp-kortkommandon-stang {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--text);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.gp-kortkommandon-stang:hover {
+  background: var(--border);
+}
+
+.gp-kortkommandon-tabell {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.gp-kortkommandon-tabell td {
+  padding: 0.3rem 0.4rem;
+  vertical-align: middle;
+}
+
+.gp-kortkommandon-tabell tr:hover td {
+  background: var(--bg);
+}
+
+.gp-kortkommandon-tangent {
+  white-space: nowrap;
+  padding-right: 1rem !important;
+}
+
+.gp-kortkommandon-tabell kbd {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  font-family: inherit;
+  font-size: 0.85em;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  box-shadow: 0 1px 0 var(--border);
+}
+
+.gp-kortkommandon-separator td {
+  padding-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--text-muted, #888);
+}

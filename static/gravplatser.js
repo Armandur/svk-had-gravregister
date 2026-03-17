@@ -1130,7 +1130,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'f' || e.key === 'F') {
     const fardigBtn = document.getElementById('gp-btn-fardigtranskriberad');
     if (fardigBtn && !fardigBtn.hidden && !fardigBtn.disabled) { fardigBtn.click(); e.preventDefault(); }
-  } else if (e.key === 's' || e.key === 'S') {
+  } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
     const skissBtn = document.getElementById('gp-lagg-till-skiss');
     if (skissBtn && !skissBtn.hidden && !skissBtn.disabled) { skissBtn.click(); e.preventDefault(); }
   }
@@ -1147,6 +1147,39 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+(function () {
+  const dialog = document.getElementById('gp-kortkommandon-dialog');
+  const openBtn = document.getElementById('gp-btn-kortkommandon');
+  const closeBtn = document.getElementById('gp-kortkommandon-stang');
+  if (!dialog) return;
+
+  openBtn?.addEventListener('click', () => dialog.showModal());
+  closeBtn?.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) dialog.close();
+  });
+})();
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) return;
+  if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
+  const lb = document.getElementById('gp-lightbox');
+  if (lb && !lb.hidden) return;
+  const ocrModal = document.getElementById('gp-ocr-modal');
+  if (ocrModal && !ocrModal.hidden) return;
+  const kortDialog = document.getElementById('gp-kortkommandon-dialog');
+  if (kortDialog && kortDialog.open) {
+    if (e.key === 'Escape') return; // låt dialog hantera Esc självt
+    return;
+  }
+  if (e.key === '?') {
+    kortDialog?.showModal();
+    e.preventDefault();
+  } else if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+    const claudeBtn = document.getElementById('gp-claude-ocr-btn');
+    if (claudeBtn && !claudeBtn.hidden && !claudeBtn.disabled) { claudeBtn.click(); e.preventDefault(); }
+  }
+});
 
 async function ensureInmatningData() {
   if (state.currentGravplatsId == null) return false;

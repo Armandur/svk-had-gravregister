@@ -18,3 +18,4 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 12 | Samla globala variabler i state-objekt i gravplatser.js | Kod | ✅ Klar |
 | 13 | Se över tangentbordskommandon – konflikter och täckning (t.ex. modalers effekt på globala genvägar) | UX | ✅ Klar |
 | 14 | Klick på färdigtranskriberat kvarter i statistikdiagrammen på startsidan ska navigera till första graven i kvarteret (inte visa felmeddelande/alert) | UX | ✅ Klar |
+| 15 | ⌨-knapp (och ?-tangent) i menyraden på /gravplatser visar en dialog med alla kortkommandon. C-tangent för att trigga Claude-hämtning. Fix: Ctrl+S triggar inte längre skiss-knappen. | UX | ✅ Klar |

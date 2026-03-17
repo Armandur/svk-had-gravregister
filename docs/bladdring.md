@@ -28,3 +28,28 @@ Layouten kan visas horisontellt (tre rutor bredvid varandra) eller vertikalt (st
 - **Föregående gravplats:** Flyttar vyn två sidor bakåt.
 
 Beskärning (övre/nedre halva) följer de andelar som anges i specifikationen och kan justeras per mapp om källmaterialet avviker.
+
+## Kortkommandon
+
+En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog med alla kortkommandon. Genvägarna fungerar när fokus inte ligger i ett inmatningsfält.
+
+| Tangent | Funktion |
+|---|---|
+| `←` / `→` | Föregående / nästa gravplats |
+| `E` | Redigera / visa gravplatsen |
+| `F` | Växla färdigtranskriberad |
+| `H` | Visa / dölj hela sidan |
+| `V` | Växla horisontell / vertikal vy |
+| `R` | Öppna rapportutskrift |
+| `S` | Lägg till skiss |
+| `C` | Hämta från Claude (kräver redigeringsläge) |
+| `Ctrl`+`S` | Spara inmatning (kräver redigeringsläge) |
+| `?` | Visa kortkommandon |
+
+**I bildförstoring:**
+
+| Tangent | Funktion |
+|---|---|
+| `←` / `→` | Föregående / nästa bild |
+| `+` / `−` | Zooma in / ut |
+| `Esc` | Stäng |

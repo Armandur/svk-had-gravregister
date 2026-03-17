@@ -25,6 +25,7 @@
         <button type="button" id="gp-btn-toggle-hela" class="gravplatser-btn-toggle-hela">Visa hela sidan</button>
         <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Horisontell vy</button>
         <button type="button" id="gp-btn-rapport" class="gravplatser-btn-rapport" title="Skapa rapportutskrift med transkriberad info och bilder">Rapportutskrift</button>
+        <button type="button" id="gp-btn-kortkommandon" class="gravplatser-btn-kortkommandon" title="Visa kortkommandon (?)">⌨</button>
       </div>
       <p id="gp-granska-anvandare-info" class="gp-granska-anvandare-info" hidden aria-live="polite"></p>
       <div id="gp-innehall-body" class="gp-innehall-body">
@@ -163,6 +164,33 @@
       <button type="button" class="gp-lightbox-zoom-btn" id="gp-lightbox-zoom-in" aria-label="Zooma in">+</button>
     </div>
   </div>
+
+  <dialog id="gp-kortkommandon-dialog" class="gp-kortkommandon-dialog" aria-label="Kortkommandon">
+    <div class="gp-kortkommandon-inner">
+      <div class="gp-kortkommandon-header">
+        <h3 class="gp-kortkommandon-rubrik">Kortkommandon</h3>
+        <button type="button" id="gp-kortkommandon-stang" class="gp-kortkommandon-stang" aria-label="Stäng">✕</button>
+      </div>
+      <table class="gp-kortkommandon-tabell">
+        <tbody>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>←</kbd> / <kbd>→</kbd></td><td>Föregående / nästa gravplats</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>E</kbd></td><td>Redigera / visa gravplatsen</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>F</kbd></td><td>Växla färdigtranskriberad</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>H</kbd></td><td>Visa / dölj hela sidan</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>V</kbd></td><td>Växla horisontell / vertikal vy</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>R</kbd></td><td>Öppna rapportutskrift</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>S</kbd></td><td>Lägg till skiss</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>C</kbd></td><td>Hämta från Claude</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Spara inmatning</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>?</kbd></td><td>Visa kortkommandon</td></tr>
+          <tr class="gp-kortkommandon-separator"><td colspan="2"><em>I bildförstoring</em></td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>←</kbd> / <kbd>→</kbd></td><td>Föregående / nästa bild</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>+</kbd> / <kbd>−</kbd></td><td>Zooma in / ut</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>Esc</kbd></td><td>Stäng</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </dialog>
 
   <div id="gp-ocr-status" aria-live="assertive" class="visually-hidden"></div>
   <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-labelledby="gp-ocr-modal-rubrik">
