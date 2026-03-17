@@ -281,6 +281,32 @@ function lightboxNext() {
   uppdateraLightboxKnappar();
 }
 
+/* ── Fönsterresize: räkna om zoom när lightboxen är öppen ────────────────── */
+(function () {
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    const lb = document.getElementById('gp-lightbox');
+    if (!lb || lb.hidden) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      /* Spara relativ scroll-position (0–1) för att återställa efter zoom */
+      const wrap = document.getElementById('gp-lightbox-img-wrap');
+      const inner = document.getElementById('gp-lightbox-img-inner');
+      if (!wrap || !inner) return;
+      const relX = inner.offsetWidth  > wrap.clientWidth  ? (wrap.scrollLeft + wrap.clientWidth  / 2) / inner.offsetWidth  : 0.5;
+      const relY = inner.offsetHeight > wrap.clientHeight ? (wrap.scrollTop  + wrap.clientHeight / 2) / inner.offsetHeight : 0.5;
+      /* Sätt zoom = 0 för att trigga auto-fit med nytt fönstermått */
+      lightboxZoom = 0;
+      lightboxZoomApplicera();
+      /* Återställ relativ position efter auto-fit */
+      const newW = inner.offsetWidth;
+      const newH = inner.offsetHeight;
+      wrap.scrollLeft = Math.max(0, relX * newW - wrap.clientWidth  / 2);
+      wrap.scrollTop  = Math.max(0, relY * newH - wrap.clientHeight / 2);
+    }, 100);
+  });
+})();
+
 /* ── Drag-to-pan + scroll-wheel-zoom ─────────────────────────────────────── */
 (function () {
   const wrap = document.getElementById('gp-lightbox-img-wrap');
