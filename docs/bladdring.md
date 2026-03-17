@@ -35,7 +35,7 @@ En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog me
 
 | Tangent | Funktion |
 |---|---|
-| `←` / `→` | Föregående / nästa gravplats |
+| `←` / `→` | Föregående / nästa gravplats (blockeras om det finns osparade ändringar – se [Osparade ändringar](inmatning.md#osparade-ändringar)) |
 | `E` | Redigera / visa gravplatsen |
 | `F` | Växla färdigtranskriberad |
 | `H` | Visa / dölj hela sidan |
