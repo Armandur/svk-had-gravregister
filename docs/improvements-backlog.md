@@ -28,7 +28,7 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 22 | Migrera SQLAlchemy-sessionen till `AsyncSession` för konsekvent async-stack (stor refaktorering – kräver genomtänkt plan) | Kod | 🔲 Öppen |
 | 23 | Exportfunktion: ladda ned transkriberade gravar som CSV/Excel (eller JSON) för vidare bearbetning i externa verktyg | Funktionalitet | 🔲 Öppen |
 | 24 | Kvarhållna `confirm()`-dialoger (destruktiva åtgärder) – uppgradera till native `<dialog>`-baserade bekräftelsemodaler för konsekvent utseende | UX | ✅ Klar |
-| 25 | `MODEL`-konstanten i `ocr_service.py` är hårdkodad – gör den konfigurerbar via env-variabel `CLAUDE_MODEL` (med Sonnet 4.6 som default) | Kod | 🔲 Öppen |
+| 25 | `MODEL`-konstanten i `ocr_service.py` är hårdkodad – konfigurerbar via env-variabel `CLAUDE_MODEL` och/eller admin-inställningar (med Sonnet 4.6 som default) | Kod | ✅ Klar |
 
 ---
 

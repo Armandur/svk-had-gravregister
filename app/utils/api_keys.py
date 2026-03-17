@@ -4,6 +4,7 @@ import os
 
 from app.config import API_KEYS_PATH
 
+_CLAUDE_MODEL_DEFAULT = "claude-sonnet-4-6"
 _CLAUDE_PRIS_DEFAULT = {"input": 3.00, "output": 15.00, "cache_creation": 3.75, "cache_read": 0.30}
 _CLAUDE_PRIS_ENV_MAP = {
     "input": "CLAUDE_PRIS_INPUT",
@@ -48,6 +49,14 @@ def _get_claude_instans_aktiv() -> bool:
 def _get_claude_batch_block_enskild() -> bool:
     """Om True: blockera enskild Claude-körning för gravar i pågående batch-jobb (default: True)."""
     return bool(_load_api_keys().get("claude_batch_block_enskild", True))
+
+
+def _get_claude_model() -> str:
+    """Returnera Claude-modell. Prioritetsordning: CLAUDE_MODEL env > api_keys.json > default."""
+    env = os.environ.get("CLAUDE_MODEL")
+    if env:
+        return env.strip()
+    return _load_api_keys().get("claude_model") or _CLAUDE_MODEL_DEFAULT
 
 
 def _get_spara_redigeringslogg_snapshot() -> bool:

@@ -70,6 +70,7 @@ class ApiKeysBody(BaseModel):
     claude_aktiv_instans: bool | None = None
     claude_batch_block_enskild: bool | None = None
     spara_redigeringslogg_snapshot: bool | None = None
+    claude_model: str | None = None  # None = ej skickad, "" = återställ till default
 
 
 # ---------- Mappkonfiguration och extramaterial ----------
