@@ -1118,12 +1118,17 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) return;
+  if (e.target.tagName && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName.toUpperCase())) {
+    if (e.key === 'Escape') { e.target.blur(); e.preventDefault(); }
+    return;
+  }
   if (!document.getElementById('gp-innehall') || document.getElementById('gp-innehall').hidden) return;
   const lb = document.getElementById('gp-lightbox');
   if (lb && !lb.hidden) return;
   const ocrModal = document.getElementById('gp-ocr-modal');
   if (ocrModal && !ocrModal.hidden) return;
+  const historikModal = document.getElementById('gp-historik-modal');
+  if (historikModal && historikModal.open) return;
   if (e.key === 'ArrowLeft') {
     if (state.currentIndex > 0) tillbaka();
     e.preventDefault();
@@ -1148,6 +1153,9 @@ document.addEventListener('keydown', (e) => {
   } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
     const skissBtn = document.getElementById('gp-lagg-till-skiss');
     if (skissBtn && !skissBtn.hidden && !skissBtn.disabled) { skissBtn.click(); e.preventDefault(); }
+  } else if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.metaKey) {
+    const historikBtn = document.getElementById('gp-btn-historik');
+    if (historikBtn && !historikBtn.hidden && !historikBtn.disabled) { historikBtn.click(); e.preventDefault(); }
   }
 });
 
@@ -1168,7 +1176,19 @@ document.addEventListener('keydown', (e) => {
   const closeBtn = document.getElementById('gp-kortkommandon-stang');
   if (!dialog) return;
 
-  openBtn?.addEventListener('click', () => dialog.showModal());
+  function uppdateraKortkommandoDialog() {
+    const villkorliga = {
+      'gp-kortk-rad-claude':      document.getElementById('gp-claude-ocr-btn'),
+      'gp-kortk-rad-historik':    document.getElementById('gp-btn-historik'),
+      'gp-kortk-rad-hela-sidan':  document.getElementById('gp-btn-toggle-hela'),
+    };
+    for (const [rowId, btn] of Object.entries(villkorliga)) {
+      const row = document.getElementById(rowId);
+      if (row) row.hidden = !btn || btn.hidden;
+    }
+  }
+
+  openBtn?.addEventListener('click', () => { uppdateraKortkommandoDialog(); dialog.showModal(); });
   closeBtn?.addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', (e) => {
     if (e.target === dialog) dialog.close();
@@ -1186,6 +1206,8 @@ document.addEventListener('keydown', (e) => {
   if (skissModalG && !skissModalG.hidden) return;
   const rapportModalG = document.getElementById('gp-rapport-modal');
   if (rapportModalG && !rapportModalG.hidden) return;
+  const historikModalG = document.getElementById('gp-historik-modal');
+  if (historikModalG && historikModalG.open) return;
   const kortDialog = document.getElementById('gp-kortkommandon-dialog');
   if (kortDialog && kortDialog.open) {
     if (e.key === 'Escape') return; // låt dialog hantera Esc självt

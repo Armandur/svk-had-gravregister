@@ -10,10 +10,10 @@ let lightboxMode = 'extramaterial';
 let lightboxHalvorUrls = [];
 /** Vid mode 'skisser': lista med skiss-objekt (för att ladda fullupplöst crop). */
 let lightboxSkisserList = [];
-/** Zoomnivå i lightbox för skisser (1 = 100%). */
-let lightboxZoom = 1;
-const LIGHTBOX_ZOOM_MIN = 0.5;
-const LIGHTBOX_ZOOM_MAX = 4;
+/** Zoomnivå i lightbox (1 = 100% naturlig storlek). 0 = auto-fit vid nästa render. */
+let lightboxZoom = 0;
+const LIGHTBOX_ZOOM_MIN = 0.1;
+const LIGHTBOX_ZOOM_MAX = 8;
 const LIGHTBOX_ZOOM_STEG = 1.25;
 
 function uppdateraLightboxKnappar() {
@@ -26,25 +26,29 @@ function uppdateraLightboxKnappar() {
   if (nextBtn) nextBtn.disabled = n <= 1;
 }
 
+function _lightboxResetInner() {
+  const inner = document.getElementById('gp-lightbox-img-inner');
+  if (inner) { inner.style.width = ''; inner.style.height = ''; inner.classList.remove('gp-lightbox-zoomed'); }
+}
+
 function openLightbox(index) {
   if (state.currentExtramaterial.length === 0 || !state.currentExtramaterialMapp) return;
   lightboxMode = 'extramaterial';
   const idx = Math.max(0, Math.min(index, state.currentExtramaterial.length - 1));
   lightboxIndex = idx;
-  lightboxZoom = 1;
+  lightboxZoom = 0;
   const em = state.currentExtramaterial[idx];
   const bildUrl = `${API}/mappar/${encodeURIComponent(state.currentExtramaterialMapp)}/fil/${encodeURIComponent(em.filnamn)}/bild?_v=${state.cacheBust}`;
   const lightbox = document.getElementById('gp-lightbox');
   const imgEl = document.getElementById('gp-lightbox-img');
   if (lightbox && imgEl) {
+    _lightboxResetInner();
     imgEl.src = bildUrl;
     imgEl.alt = em.filnamn;
     imgEl.style.transform = '';
     imgEl.onload = () => lightboxZoomApplicera();
     const z = document.getElementById('gp-lightbox-zoom');
     if (z) z.hidden = false;
-    const wrap = document.getElementById('gp-lightbox-img-wrap');
-    if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -62,18 +66,17 @@ function openLightboxHalvor(index) {
   if (lightboxHalvorUrls.length === 0) return;
   lightboxMode = 'halvor';
   lightboxIndex = Math.max(0, Math.min(index, lightboxHalvorUrls.length - 1));
-  lightboxZoom = 1;
+  lightboxZoom = 0;
   const lightbox = document.getElementById('gp-lightbox');
   const imgEl = document.getElementById('gp-lightbox-img');
   if (lightbox && imgEl) {
+    _lightboxResetInner();
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
     imgEl.alt = '';
     imgEl.style.transform = '';
     imgEl.onload = () => lightboxZoomApplicera();
     const z = document.getElementById('gp-lightbox-zoom');
     if (z) z.hidden = false;
-    const wrap = document.getElementById('gp-lightbox-img-wrap');
-    if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
     lightbox.hidden = false;
     uppdateraLightboxKnappar();
   }
@@ -125,16 +128,15 @@ function openLightboxSkisser(skisserArray, index) {
   lightboxSkisserList = skisserArray;
   lightboxMode = 'skisser';
   lightboxIndex = Math.max(0, Math.min(index, skisserArray.length - 1));
-  lightboxZoom = 1;
+  lightboxZoom = 0;
   const lightbox = document.getElementById('gp-lightbox');
   const imgEl = document.getElementById('gp-lightbox-img');
   const zoomPanel = document.getElementById('gp-lightbox-zoom');
   if (!lightbox || !imgEl) return;
+  _lightboxResetInner();
   imgEl.onload = () => lightboxZoomApplicera();
   imgEl.alt = 'Skiss';
   if (zoomPanel) zoomPanel.hidden = false;
-  const wrap = document.getElementById('gp-lightbox-img-wrap');
-  if (wrap) { wrap.scrollTop = 0; wrap.scrollLeft = 0; }
   lightbox.hidden = false;
   uppdateraLightboxKnappar();
   const loadingIndex = lightboxIndex;
@@ -152,50 +154,67 @@ function openLightboxSkisser(skisserArray, index) {
   );
 }
 
-function lightboxZoomApplicera() {
+/**
+ * Applicerar aktuell zoomnivå och hanterar scroll-position.
+ * opts: { focalX, focalY, viewportX, viewportY }
+ *   focalX/Y: position i scroll-koordinater före zoom (fokuspunkt)
+ *   viewportX/Y: position i wrap-viewport där fokuspunkten ska stanna
+ */
+function lightboxZoomApplicera(opts) {
   const imgEl = document.getElementById('gp-lightbox-img');
   const innerEl = document.getElementById('gp-lightbox-img-inner');
   const nivaEl = document.getElementById('gp-lightbox-zoom-niva');
   const wrapEl = document.getElementById('gp-lightbox-img-wrap');
-  const harBild = innerEl && imgEl && imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0;
-  const kanZoomaHalvorSkiss = (lightboxMode === 'skisser' || lightboxMode === 'halvor') && harBild;
-  const kanZoomaExtramaterial = lightboxMode === 'extramaterial' && harBild;
+  if (!imgEl || !innerEl || !wrapEl) return;
+  const natW = imgEl.naturalWidth;
+  const natH = imgEl.naturalHeight;
+  if (!natW || !natH) return;
 
-  if (kanZoomaHalvorSkiss) {
-    const w = Math.round(imgEl.naturalWidth * lightboxZoom);
-    const h = Math.round(imgEl.naturalHeight * lightboxZoom);
-    innerEl.style.width = w + 'px';
-    innerEl.style.height = h + 'px';
-    innerEl.classList.add('gp-lightbox-zoomed');
-    imgEl.style.transform = '';
-  } else if (kanZoomaExtramaterial) {
-    /* Extramaterial: alltid explicit storlek (inkl. zoom ut < 100 %) så bilden kan skalas ned och få plats */
-    const w = Math.round(imgEl.naturalWidth * lightboxZoom);
-    const h = Math.round(imgEl.naturalHeight * lightboxZoom);
-    innerEl.style.width = w + 'px';
-    innerEl.style.height = h + 'px';
-    innerEl.classList.add('gp-lightbox-zoomed');
-    imgEl.style.transform = '';
-  } else {
-    if (innerEl) {
-      innerEl.style.width = '';
-      innerEl.style.height = '';
-      innerEl.classList.remove('gp-lightbox-zoomed');
-    }
-    if (imgEl) imgEl.style.transform = '';
+  /* Auto-fit: beräkna zoom så bilden fyller tillgängligt utrymme */
+  if (lightboxZoom <= 0) {
+    const cw = wrapEl.clientWidth || 1;
+    const ch = wrapEl.clientHeight || 1;
+    lightboxZoom = Math.min(cw / natW, ch / natH);
   }
+  lightboxZoom = Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom));
+
+  const newW = Math.round(natW * lightboxZoom);
+  const newH = Math.round(natH * lightboxZoom);
+  const oldW = innerEl.offsetWidth || 0;
+  const oldH = innerEl.offsetHeight || 0;
+
+  let newScrollLeft, newScrollTop;
+  if (opts && opts.focalX !== undefined && oldW > 0) {
+    /* Zoom mot specifik punkt (t.ex. muspekarens position) */
+    newScrollLeft = opts.focalX * (newW / oldW) - opts.viewportX;
+    newScrollTop  = opts.focalY * (newH / oldH) - opts.viewportY;
+  } else if (oldW > 0) {
+    /* Håll mitten av viewport fix */
+    const cx = wrapEl.scrollLeft + wrapEl.clientWidth  / 2;
+    const cy = wrapEl.scrollTop  + wrapEl.clientHeight / 2;
+    newScrollLeft = cx * (newW / oldW) - wrapEl.clientWidth  / 2;
+    newScrollTop  = cy * (newH / oldH) - wrapEl.clientHeight / 2;
+  } else {
+    /* Initialt: centrera bilden */
+    newScrollLeft = (newW - wrapEl.clientWidth)  / 2;
+    newScrollTop  = (newH - wrapEl.clientHeight) / 2;
+  }
+
+  innerEl.style.width  = newW + 'px';
+  innerEl.style.height = newH + 'px';
+  innerEl.classList.add('gp-lightbox-zoomed');
+  imgEl.style.transform = '';
   if (nivaEl) nivaEl.textContent = Math.round(lightboxZoom * 100) + '%';
-  if (wrapEl) { wrapEl.scrollTop = 0; wrapEl.scrollLeft = 0; }
+  wrapEl.scrollLeft = Math.max(0, newScrollLeft);
+  wrapEl.scrollTop  = Math.max(0, newScrollTop);
 }
 
 function lightboxZoomIn() {
-  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor' && lightboxMode !== 'extramaterial') return;
   lightboxZoom = Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom * LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
 
 function lightboxZoomOut() {
-  if (lightboxMode !== 'skisser' && lightboxMode !== 'halvor' && lightboxMode !== 'extramaterial') return;
   lightboxZoom = Math.max(LIGHTBOX_ZOOM_MIN, lightboxZoom / LIGHTBOX_ZOOM_STEG);
   lightboxZoomApplicera();
 }
@@ -205,8 +224,7 @@ function closeLightbox() {
   const zoomPanel = document.getElementById('gp-lightbox-zoom');
   if (lightbox) lightbox.hidden = true;
   if (zoomPanel) zoomPanel.hidden = true;
-  lightboxZoom = 1;
-  lightboxZoomApplicera();
+  lightboxZoom = 0;
 }
 
 function lightboxPrev() {
@@ -218,11 +236,14 @@ function lightboxPrev() {
   const imgEl = document.getElementById('gp-lightbox-img');
   if (!imgEl) return;
   if (lightboxMode === 'halvor') {
+    lightboxZoom = 0;
+    _lightboxResetInner();
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
     imgEl.onload = () => lightboxZoomApplicera();
   } else if (lightboxMode === 'skisser') {
+    lightboxZoom = 0;
+    _lightboxResetInner();
     const s = lightboxSkisserList[lightboxIndex];
-    lightboxZoom = 1;
     loadSkissFullRes(s).then(
       (dataUrl) => { imgEl.src = dataUrl; lightboxZoomApplicera(); },
       () => { imgEl.src = ''; }
@@ -242,11 +263,14 @@ function lightboxNext() {
   const imgEl = document.getElementById('gp-lightbox-img');
   if (!imgEl) return;
   if (lightboxMode === 'halvor') {
+    lightboxZoom = 0;
+    _lightboxResetInner();
     imgEl.src = lightboxHalvorUrls[lightboxIndex];
     imgEl.onload = () => lightboxZoomApplicera();
   } else if (lightboxMode === 'skisser') {
+    lightboxZoom = 0;
+    _lightboxResetInner();
     const s = lightboxSkisserList[lightboxIndex];
-    lightboxZoom = 1;
     loadSkissFullRes(s).then(
       (dataUrl) => { imgEl.src = dataUrl; lightboxZoomApplicera(); },
       () => { imgEl.src = ''; }
@@ -256,3 +280,78 @@ function lightboxNext() {
   }
   uppdateraLightboxKnappar();
 }
+
+/* ── Drag-to-pan + scroll-wheel-zoom ─────────────────────────────────────── */
+(function () {
+  const wrap = document.getElementById('gp-lightbox-img-wrap');
+  if (!wrap) return;
+
+  /* Dra med mus */
+  let dragging = false, dragX = 0, dragY = 0, dragSL = 0, dragST = 0;
+
+  wrap.addEventListener('mousedown', (e) => {
+    const lb = document.getElementById('gp-lightbox');
+    if (!lb || lb.hidden) return;
+    if (e.button !== 0) return;
+    if (e.target.closest('button')) return;
+    dragging = true;
+    dragX = e.clientX; dragY = e.clientY;
+    dragSL = wrap.scrollLeft; dragST = wrap.scrollTop;
+    wrap.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    wrap.scrollLeft = dragSL - (e.clientX - dragX);
+    wrap.scrollTop  = dragST - (e.clientY - dragY);
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    wrap.style.cursor = '';
+  });
+
+  /* Dra med touch */
+  let touchX = 0, touchY = 0, touchSL = 0, touchST = 0;
+
+  wrap.addEventListener('touchstart', (e) => {
+    const lb = document.getElementById('gp-lightbox');
+    if (!lb || lb.hidden) return;
+    if (e.touches.length === 1) {
+      touchX = e.touches[0].clientX; touchY = e.touches[0].clientY;
+      touchSL = wrap.scrollLeft; touchST = wrap.scrollTop;
+    }
+  }, { passive: true });
+
+  wrap.addEventListener('touchmove', (e) => {
+    const lb = document.getElementById('gp-lightbox');
+    if (!lb || lb.hidden) return;
+    if (e.touches.length === 1) {
+      wrap.scrollLeft = touchSL - (e.touches[0].clientX - touchX);
+      wrap.scrollTop  = touchST - (e.touches[0].clientY - touchY);
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  /* Zoom med scroll-hjul mot muspekaren */
+  wrap.addEventListener('wheel', (e) => {
+    const lb = document.getElementById('gp-lightbox');
+    if (!lb || lb.hidden) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? LIGHTBOX_ZOOM_STEG : 1 / LIGHTBOX_ZOOM_STEG;
+    const newZoom = Math.max(LIGHTBOX_ZOOM_MIN, Math.min(LIGHTBOX_ZOOM_MAX, lightboxZoom * factor));
+    if (newZoom === lightboxZoom) return;
+    lightboxZoom = newZoom;
+    const rect = wrap.getBoundingClientRect();
+    const viewportX = e.clientX - rect.left;
+    const viewportY = e.clientY - rect.top;
+    lightboxZoomApplicera({
+      focalX: wrap.scrollLeft + viewportX,
+      focalY: wrap.scrollTop  + viewportY,
+      viewportX,
+      viewportY,
+    });
+  }, { passive: false });
+})();

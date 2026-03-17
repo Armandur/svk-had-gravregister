@@ -31,7 +31,7 @@ Beskärning (övre/nedre halva) följer de andelar som anges i specifikationen o
 
 ## Kortkommandon
 
-En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog med alla kortkommandon. Genvägarna fungerar när fokus inte ligger i ett inmatningsfält.
+En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog med alla kortkommandon. Genvägarna fungerar när fokus inte ligger i ett inmatningsfält. Trycker man `Escape` i ett inmatningsfält tappar fältet fokus, så att nästföljande tangenttryck triggar genvägar igen. Kortkommandon för funktioner som kräver särskild behörighet (Claude, Historik) visas bara i dialogen om användaren har tillgång till dem.
 
 | Tangent | Funktion |
 |---|---|
@@ -42,7 +42,8 @@ En knapp med symbolen ⌨ i menyraden (eller tangenten `?`) öppnar en dialog me
 | `V` | Växla horisontell / vertikal vy |
 | `R` | Öppna rapportutskrift |
 | `S` | Lägg till skiss |
-| `C` | Hämta från Claude (kräver redigeringsläge) |
+| `C` | Hämta från Claude (kräver redigeringsläge; visas ej om Claude ej är tillgänglig) |
+| `I` | Öppna redigeringshistorik (visas ej om ej admin) |
 | `Ctrl`+`S` | Spara inmatning (kräver redigeringsläge) |
 | `?` | Visa kortkommandon |
 
