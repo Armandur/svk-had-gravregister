@@ -1093,6 +1093,21 @@ document.addEventListener('keydown', (e) => {
     else if (e.key === '-') { lightboxZoomOut(); e.preventDefault(); }
     return;
   }
+  const ocrModalGlobal = document.getElementById('gp-ocr-modal');
+  if (ocrModalGlobal && !ocrModalGlobal.hidden) {
+    if (e.key === 'Escape') { closeOcrModal(false); e.preventDefault(); }
+    return;
+  }
+  const skissModal = document.getElementById('gp-skiss-modal');
+  if (skissModal && !skissModal.hidden) {
+    if (e.key === 'Escape') { document.getElementById('gp-skiss-avbryt')?.click(); e.preventDefault(); }
+    return;
+  }
+  const rapportModal = document.getElementById('gp-rapport-modal');
+  if (rapportModal && !rapportModal.hidden) {
+    if (e.key === 'Escape') { rapportModal.hidden = true; e.preventDefault(); }
+    return;
+  }
   if (e.key === 'Escape' && ocrVantarPaBild) {
     ocrVantarPaBild = false;
     ocrNamnLage = null;
@@ -1167,6 +1182,10 @@ document.addEventListener('keydown', (e) => {
   if (lb && !lb.hidden) return;
   const ocrModal = document.getElementById('gp-ocr-modal');
   if (ocrModal && !ocrModal.hidden) return;
+  const skissModalG = document.getElementById('gp-skiss-modal');
+  if (skissModalG && !skissModalG.hidden) return;
+  const rapportModalG = document.getElementById('gp-rapport-modal');
+  if (rapportModalG && !rapportModalG.hidden) return;
   const kortDialog = document.getElementById('gp-kortkommandon-dialog');
   if (kortDialog && kortDialog.open) {
     if (e.key === 'Escape') return; // låt dialog hantera Esc självt
