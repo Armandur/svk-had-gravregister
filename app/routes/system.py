@@ -36,6 +36,12 @@ async def root():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@router.get("/profil")
+async def profil():
+    """Profilsida för inloggad användare – byt lösenord och preferenser."""
+    return FileResponse(STATIC_DIR / "profil.html")
+
+
 @router.get("/api/version")
 def api_version():
     """Aktuellt commit-id och branch för visning som version på startsidan."""

@@ -21,6 +21,24 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 15 | ⌨-knapp (och ?-tangent) i menyraden på /gravplatser visar en dialog med alla kortkommandon. C-tangent för att trigga Claude-hämtning. Fix: Ctrl+S triggar inte längre skiss-knappen. | UX | ✅ Klar |
 | 16 | Ersätt webbläsarens alert()/confirm()/prompt() med lämpligare UI-komponenter – se detaljerad inventering nedan | UX | ✅ Klar |
 | 17 | Konsolidera de fyra separata `document.addEventListener('keydown')`-lyssnarna i gravplatser.js till en enda lyssnare med tydlig prioritetsordning för modal-guards – enklare att överblicka och debugga | Kod | ✅ Klar |
+| 18 | Skapa `CLAUDE.md` med projektöversikt, körinstruktioner och konventioner för AI-assisterat arbete | Kod | ✅ Klar |
+| 19 | `@app.on_event("startup")` deprecated i FastAPI ≥ 0.93 – ersatt med `lifespan` context manager | Kod | ✅ Klar |
+| 20 | `api_keys.py` läser JSON från disk vid varje anrop (4+ funktioner) – cacha innehållet i minnet med invalidering vid skrivning | Kod | ✅ Klar |
+| 21 | Lägg till automatiserade tester (`pytest`) + GitHub Actions workflow – smoke-tester för routes och enhetstester för OCR-service | Kod | 🔲 Öppen |
+| 22 | Migrera SQLAlchemy-sessionen till `AsyncSession` för konsekvent async-stack (stor refaktorering – kräver genomtänkt plan) | Kod | 🔲 Öppen |
+| 23 | Exportfunktion: ladda ned transkriberade gravar som CSV/Excel (eller JSON) för vidare bearbetning i externa verktyg | Funktionalitet | 🔲 Öppen |
+| 24 | Kvarhållna `confirm()`-dialoger (destruktiva åtgärder) – uppgradera till native `<dialog>`-baserade bekräftelsemodaler för konsekvent utseende | UX | ✅ Klar |
+| 25 | `MODEL`-konstanten i `ocr_service.py` är hårdkodad – konfigurerbar via env-variabel `CLAUDE_MODEL` och/eller admin-inställningar (med Sonnet 4.6 som default) | Kod | ✅ Klar |
+| 26 | Inline-formulär för lösenord/namnbyte i admin.html – ersätt de sista `prompt()`-anropen ("Sätt lösenord", "Byt namn") med ett litet inline-formulär som expanderar direkt i användarraden, utan webbläsardialog | UX | ✅ Klar |
+| 27 | Konsekvent knappstil i admin.html – action-knapparna (Sätt lösenord, Byt namn, Ta bort, Preferenser) saknar styling och visas som råa webbläsarknappar; ge dem samma utseende som övriga stylade knappar i appen | UX | ✅ Klar |
+| 28 | Döp om "Roliga saker" → "Preferenser" i admin.html – etiketten är opak, "Preferenser" (eller "Inställningar") är självförklarande och konsekvent med övriga delar av appen | UX | ✅ Klar |
+| 29 | Slå ihop "API-nycklar"-sektionen med "Claude OCR" i installningar.html – API-nyckeln rör enbart Claude; en separat sektion skapar falsk förväntan om fler nycklar och bryter det logiska flödet | UX | ✅ Klar |
+| 30 | Städa upp installningar.html: länken till /loggar förekommer i två sektioner (Administration och Redigeringshistorik) – ta bort dubbletten; flytta snapshot-toggle till Administration-sektionen och ta bort Redigeringshistorik som separat sektion | UX | ✅ Klar |
+| 31 | "Min profil"-sida (`/profil`) tillgänglig för alla inloggade – innehåller: byt eget lösenord, egna preferenser (ljud/toast för utmärkelser), länk till egna prestationer; länkas från startsidans meny | Funktionalitet | ✅ Klar |
+| 32 | Flagga gravplats som "osäker transkribering" – en knapp/kryssruta på gravplatsformuläret för att markera att transkriberingen är osäker och bör granskas av annan person; syns i sök/statistik och ger "second opinion"-flöde | Funktionalitet | 🔲 Öppen |
+| 33 | Bulk-markering: markera flera gravar i ett kvarter som färdiga på en gång – t.ex. via checkboxar i listvyn, med en "Markera alla markerade som färdiga"-knapp | Funktionalitet | 🔲 Öppen |
+| 34 | Förhandsgranskningsbild (thumbnail) i sökresultat – visa en liten bild på gravkortet direkt i träfflistan (sök och avancerad sökning) så att användaren snabbt kan se rätt gravplats utan att navigera dit | UX | 🔲 Öppen |
+| 35 | Personlig statistik på startsidan – visa "Du har transkriberat X gravar" (och ev. antal utmärkelser) direkt på startsidan för inloggad användare, som komplement till den generella statistiken | UX | 🔲 Öppen |
 
 ---
 

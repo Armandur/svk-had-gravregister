@@ -1096,3 +1096,49 @@ body {
 }
 .gp-avbryt-bekraftelse-nej:hover { background: #cbd5e1; }
 
+/* Bekräftelsedialog (showConfirm) */
+#gp-confirm-dialog {
+  border: none;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 26rem;
+  width: calc(100% - 2rem);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  background: var(--card);
+  color: var(--text);
+}
+#gp-confirm-dialog::backdrop {
+  background: rgba(0,0,0,0.4);
+}
+.gp-confirm-text {
+  margin: 0 0 1.25rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.gp-confirm-knappar {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+.gp-confirm-avbryt-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.gp-confirm-avbryt-btn:hover { background: #f1f5f9; }
+.gp-confirm-ok-btn {
+  padding: 0.45rem 1rem;
+  border: none;
+  border-radius: 0.35rem;
+  background: #991b1b;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.gp-confirm-ok-btn:hover { background: #7f1d1d; }
+

@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, verify_password
+from app.auth import get_current_user, hash_password, verify_password
 from app.database import (
     GravplatsRedigeringslogg,
     User,
     get_db,
 )
-from app.schemas import LoginBody, MePreferencesBody
+from app.schemas import LoginBody, MePasswordBody, MePreferencesBody
 from app.utils.achievements import _compute_achievements_niva
 from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 
@@ -34,6 +34,23 @@ async def login(body: LoginBody, request: Request, db: Session = Depends(get_db)
 async def logout(request: Request):
     """Logga ut – rensa session."""
     request.session.clear()
+    return {"ok": True}
+
+
+@router.put("/api/me/password")
+async def change_my_password(
+    body: MePasswordBody,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Byt eget lösenord – kräver att nuvarande lösenord anges."""
+    if not verify_password(body.current_password or "", current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Felaktigt nuvarande lösenord")
+    new_pw = (body.new_password or "").strip()
+    if len(new_pw) < 4:
+        raise HTTPException(status_code=400, detail="Det nya lösenordet är för kort (minst 4 tecken)")
+    current_user.password_hash = hash_password(new_pw)
+    db.commit()
     return {"ok": True}
 
 

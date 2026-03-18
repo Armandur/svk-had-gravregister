@@ -16,10 +16,17 @@
     .admin-lista .admin-badge { font-size: 0.75rem; background: #2563eb; color: #fff; padding: 0.15rem 0.4rem; border-radius: 4px; }
     .admin-lista .admin-knappar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
     .admin-lista .admin-claude-toggle { display: flex; align-items: center; gap: 0.3rem; font-size: 0.875rem; cursor: pointer; padding: 0.35rem 0.5rem; background: #f0f9ff; border: 1px solid #7dd3fc; border-radius: 4px; }
-    .admin-lista button { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
-    .admin-lista button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .admin-lista .admin-prestationer-lank { display: inline-block; margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; text-decoration: none; color: inherit; background: #e2e8f0; border: 1px solid #cbd5e1; border-radius: 4px; }
-    .admin-lista .admin-prestationer-lank:hover { background: #cbd5e1; }
+    .admin-btn { margin: 0; padding: 0.35rem 0.6rem; font-size: 0.875rem; cursor: pointer; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; color: #1e293b; font-family: inherit; text-decoration: none; display: inline-block; }
+    .admin-btn:hover:not(:disabled) { background: #e2e8f0; border-color: #94a3b8; }
+    .admin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .admin-btn-primary { background: var(--accent, #2563eb); color: #fff; border-color: var(--accent, #2563eb); }
+    .admin-btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+    .admin-btn-danger { background: none; color: #dc2626; border-color: #dc2626; }
+    .admin-btn-danger:hover:not(:disabled) { background: #fee2e2; }
+    .admin-inline-wrap { display: inline-flex; align-items: center; }
+    .admin-inline-form { display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+    .admin-inline-form[hidden] { display: none !important; }
+    .admin-inline-input { padding: 0.3rem 0.5rem; font-size: 0.875rem; border: 1px solid #cbd5e1; border-radius: 4px; width: 9rem; font-family: inherit; }
     .admin-sida label { display: block; margin-top: 0.75rem; font-weight: 500; }
     .admin-sida input { padding: 0.4rem 0.5rem; margin-top: 0.25rem; width: 100%; max-width: 16rem; box-sizing: border-box; }
     .admin-sida #admin-skapa-form button { margin-top: 0.5rem; padding: 0.4rem 0.75rem; cursor: pointer; }
@@ -29,7 +36,6 @@
     .admin-prefs-wrap { flex: 1 1 100%; margin-top: 0.5rem; padding: 0.75rem; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0; }
     .admin-prefs-wrap label { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; cursor: pointer; font-weight: normal; }
     .admin-prefs-wrap input[type="checkbox"] { margin: 0; }
-    .admin-prefs-wrap button { margin-top: 0.5rem; padding: 0.3rem 0.6rem; font-size: 0.875rem; cursor: pointer; }
     .admin-prefs-sparad { font-size: 0.85rem; color: #16a34a; margin-left: 0.5rem; }
   </style>
 </head>
@@ -92,29 +98,62 @@
               li.setAttribute('data-user-id', u.id);
               const claudeAktiv = u.claude_aktiv !== false;
               const claudeBatchAktiv = u.claude_batch_aktiv === true;
+              const usernameEsc = (u.username || '').replace(/"/g, '&quot;');
               li.innerHTML = '<span class="admin-namn">' + (u.username || '') + (u.is_admin ? ' <span class="admin-badge">admin</span>' : '') + '</span>' +
                 '<span class="admin-knappar">' +
-                '<button type="button" class="admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
-                '<button type="button" class="admin-byta-namn" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '">Byt namn</button>' +
-                '<a href="/admin/users/' + u.id + '/prestationer" class="admin-prestationer-lank">Prestationer</a>' +
-                '<button type="button" class="admin-roliga-saker" data-id="' + u.id + '">Roliga saker</button>' +
+                '<span class="admin-inline-wrap" id="admin-pwd-wrap-' + u.id + '">' +
+                '<button type="button" class="admin-btn admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
+                '<span class="admin-inline-form" id="admin-pwd-form-' + u.id + '" hidden>' +
+                '<input type="password" class="admin-inline-input" id="admin-pwd-input-' + u.id + '" placeholder="Nytt lösenord" autocomplete="new-password" />' +
+                '<button type="button" class="admin-btn admin-btn-primary admin-pwd-spara" data-id="' + u.id + '">Spara</button>' +
+                '<button type="button" class="admin-btn admin-pwd-avbryt" data-id="' + u.id + '">Avbryt</button>' +
+                '</span></span>' +
+                '<span class="admin-inline-wrap" id="admin-namn-wrap-' + u.id + '">' +
+                '<button type="button" class="admin-btn admin-byta-namn" data-id="' + u.id + '" data-username="' + usernameEsc + '">Byt namn</button>' +
+                '<span class="admin-inline-form" id="admin-namn-form-' + u.id + '" hidden>' +
+                '<input type="text" class="admin-inline-input" id="admin-namn-input-' + u.id + '" value="' + usernameEsc + '" autocomplete="off" />' +
+                '<button type="button" class="admin-btn admin-btn-primary admin-namn-spara" data-id="' + u.id + '" data-username="' + usernameEsc + '">Spara</button>' +
+                '<button type="button" class="admin-btn admin-namn-avbryt" data-id="' + u.id + '">Avbryt</button>' +
+                '</span></span>' +
+                '<a href="/admin/users/' + u.id + '/prestationer" class="admin-btn">Prestationer</a>' +
+                '<button type="button" class="admin-btn admin-roliga-saker" data-id="' + u.id + '">Preferenser</button>' +
                 '<label class="admin-claude-toggle" title="Aktivera/inaktivera Claude OCR för denna användare"><input type="checkbox" class="admin-claude-aktiv" data-id="' + u.id + '"' + (claudeAktiv ? ' checked' : '') + ' /> Claude</label>' +
                 '<label class="admin-claude-toggle" title="Aktivera/inaktivera Claude Batch OCR för denna användare"><input type="checkbox" class="admin-claude-batch-aktiv" data-id="' + u.id + '"' + (claudeBatchAktiv ? ' checked' : '') + ' /> Batch</label>' +
-                '<button type="button" class="admin-ta-bort" data-id="' + u.id + '" data-username="' + (u.username || '').replace(/"/g, '&quot;') + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
+                '<button type="button" class="admin-btn admin-btn-danger admin-ta-bort" data-id="' + u.id + '" data-username="' + usernameEsc + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
                 '</span>' +
                 '<div class="admin-prefs-wrap" id="admin-prefs-' + u.id + '" hidden>' +
-                '<label><input type="checkbox" id="admin-pref-fun-' + u.id + '" /> Aktivera roliga saker (toast och ljud)</label>' +
+                '<label><input type="checkbox" id="admin-pref-fun-' + u.id + '" /> Aktivera utmärkelse-notifieringar (toast och ljud)</label>' +
                 '<label><input type="checkbox" id="admin-pref-toast-' + u.id + '" /> Visa toast (nytt yrke och utmärkelser)</label>' +
                 '<label><input type="checkbox" id="admin-pref-sound-' + u.id + '" /> Spela ljud (nytt yrke och utmärkelser)</label>' +
-                '<br /><button type="button" class="admin-prefs-spara" data-id="' + u.id + '">Spara</button><span class="admin-prefs-sparad" id="admin-prefs-sparad-' + u.id + '" hidden>Sparat.</span>' +
+                '<br /><button type="button" class="admin-btn admin-btn-primary admin-prefs-spara" data-id="' + u.id + '">Spara</button><span class="admin-prefs-sparad" id="admin-prefs-sparad-' + u.id + '" hidden>Sparat.</span>' +
                 '</div>';
               listEl.appendChild(li);
             });
+            // --- Inline lösenordsformulär ---
             listEl.querySelectorAll('.admin-set-pwd').forEach(function(btn) {
               btn.addEventListener('click', function() {
                 const id = btn.dataset.id;
-                const pwd = prompt('Nytt lösenord för användaren:');
-                if (pwd == null || !pwd.trim()) return;
+                btn.hidden = true;
+                const form = document.getElementById('admin-pwd-form-' + id);
+                if (form) { form.hidden = false; const inp = document.getElementById('admin-pwd-input-' + id); if (inp) { inp.value = ''; inp.focus(); } }
+              });
+            });
+            listEl.querySelectorAll('.admin-pwd-avbryt').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const form = document.getElementById('admin-pwd-form-' + id);
+                if (form) form.hidden = true;
+                const setPwdBtn = listEl.querySelector('.admin-set-pwd[data-id="' + id + '"]');
+                if (setPwdBtn) setPwdBtn.hidden = false;
+              });
+            });
+            listEl.querySelectorAll('.admin-pwd-spara').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const inp = document.getElementById('admin-pwd-input-' + id);
+                const pwd = inp ? inp.value.trim() : '';
+                if (!pwd) { showToast('Ange ett lösenord.', 'info'); if (inp) inp.focus(); return; }
+                btn.disabled = true;
                 fetch('/api/admin/users/' + id + '/password', {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
@@ -123,24 +162,49 @@
                 }).then(function(r) {
                   if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte spara'); });
                   showToast('Lösenord uppdaterat.', 'ok');
-                  visaAnvandare();
+                  const form = document.getElementById('admin-pwd-form-' + id);
+                  if (form) form.hidden = true;
+                  const setPwdBtn = listEl.querySelector('.admin-set-pwd[data-id="' + id + '"]');
+                  if (setPwdBtn) setPwdBtn.hidden = false;
                 }).catch(function(e) {
                   showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
-                });
+                }).finally(function() { btn.disabled = false; });
               });
             });
+
+            // --- Inline namnformulär ---
             listEl.querySelectorAll('.admin-byta-namn').forEach(function(btn) {
               btn.addEventListener('click', function() {
                 const id = btn.dataset.id;
+                btn.hidden = true;
+                const form = document.getElementById('admin-namn-form-' + id);
+                if (form) { form.hidden = false; const inp = document.getElementById('admin-namn-input-' + id); if (inp) { inp.select(); inp.focus(); } }
+              });
+            });
+            listEl.querySelectorAll('.admin-namn-avbryt').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
+                const form = document.getElementById('admin-namn-form-' + id);
+                if (form) form.hidden = true;
+                const namnBtn = listEl.querySelector('.admin-byta-namn[data-id="' + id + '"]');
+                if (namnBtn) namnBtn.hidden = false;
+              });
+            });
+            listEl.querySelectorAll('.admin-namn-spara').forEach(function(btn) {
+              btn.addEventListener('click', function() {
+                const id = btn.dataset.id;
                 const gammalt = (btn.dataset.username || '').trim();
-                const nytt = prompt('Nytt användarnamn:', gammalt);
-                if (nytt == null) return;
-                const trimmed = (nytt || '').trim();
-                if (!trimmed) {
-                  showToast('Användarnamn kan inte vara tomt.', 'info');
+                const inp = document.getElementById('admin-namn-input-' + id);
+                const trimmed = inp ? (inp.value || '').trim() : '';
+                if (!trimmed) { showToast('Användarnamn kan inte vara tomt.', 'info'); if (inp) inp.focus(); return; }
+                if (trimmed === gammalt) {
+                  const form = document.getElementById('admin-namn-form-' + id);
+                  if (form) form.hidden = true;
+                  const namnBtn = listEl.querySelector('.admin-byta-namn[data-id="' + id + '"]');
+                  if (namnBtn) namnBtn.hidden = false;
                   return;
                 }
-                if (trimmed === gammalt) return;
+                btn.disabled = true;
                 fetch('/api/admin/users/' + id, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
@@ -154,7 +218,7 @@
                   });
                 }).catch(function(e) {
                   showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
-                });
+                }).finally(function() { btn.disabled = false; });
               });
             });
             listEl.querySelectorAll('.admin-claude-aktiv').forEach(function(cb) {
@@ -186,10 +250,10 @@
               });
             });
             listEl.querySelectorAll('.admin-ta-bort:not([disabled])').forEach(function(btn) {
-              btn.addEventListener('click', function() {
+              btn.addEventListener('click', async function() {
                 const id = btn.dataset.id;
                 const username = (btn.dataset.username || '').trim();
-                if (!confirm('Vill du verkligen ta bort användaren "' + username + '"? Detta kan inte ångras.')) return;
+                if (!await showConfirm('Vill du verkligen ta bort användaren "' + username + '"? Detta kan inte ångras.')) return;
                 fetch('/api/admin/users/' + id, {
                   method: 'DELETE',
                   credentials: 'include'

@@ -597,7 +597,7 @@
     });
     lista.querySelectorAll('.batch-stoppa-lista-btn').forEach(function(btn) {
       btn.addEventListener('click', async function() {
-        if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+        if (!await showConfirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
         try {
           await fetch(API + '/batch-claude/jobb/' + btn.dataset.id + '/avbryt', { method: 'POST', credentials: 'include' });
           laddaJobb();
@@ -648,7 +648,7 @@
     });
     lista.querySelectorAll('.batch-ta-bort-btn').forEach(function(btn) {
       btn.addEventListener('click', async function() {
-        if (!confirm('Ta bort jobbet?')) return;
+        if (!await showConfirm('Ta bort jobbet?')) return;
         try {
           const r = await fetch(API + '/batch-claude/jobb/' + btn.dataset.id, { method: 'DELETE', credentials: 'include' });
           if (r.ok) laddaJobb();
@@ -801,7 +801,7 @@
 
   document.getElementById('batch-stoppa-btn').addEventListener('click', async function() {
     if (!aktivtJobbId) return;
-    if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+    if (!await showConfirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
     aktivtJobbPausad = true;
     try { await fetch(API + '/batch-claude/jobb/' + aktivtJobbId + '/avbryt', { method: 'POST', credentials: 'include' }); } catch(e) {}
     document.getElementById('batch-aktiv-wrap').hidden = true;

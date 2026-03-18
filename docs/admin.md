@@ -49,6 +49,17 @@ Under **Inställningar → Claude OCR** finns en kryssruta **Aktivera Claude-fun
 
 Kryssrutan **Blockera enskild Claude-körning för gravar i pågående batch-jobb** förhindrar att en användare skickar ett enskilt anrop för en gravplats som redan bearbetas av ett batch-jobb. Rekommenderas för att undvika dubbla kostnader.
 
+### Claude-modell
+
+Under **Inställningar → Claude OCR** kan du ange vilken Claude-modell som ska användas för OCR-körningar (enskilda och batch). Lämna fältet tomt för att använda standardmodellen `claude-sonnet-4-6`.
+
+Prioritetsordning:
+1. Miljövariabeln `CLAUDE_MODEL` (om satt låses fältet i UI:t)
+2. Inställningen i admin-UI:t
+3. Standardvärde: `claude-sonnet-4-6`
+
+Exempel på modell-ID: `claude-haiku-4-5-20251001` (snabbare/billigare), `claude-opus-4-6` (mer kapabel/dyrare).
+
 ### Anropslogg
 
 Under **Inställningar → Claude OCR → Anropslogg** ser du alla Claude-anrop med token-förbrukning och beräknad kostnad i USD och SEK (valutakursen hämtas automatiskt). Filtrera per användare och se totalkostnaden.

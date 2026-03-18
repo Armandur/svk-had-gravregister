@@ -34,7 +34,7 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_spara_redigeringslogg_snapshot, _set_api_keys_json
+from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_claude_model, _get_spara_redigeringslogg_snapshot, _invalidate_cache, _load_api_keys
 from app.utils.git_version import GIT_VERSION
 from app.utils.text import _sanitize_backup_filename_part
 
@@ -110,6 +110,8 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "claude_aktiv_instans": _get_claude_instans_aktiv(),
         "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
         "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
+        "claude_model": _get_claude_model(),
+        "claude_model_from_env": bool(os.environ.get("CLAUDE_MODEL")),
     }
 
 
@@ -117,12 +119,7 @@ async def get_api_keys(admin: User = Depends(require_admin)):
 async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
     """Spara API-nycklar och instansinställningar till api_keys.json. Endast admin."""
     try:
-        existing: dict = {}
-        if API_KEYS_PATH.is_file():
-            try:
-                existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                existing = {}
+        existing = dict(_load_api_keys())
         if body.anthropic_api_key is not None:
             key = body.anthropic_api_key.strip()
             if key:
@@ -135,7 +132,14 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
             existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
         if body.spara_redigeringslogg_snapshot is not None:
             existing["spara_redigeringslogg_snapshot"] = body.spara_redigeringslogg_snapshot
+        if body.claude_model is not None:
+            model = body.claude_model.strip()
+            if model:
+                existing["claude_model"] = model
+            else:
+                existing.pop("claude_model", None)
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        _invalidate_cache()
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
     return {"ok": True}

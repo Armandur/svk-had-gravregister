@@ -16,6 +16,11 @@ class MePreferencesBody(BaseModel):
     inmatning_sections_order: list[str] | None = None
 
 
+class MePasswordBody(BaseModel):
+    current_password: str = ""
+    new_password: str = ""
+
+
 # ---------- Admin: användare ----------
 
 class CreateUserBody(BaseModel):
@@ -70,6 +75,7 @@ class ApiKeysBody(BaseModel):
     claude_aktiv_instans: bool | None = None
     claude_batch_block_enskild: bool | None = None
     spara_redigeringslogg_snapshot: bool | None = None
+    claude_model: str | None = None  # None = ej skickad, "" = återställ till default
 
 
 # ---------- Mappkonfiguration och extramaterial ----------

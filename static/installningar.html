@@ -66,10 +66,20 @@
       <h2>Administration</h2>
       <nav class="inst-lankgrupp">
         <a href="/admin">Användarhantering</a>
-        <a href="/loggar">Loggar</a>
+        <a href="/loggar">Redigeringslogg (vem/när)</a>
         <a href="/databasunderhall">Databasunderhåll</a>
         <a href="/sakerhetskopior">Säkerhetskopior</a>
       </nav>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-snapshot-toggle" checked />
+          Spara inmatningsdata vid varje redigering
+        </label>
+        <span id="inst-snapshot-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
+      <p style="margin:0.35rem 0 0; font-size:0.82rem; color:#64748b;">
+        När aktiverat sparas en kopia vid varje sparande – möjliggör "Vad ändrades?" i historik-modalen.
+      </p>
     </section>
 
     <section class="inst-sektion" aria-label="Claude OCR">
@@ -91,41 +101,38 @@
         </label>
         <span id="inst-claude-batch-block-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
       </div>
-    </section>
-
-    <section class="inst-sektion" aria-label="Redigeringshistorik">
-      <h2>Redigeringshistorik</h2>
-      <p style="font-size:0.9rem; color:#64748b; margin:0 0 0.75rem;">
-        När aktiverat sparas en kopia av inmatningsdata vid varje sparande. Möjliggör "Vad ändrades?" i historik-modalen på gravplatssidan.
-      </p>
-      <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
-          <input type="checkbox" id="inst-snapshot-toggle" checked />
-          Spara inmatningsdata vid varje redigering
-        </label>
-        <span id="inst-snapshot-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      <div style="margin-top:0.75rem;">
+        <label style="font-size:0.95rem; display:block; margin-bottom:0.35rem;">Claude-modell</label>
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="inst-claude-model-input" placeholder="claude-sonnet-4-6"
+            style="flex:1; min-width:14rem; padding:0.45rem 0.65rem; font-size:0.95rem; font-family:monospace; border:1px solid var(--border,#e2e8f0); border-radius:5px; background:var(--card,#fff);" />
+          <button type="button" id="inst-claude-model-spara"
+            style="padding:0.45rem 1rem; font-size:0.95rem; background:var(--accent,#2563eb); color:#fff; border:none; border-radius:5px; cursor:pointer; font-family:inherit;">Spara modell</button>
+          <span id="inst-claude-model-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+        </div>
+        <p style="margin:0.4rem 0 0; font-size:0.82rem; color:#64748b;">
+          Prioritetsordning: miljövariabeln <code>CLAUDE_MODEL</code> &gt; inställning nedan &gt; <code>claude-sonnet-4-6</code>.
+          Exempel: <code>claude-haiku-4-5-20251001</code>, <code>claude-opus-4-6</code>.
+        </p>
       </div>
-      <nav class="inst-lankgrupp" style="margin-top:0.75rem;">
-        <a href="/loggar">Redigeringslogg (vem/när)</a>
-      </nav>
-    </section>
-
-    <section class="inst-sektion" aria-label="API-nycklar">
-      <h2>API-nycklar</h2>
-      <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
-      <div class="inst-api-form">
-        <input type="password" id="inst-api-input" placeholder="sk-ant-api03-…" autocomplete="off" aria-label="Anthropic API-nyckel" />
-        <button type="button" id="inst-api-spara">Spara nyckel</button>
-        <button type="button" id="inst-api-ta-bort" class="inst-api-ta-bort" hidden>Ta bort nyckel</button>
+      <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border,#e2e8f0);">
+        <p style="font-size:0.95rem; font-weight:600; margin:0 0 0.5rem; color:#475569;">Anthropic API-nyckel</p>
+        <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
+        <div class="inst-api-form">
+          <input type="password" id="inst-api-input" placeholder="sk-ant-api03-…" autocomplete="off" aria-label="Anthropic API-nyckel" />
+          <button type="button" id="inst-api-spara">Spara nyckel</button>
+          <button type="button" id="inst-api-ta-bort" class="inst-api-ta-bort" hidden>Ta bort nyckel</button>
+        </div>
+        <p id="inst-api-meddelande" class="inst-meddelande" hidden aria-live="polite"></p>
+        <p style="margin-top:0.5rem; font-size:0.82rem; color:#64748b;">
+          Nyckeln sparas i <code>api_keys.json</code> bredvid databasen.
+          Miljövariabeln <code>ANTHROPIC_API_KEY</code> har prioritet om den är satt.
+        </p>
       </div>
-      <p id="inst-api-meddelande" class="inst-meddelande" hidden aria-live="polite"></p>
-      <p style="margin-top:0.75rem; font-size:0.85rem; color:#64748b;">
-        Nyckeln sparas i <code>api_keys.json</code> bredvid databasen.
-        Miljövariabeln <code>ANTHROPIC_API_KEY</code> har prioritet om den är satt.
-      </p>
     </section>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
     (async function () {
       const me = await gpEnsureAuth();
@@ -150,6 +157,9 @@
       const batchBlockStatus = document.getElementById('inst-claude-batch-block-status');
       const snapshotToggle = document.getElementById('inst-snapshot-toggle');
       const snapshotStatus = document.getElementById('inst-snapshot-status');
+      const modelInput = document.getElementById('inst-claude-model-input');
+      const modelSparaBtn = document.getElementById('inst-claude-model-spara');
+      const modelStatus = document.getElementById('inst-claude-model-status');
 
       instansToggle && instansToggle.addEventListener('change', async function() {
         const aktiv = instansToggle.checked;
@@ -208,6 +218,27 @@
         }
       });
 
+      modelSparaBtn && modelSparaBtn.addEventListener('click', async function() {
+        const model = (modelInput.value || '').trim();
+        modelStatus.textContent = 'Sparar…';
+        modelSparaBtn.disabled = true;
+        try {
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ claude_model: model }),
+          });
+          if (!res.ok) throw new Error();
+          modelStatus.textContent = model ? 'Sparad.' : 'Återställd till default.';
+          setTimeout(() => { modelStatus.textContent = ''; }, 2500);
+        } catch (_) {
+          modelStatus.textContent = 'Kunde inte spara.';
+        } finally {
+          modelSparaBtn.disabled = false;
+        }
+      });
+
       async function laddaStatus() {
         try {
           const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
@@ -225,6 +256,12 @@
           if (instansToggle) instansToggle.checked = d.claude_aktiv_instans !== false;
           if (batchBlockToggle) batchBlockToggle.checked = d.claude_batch_block_enskild !== false;
           if (snapshotToggle) snapshotToggle.checked = d.spara_redigeringslogg_snapshot !== false;
+          if (modelInput) {
+            modelInput.value = d.claude_model || '';
+            modelInput.disabled = d.claude_model_from_env;
+            if (modelSparaBtn) modelSparaBtn.disabled = d.claude_model_from_env;
+            if (d.claude_model_from_env && modelStatus) modelStatus.textContent = '(styrs av miljövariabel CLAUDE_MODEL)';
+          }
         } catch (_) {
           statusEl.textContent = 'Kunde inte hämta status.';
         }
@@ -253,7 +290,7 @@
       });
 
       taBortBtn.addEventListener('click', async () => {
-        if (!confirm('Ta bort den sparade API-nyckeln?')) return;
+        if (!await showConfirm('Ta bort den sparade API-nyckeln?')) return;
         taBortBtn.disabled = true;
         try {
           const res = await fetch('/api/settings/api-keys', {

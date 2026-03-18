@@ -38,3 +38,46 @@ function showToast(meddelande, typ) {
     setTimeout(() => el.remove(), 220);
   }, 4000);
 }
+
+/**
+ * Visar en bekräftelsedialog med native <dialog>-element.
+ * @param {string} meddelande - Frågetexten (plaintext).
+ * @param {string} [bekraftaText='Ja'] - Text på bekräftelseknappen.
+ * @returns {Promise<boolean>} true om bekräftad, false om avbruten.
+ */
+function showConfirm(meddelande, bekraftaText) {
+  bekraftaText = bekraftaText || 'Ja';
+  return new Promise(function (resolve) {
+    let dlg = document.getElementById('gp-confirm-dialog');
+    if (!dlg) {
+      dlg = document.createElement('dialog');
+      dlg.id = 'gp-confirm-dialog';
+      dlg.innerHTML =
+        '<p class="gp-confirm-text"></p>' +
+        '<div class="gp-confirm-knappar">' +
+          '<button class="gp-confirm-avbryt-btn">Avbryt</button>' +
+          '<button class="gp-confirm-ok-btn"></button>' +
+        '</div>';
+      document.body.appendChild(dlg);
+    }
+    dlg.querySelector('.gp-confirm-text').textContent = meddelande;
+    const okBtn = dlg.querySelector('.gp-confirm-ok-btn');
+    okBtn.textContent = bekraftaText;
+
+    function cleanup(result) {
+      dlg.close();
+      okBtn.removeEventListener('click', onOk);
+      dlg.querySelector('.gp-confirm-avbryt-btn').removeEventListener('click', onAvbryt);
+      dlg.removeEventListener('cancel', onCancel);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onAvbryt() { cleanup(false); }
+    function onCancel(e) { e.preventDefault(); cleanup(false); }
+
+    okBtn.addEventListener('click', onOk);
+    dlg.querySelector('.gp-confirm-avbryt-btn').addEventListener('click', onAvbryt);
+    dlg.addEventListener('cancel', onCancel);
+    dlg.showModal();
+  });
+}
