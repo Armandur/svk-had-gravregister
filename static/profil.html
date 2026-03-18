@@ -50,6 +50,16 @@
     .profil-pref-rad { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; cursor: pointer; font-size: 0.95rem; }
     .profil-pref-rad input[type="checkbox"] { margin: 0; }
     .profil-pref-info { font-size: 0.85rem; color: #64748b; margin: 0.35rem 0 0.75rem; }
+
+    .profil-sektioner-lista { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
+    .profil-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.25rem; border-radius: 4px; }
+    .profil-sektioner-namn { font-size: 0.9rem; flex: 1; }
+    .profil-sektioner-knappar { display: flex; gap: 0.25rem; }
+    .profil-sektioner-knappar button { padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
+    .profil-drag-handle { cursor: grab; color: #94a3b8; font-size: 1rem; padding: 0 0.25rem 0 0; user-select: none; }
+    .profil-drag-handle:active { cursor: grabbing; }
+    .profil-sektioner-lista li.profil-dragging { opacity: 0.4; }
+    .profil-sektioner-lista li.profil-drag-over { background: #f0f9ff; outline: 2px solid var(--accent, #2563eb); }
   </style>
 </head>
 <body>
@@ -83,6 +93,13 @@
         <button type="button" class="profil-btn" id="profil-pref-spara">Spara preferenser</button>
         <span id="profil-pref-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
       </div>
+    </section>
+
+    <section class="profil-sektion" aria-label="Ordning på inmatningssektioner">
+      <h2>Ordning på inmatningssektioner</h2>
+      <p class="profil-pref-info">Välj i vilken ordning sektionerna visas på sidan <strong>/gravplatser</strong> för dig. Sparas automatiskt.</p>
+      <ul id="profil-sections-list" class="profil-sektioner-lista"></ul>
+      <p id="profil-sections-sparad" style="font-size:0.85rem; color:#16a34a; margin-top:0.4rem;" hidden aria-live="polite">Sparat.</p>
     </section>
 
     <section class="profil-sektion" aria-label="Byt lösenord">
@@ -119,6 +136,147 @@
       const soundEl  = document.getElementById('profil-pref-sound');
       const prefStatus = document.getElementById('profil-pref-status');
 
+      // --- Ordning på inmatningssektioner ---
+      const SECTIONS_ALLOWED = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
+      const SECTION_LABELS = {
+        innehavare: 'Gravrättsinnehavare',
+        narmast_anhoriga: 'Närmast anhöriga',
+        gravplatsen: 'Gravplatsen',
+        skiss: 'Skiss och gravplatsstorlek',
+        gravsatta: 'Gravsatta'
+      };
+      let sectionsOrder = SECTIONS_ALLOWED.slice();
+
+      function normaliseraSectionsOrder(order) {
+        const out = [];
+        (order || []).forEach(function (s) {
+          if (SECTIONS_ALLOWED.indexOf(s) !== -1 && out.indexOf(s) === -1) out.push(s);
+        });
+        SECTIONS_ALLOWED.forEach(function (s) { if (out.indexOf(s) === -1) out.push(s); });
+        return out;
+      }
+
+      function renderSectionsOrder() {
+        const list = document.getElementById('profil-sections-list');
+        if (!list) return;
+        list.innerHTML = '';
+        sectionsOrder.forEach(function (id, idx) {
+          const label = SECTION_LABELS[id] || id;
+          const li = document.createElement('li');
+          li.draggable = true;
+          li.dataset.id = id;
+
+          const handle = document.createElement('span');
+          handle.className = 'profil-drag-handle';
+          handle.setAttribute('aria-hidden', 'true');
+          handle.textContent = '⠿';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'profil-sektioner-namn';
+          nameSpan.textContent = label;
+
+          const btnWrap = document.createElement('span');
+          btnWrap.className = 'profil-sektioner-knappar';
+
+          const upBtn = document.createElement('button');
+          upBtn.type = 'button';
+          upBtn.dataset.move = 'up';
+          upBtn.dataset.id = id;
+          upBtn.textContent = '↑';
+          upBtn.setAttribute('aria-label', 'Flytta ' + label + ' uppåt');
+          upBtn.disabled = idx === 0;
+
+          const downBtn = document.createElement('button');
+          downBtn.type = 'button';
+          downBtn.dataset.move = 'down';
+          downBtn.dataset.id = id;
+          downBtn.textContent = '↓';
+          downBtn.setAttribute('aria-label', 'Flytta ' + label + ' nedåt');
+          downBtn.disabled = idx === sectionsOrder.length - 1;
+
+          btnWrap.appendChild(upBtn);
+          btnWrap.appendChild(downBtn);
+          li.appendChild(handle);
+          li.appendChild(nameSpan);
+          li.appendChild(btnWrap);
+          list.appendChild(li);
+        });
+      }
+
+      function sparaSectionsOrder() {
+        const sparadEl = document.getElementById('profil-sections-sparad');
+        fetch('/api/me/preferences', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ inmatning_sections_order: sectionsOrder })
+        }).then(function (r) {
+          if (!r.ok) throw new Error();
+          if (sparadEl) { sparadEl.hidden = false; setTimeout(function () { sparadEl.hidden = true; }, 2000); }
+        }).catch(function () {
+          if (sparadEl) { sparadEl.textContent = 'Kunde inte spara.'; sparadEl.hidden = false; }
+        });
+      }
+
+      const sectionsListEl = document.getElementById('profil-sections-list');
+      let draggingId = null;
+      if (sectionsListEl) {
+        sectionsListEl.addEventListener('click', function (e) {
+          const btn = e.target.closest('button[data-move]');
+          if (!btn) return;
+          const dir = btn.getAttribute('data-move');
+          const id = btn.getAttribute('data-id');
+          const idx = sectionsOrder.indexOf(id);
+          if (idx === -1) return;
+          if (dir === 'up' && idx > 0) {
+            const tmp = sectionsOrder[idx - 1]; sectionsOrder[idx - 1] = sectionsOrder[idx]; sectionsOrder[idx] = tmp;
+          } else if (dir === 'down' && idx < sectionsOrder.length - 1) {
+            const tmp = sectionsOrder[idx + 1]; sectionsOrder[idx + 1] = sectionsOrder[idx]; sectionsOrder[idx] = tmp;
+          }
+          renderSectionsOrder();
+          sparaSectionsOrder();
+        });
+        sectionsListEl.addEventListener('dragstart', function (e) {
+          const li = e.target.closest('li[data-id]');
+          if (!li) return;
+          draggingId = li.dataset.id;
+          li.classList.add('profil-dragging');
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        sectionsListEl.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          const li = e.target.closest('li[data-id]');
+          sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('profil-drag-over'); });
+          if (li && li.dataset.id !== draggingId) li.classList.add('profil-drag-over');
+        });
+        sectionsListEl.addEventListener('dragleave', function (e) {
+          if (!sectionsListEl.contains(e.relatedTarget)) {
+            sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('profil-drag-over'); });
+          }
+        });
+        sectionsListEl.addEventListener('drop', function (e) {
+          e.preventDefault();
+          const li = e.target.closest('li[data-id]');
+          sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('profil-drag-over'); });
+          if (!li || !draggingId || li.dataset.id === draggingId) { draggingId = null; return; }
+          const fromIdx = sectionsOrder.indexOf(draggingId);
+          const toIdx = sectionsOrder.indexOf(li.dataset.id);
+          if (fromIdx === -1 || toIdx === -1) { draggingId = null; return; }
+          sectionsOrder.splice(fromIdx, 1);
+          sectionsOrder.splice(toIdx, 0, draggingId);
+          draggingId = null;
+          renderSectionsOrder();
+          sparaSectionsOrder();
+        });
+        sectionsListEl.addEventListener('dragend', function () {
+          draggingId = null;
+          sectionsListEl.querySelectorAll('li').forEach(function (el) {
+            el.classList.remove('profil-drag-over', 'profil-dragging');
+          });
+        });
+      }
+
       const meRes = await fetch('/api/me', { credentials: 'include' });
       if (meRes.ok) {
         const meData = await meRes.json();
@@ -126,6 +284,8 @@
         if (funEl)   funEl.checked   = p.fun_enabled !== false;
         if (toastEl) toastEl.checked = p.toast_on_new_yrke !== false;
         if (soundEl) soundEl.checked = p.sound_on_new_yrke !== false;
+        sectionsOrder = normaliseraSectionsOrder(p.inmatning_sections_order);
+        renderSectionsOrder();
       }
 
       // --- Spara preferenser ---
