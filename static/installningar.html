@@ -66,10 +66,20 @@
       <h2>Administration</h2>
       <nav class="inst-lankgrupp">
         <a href="/admin">Användarhantering</a>
-        <a href="/loggar">Loggar</a>
+        <a href="/loggar">Redigeringslogg (vem/när)</a>
         <a href="/databasunderhall">Databasunderhåll</a>
         <a href="/sakerhetskopior">Säkerhetskopior</a>
       </nav>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
+          <input type="checkbox" id="inst-snapshot-toggle" checked />
+          Spara inmatningsdata vid varje redigering
+        </label>
+        <span id="inst-snapshot-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
+      <p style="margin:0.35rem 0 0; font-size:0.82rem; color:#64748b;">
+        När aktiverat sparas en kopia vid varje sparande – möjliggör "Vad ändrades?" i historik-modalen.
+      </p>
     </section>
 
     <section class="inst-sektion" aria-label="Claude OCR">
@@ -105,38 +115,20 @@
           Exempel: <code>claude-haiku-4-5-20251001</code>, <code>claude-opus-4-6</code>.
         </p>
       </div>
-    </section>
-
-    <section class="inst-sektion" aria-label="Redigeringshistorik">
-      <h2>Redigeringshistorik</h2>
-      <p style="font-size:0.9rem; color:#64748b; margin:0 0 0.75rem;">
-        När aktiverat sparas en kopia av inmatningsdata vid varje sparande. Möjliggör "Vad ändrades?" i historik-modalen på gravplatssidan.
-      </p>
-      <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.95rem; cursor:pointer;">
-          <input type="checkbox" id="inst-snapshot-toggle" checked />
-          Spara inmatningsdata vid varje redigering
-        </label>
-        <span id="inst-snapshot-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border,#e2e8f0);">
+        <p style="font-size:0.95rem; font-weight:600; margin:0 0 0.5rem; color:#475569;">Anthropic API-nyckel</p>
+        <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
+        <div class="inst-api-form">
+          <input type="password" id="inst-api-input" placeholder="sk-ant-api03-…" autocomplete="off" aria-label="Anthropic API-nyckel" />
+          <button type="button" id="inst-api-spara">Spara nyckel</button>
+          <button type="button" id="inst-api-ta-bort" class="inst-api-ta-bort" hidden>Ta bort nyckel</button>
+        </div>
+        <p id="inst-api-meddelande" class="inst-meddelande" hidden aria-live="polite"></p>
+        <p style="margin-top:0.5rem; font-size:0.82rem; color:#64748b;">
+          Nyckeln sparas i <code>api_keys.json</code> bredvid databasen.
+          Miljövariabeln <code>ANTHROPIC_API_KEY</code> har prioritet om den är satt.
+        </p>
       </div>
-      <nav class="inst-lankgrupp" style="margin-top:0.75rem;">
-        <a href="/loggar">Redigeringslogg (vem/när)</a>
-      </nav>
-    </section>
-
-    <section class="inst-sektion" aria-label="API-nycklar">
-      <h2>API-nycklar</h2>
-      <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
-      <div class="inst-api-form">
-        <input type="password" id="inst-api-input" placeholder="sk-ant-api03-…" autocomplete="off" aria-label="Anthropic API-nyckel" />
-        <button type="button" id="inst-api-spara">Spara nyckel</button>
-        <button type="button" id="inst-api-ta-bort" class="inst-api-ta-bort" hidden>Ta bort nyckel</button>
-      </div>
-      <p id="inst-api-meddelande" class="inst-meddelande" hidden aria-live="polite"></p>
-      <p style="margin-top:0.75rem; font-size:0.85rem; color:#64748b;">
-        Nyckeln sparas i <code>api_keys.json</code> bredvid databasen.
-        Miljövariabeln <code>ANTHROPIC_API_KEY</code> har prioritet om den är satt.
-      </p>
     </section>
   </main>
   <script src="/static/auth.js"></script>

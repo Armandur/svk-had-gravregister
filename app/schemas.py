@@ -16,6 +16,11 @@ class MePreferencesBody(BaseModel):
     inmatning_sections_order: list[str] | None = None
 
 
+class MePasswordBody(BaseModel):
+    current_password: str = ""
+    new_password: str = ""
+
+
 # ---------- Admin: användare ----------
 
 class CreateUserBody(BaseModel):

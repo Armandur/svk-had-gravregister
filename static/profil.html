@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Min profil – Gravregister</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <style>
+    .profil-sida { max-width: 38rem; margin: 2rem auto; padding: 2rem; }
+    .profil-sida h1 { font-size: 1.35rem; margin-bottom: 0.25rem; color: var(--accent, #2563eb); }
+    .profil-tillbaka { margin-bottom: 1.5rem; }
+    .profil-tillbaka a { color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .profil-tillbaka a:hover { text-decoration: underline; }
+
+    .profil-sektion { margin-bottom: 2rem; }
+    .profil-sektion h2 { font-size: 1.05rem; font-weight: 600; color: #475569; margin: 0 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border, #e2e8f0); }
+
+    .profil-lankgrupp { display: flex; flex-direction: column; gap: 0.5rem; }
+    .profil-lankgrupp a {
+      display: block; padding: 0.75rem 1rem; font-size: 0.97rem;
+      text-decoration: none; color: #1e293b;
+      background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0);
+      border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .profil-lankgrupp a:hover { background: #f8fafc; border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }
+
+    .profil-form { display: flex; flex-direction: column; gap: 0.6rem; max-width: 24rem; }
+    .profil-form label { font-size: 0.95rem; font-weight: 500; display: block; }
+    .profil-form input[type="password"] {
+      width: 100%; padding: 0.45rem 0.65rem; font-size: 0.95rem;
+      border: 1px solid var(--border, #e2e8f0); border-radius: 5px;
+      background: var(--card, #fff); box-sizing: border-box; font-family: inherit;
+    }
+    .profil-form input[type="password"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+    .profil-btn {
+      padding: 0.45rem 1.1rem; font-size: 0.95rem;
+      background: var(--accent, #2563eb); color: #fff;
+      border: none; border-radius: 5px; cursor: pointer; font-family: inherit;
+      align-self: flex-start;
+    }
+    .profil-btn:hover:not(:disabled) { filter: brightness(1.1); }
+    .profil-btn:disabled { opacity: 0.6; cursor: wait; }
+
+    .profil-meddelande { font-size: 0.9rem; padding: 0.4rem 0.65rem; border-radius: 4px; }
+    .profil-meddelande.ok { background: #dcfce7; color: #166534; }
+    .profil-meddelande.fel { background: #fee2e2; color: #991b1b; }
+
+    .profil-pref-rad { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; cursor: pointer; font-size: 0.95rem; }
+    .profil-pref-rad input[type="checkbox"] { margin: 0; }
+    .profil-pref-info { font-size: 0.85rem; color: #64748b; margin: 0.35rem 0 0.75rem; }
+  </style>
+</head>
+<body>
+  <main class="profil-sida">
+    <h1 id="profil-rubrik">Min profil</h1>
+    <p class="profil-tillbaka"><a href="/">← Tillbaka till menyn</a></p>
+
+    <section class="profil-sektion" aria-label="Prestationer">
+      <h2>Prestationer</h2>
+      <nav class="profil-lankgrupp">
+        <a href="/prestationer">Mina utmärkelser och statistik</a>
+      </nav>
+    </section>
+
+    <section class="profil-sektion" aria-label="Preferenser">
+      <h2>Preferenser</h2>
+      <p class="profil-pref-info">Styr om du vill se toast-meddelanden och höra ljud när du registrerar ett nytt yrke eller uppnår en ny utmärkelse.</p>
+      <label class="profil-pref-rad">
+        <input type="checkbox" id="profil-pref-fun" />
+        Aktivera utmärkelse-notifieringar (toast och ljud)
+      </label>
+      <label class="profil-pref-rad">
+        <input type="checkbox" id="profil-pref-toast" />
+        Visa toast (nytt yrke och utmärkelser)
+      </label>
+      <label class="profil-pref-rad">
+        <input type="checkbox" id="profil-pref-sound" />
+        Spela ljud (nytt yrke och utmärkelser)
+      </label>
+      <div style="margin-top:0.75rem; display:flex; align-items:center; gap:0.75rem;">
+        <button type="button" class="profil-btn" id="profil-pref-spara">Spara preferenser</button>
+        <span id="profil-pref-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="profil-sektion" aria-label="Byt lösenord">
+      <h2>Byt lösenord</h2>
+      <form class="profil-form" id="profil-pwd-form" autocomplete="off">
+        <label>Nuvarande lösenord
+          <input type="password" id="profil-pwd-nu" autocomplete="current-password" required />
+        </label>
+        <label>Nytt lösenord
+          <input type="password" id="profil-pwd-nytt" autocomplete="new-password" required />
+        </label>
+        <label>Upprepa nytt lösenord
+          <input type="password" id="profil-pwd-upprepa" autocomplete="new-password" required />
+        </label>
+        <button type="submit" class="profil-btn" id="profil-pwd-btn">Byt lösenord</button>
+        <p id="profil-pwd-meddelande" class="profil-meddelande" hidden aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+  <script src="/static/utils.js"></script>
+  <script src="/static/auth.js"></script>
+  <script>
+    (async function () {
+      const me = await gpEnsureAuth();
+      if (!me) return;
+
+      // Visa användarnamn i rubrik
+      const rubrik = document.getElementById('profil-rubrik');
+      if (rubrik && me.username) rubrik.textContent = me.username + '\u00a0– Min profil';
+
+      // --- Ladda preferenser ---
+      const funEl    = document.getElementById('profil-pref-fun');
+      const toastEl  = document.getElementById('profil-pref-toast');
+      const soundEl  = document.getElementById('profil-pref-sound');
+      const prefStatus = document.getElementById('profil-pref-status');
+
+      const meRes = await fetch('/api/me', { credentials: 'include' });
+      if (meRes.ok) {
+        const meData = await meRes.json();
+        const p = meData.preferences || {};
+        if (funEl)   funEl.checked   = p.fun_enabled !== false;
+        if (toastEl) toastEl.checked = p.toast_on_new_yrke !== false;
+        if (soundEl) soundEl.checked = p.sound_on_new_yrke !== false;
+      }
+
+      // --- Spara preferenser ---
+      document.getElementById('profil-pref-spara').addEventListener('click', async function () {
+        const btn = this;
+        btn.disabled = true;
+        prefStatus.textContent = 'Sparar\u2026';
+        try {
+          const res = await apiFetch('/api/me/preferences', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fun_enabled:        funEl   ? funEl.checked   : true,
+              toast_on_new_yrke:  toastEl ? toastEl.checked : true,
+              sound_on_new_yrke:  soundEl ? soundEl.checked : true,
+            }),
+          });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.detail || 'Fel'); }
+          prefStatus.textContent = 'Sparat.';
+          setTimeout(function () { prefStatus.textContent = ''; }, 2500);
+        } catch (err) {
+          prefStatus.textContent = 'Kunde inte spara: ' + (err.message || 'nätverksfel');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      // --- Byt lösenord ---
+      function visaPwdMedd(text, typ) {
+        const el = document.getElementById('profil-pwd-meddelande');
+        el.textContent = text;
+        el.className = 'profil-meddelande ' + typ;
+        el.hidden = false;
+        if (typ === 'ok') setTimeout(function () { el.hidden = true; }, 4000);
+      }
+
+      document.getElementById('profil-pwd-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const nuEl     = document.getElementById('profil-pwd-nu');
+        const nyttEl   = document.getElementById('profil-pwd-nytt');
+        const uppEl    = document.getElementById('profil-pwd-upprepa');
+        const btn      = document.getElementById('profil-pwd-btn');
+
+        const nu    = nuEl.value;
+        const nytt  = nyttEl.value.trim();
+        const uppr  = uppEl.value.trim();
+
+        if (nytt !== uppr) { visaPwdMedd('De nya lösenorden stämmer inte överens.', 'fel'); uppEl.focus(); return; }
+        if (nytt.length < 4) { visaPwdMedd('Det nya lösenordet är för kort (minst 4 tecken).', 'fel'); nyttEl.focus(); return; }
+
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/me/password', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ current_password: nu, new_password: nytt }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(d.detail || 'Fel');
+          visaPwdMedd('Lösenordet har bytts.', 'ok');
+          nuEl.value = '';
+          nyttEl.value = '';
+          uppEl.value = '';
+        } catch (err) {
+          visaPwdMedd(err.message || 'Nätverksfel', 'fel');
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
