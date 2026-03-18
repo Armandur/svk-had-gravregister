@@ -50,20 +50,24 @@
       font-size: 0.9rem;
       color: #334155;
     }
-    .prestationer-inställningar label { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; }
-    .prestationer-inställningar input[type="checkbox"] { margin: 0; }
-    .prestationer-sparad { font-size: 0.85rem; color: #16a34a; margin-top: 0.5rem; }
     .prestationer-laddar { color: #64748b; }
     .prestationer-fel { color: #b91c1c; }
-    .prestationer-sektioner-lista { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
-    .prestationer-sektioner-lista li { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0.25rem; border-radius: 4px; }
-    .prestationer-sektioner-namn { font-size: 0.9rem; flex: 1; }
-    .prestationer-sektioner-knappar { display: flex; gap: 0.25rem; }
-    .prestationer-sektioner-knappar button { padding: 0.2rem 0.5rem; font-size: 0.8rem; cursor: pointer; }
-    .prestationer-drag-handle { cursor: grab; color: #94a3b8; font-size: 1rem; padding: 0 0.25rem 0 0; user-select: none; }
-    .prestationer-drag-handle:active { cursor: grabbing; }
-    .prestationer-sektioner-lista li.prestationer-dragging { opacity: 0.4; }
-    .prestationer-sektioner-lista li.prestationer-drag-over { background: #f0f9ff; outline: 2px solid var(--accent, #2563eb); }
+    .prestationer-yrken-btn {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.97rem;
+      font-family: inherit;
+      font-weight: 500;
+      background: var(--card, #fff);
+      color: var(--accent, #2563eb);
+      border: 1px solid var(--accent, #2563eb);
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.12s, color 0.12s;
+    }
+    .prestationer-yrken-btn:hover { background: var(--accent, #2563eb); color: #fff; }
   </style>
 </head>
 <body>
@@ -95,27 +99,8 @@
         <div id="prestationer-nivaer-lista-yrke" class="prestationer-medalj-grid"></div>
       </section>
     </section>
-    <section id="prestationer-inställningar-sektion" aria-label="Inställningar för roliga saker">
-      <h2>Roliga saker</h2>
-      <p class="prestationer-inställningar-brodtext" style="margin: 0 0 0.75rem; font-size: 0.9rem; color: #555;">Toast och ljud vid nytt unikt yrke samt när du får en utmärkelse (brons/silver/guld).</p>
-      <div class="prestationer-kort prestationer-inställningar">
-        <label><input type="checkbox" id="pref-fun-enabled" /> Aktivera roliga saker (toast och ljud)</label>
-        <label><input type="checkbox" id="pref-toast-on-new-yrke" /> Visa toast (nytt yrke och utmärkelser)</label>
-        <label><input type="checkbox" id="pref-sound-on-new-yrke" /> Spela ljud (nytt yrke och utmärkelser)</label>
-        <p id="prestationer-sparad" class="prestationer-sparad" hidden aria-live="polite">Inställningar sparade.</p>
-      </div>
-    </section>
-    <section id="prestationer-inmatning-sektion" aria-label="Ordning för inmatningssektioner">
-      <h2>Ordning på inmatningssektioner</h2>
-      <p class="prestationer-inställningar-brodtext" style="margin: 0 0 0.75rem; font-size: 0.9rem; color: #555;">
-        Välj i vilken ordning sektionerna visas på sidan <strong>/gravplatser</strong> för dig. Detta påverkar bara din egen vy.
-      </p>
-      <div class="prestationer-kort prestationer-inställningar">
-        <ul id="pref-sections-list" class="prestationer-sektioner-lista"></ul>
-      </div>
-    </section>
-    <p style="margin-top: 1rem;"><a href="/yrken">Se alla unika yrken i systemet →</a></p>
-    <p id="prestationer-admin-lank-wrap" style="margin-top: 0.5rem;" hidden><a href="/admin/achievement-niva">Justera prestationsgränser (admin)</a></p>
+
+    <a href="/yrken" class="prestationer-yrken-btn">Se alla unika yrken i systemet →</a>
   </main>
 
   <script src="/static/auth.js"></script>
@@ -171,10 +156,7 @@
       var regRubrik = document.getElementById('prestationer-nivaer-reg-rubrik');
       var yrkeRubrik = document.getElementById('prestationer-nivaer-yrke-rubrik');
       if (regLista && yrkeLista) {
-        // Visa bara utmärkelser där användaren faktiskt har nått en nivå (hemliga tills dess)
-        var earnedOnly = (nivaer || []).filter(function (n) {
-          return !!n.earned_level;
-        });
+        var earnedOnly = (nivaer || []).filter(function (n) { return !!n.earned_level; });
         var earnedReg = earnedOnly.filter(function (n) {
           var key = String(n.achievement_key || '');
           return key && !key.startsWith('yrke_');
@@ -225,183 +207,6 @@
       statusEl.textContent = 'Kunde inte ladda prestationer: ' + (err.message || 'nätverksfel');
       statusEl.className = 'prestationer-fel';
     });
-
-  function laddaPreferenser() {
-    return fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; });
-  }
-
-  const SECTIONS_ALLOWED = ['innehavare', 'narmast_anhoriga', 'gravplatsen', 'skiss', 'gravsatta'];
-  const SECTION_LABELS = {
-    innehavare: 'Gravrättsinnehavare',
-    narmast_anhoriga: 'Närmast anhöriga',
-    gravplatsen: 'Gravplatsen',
-    skiss: 'Skiss och gravplatsstorlek',
-    gravsatta: 'Gravsatta'
-  };
-  let sectionsOrder = SECTIONS_ALLOWED.slice();
-
-  function normaliseraSectionsOrder(order) {
-    const out = [];
-    (order || []).forEach(function (s) {
-      if (SECTIONS_ALLOWED.indexOf(s) !== -1 && out.indexOf(s) === -1) out.push(s);
-    });
-    SECTIONS_ALLOWED.forEach(function (s) {
-      if (out.indexOf(s) === -1) out.push(s);
-    });
-    return out;
-  }
-
-  function renderSectionsOrder() {
-    var list = document.getElementById('pref-sections-list');
-    if (!list) return;
-    list.innerHTML = '';
-    sectionsOrder.forEach(function (id, idx) {
-      var label = SECTION_LABELS[id] || id;
-      var li = document.createElement('li');
-      li.draggable = true;
-      li.dataset.id = id;
-
-      var handle = document.createElement('span');
-      handle.className = 'prestationer-drag-handle';
-      handle.setAttribute('aria-hidden', 'true');
-      handle.textContent = '⠿';
-
-      var nameSpan = document.createElement('span');
-      nameSpan.className = 'prestationer-sektioner-namn';
-      nameSpan.textContent = label;
-
-      var btnWrap = document.createElement('span');
-      btnWrap.className = 'prestationer-sektioner-knappar';
-
-      var upBtn = document.createElement('button');
-      upBtn.type = 'button';
-      upBtn.dataset.move = 'up';
-      upBtn.dataset.id = id;
-      upBtn.textContent = '↑';
-      upBtn.setAttribute('aria-label', 'Flytta ' + label + ' uppåt');
-      upBtn.disabled = idx === 0;
-
-      var downBtn = document.createElement('button');
-      downBtn.type = 'button';
-      downBtn.dataset.move = 'down';
-      downBtn.dataset.id = id;
-      downBtn.textContent = '↓';
-      downBtn.setAttribute('aria-label', 'Flytta ' + label + ' nedåt');
-      downBtn.disabled = idx === sectionsOrder.length - 1;
-
-      btnWrap.appendChild(upBtn);
-      btnWrap.appendChild(downBtn);
-      li.appendChild(handle);
-      li.appendChild(nameSpan);
-      li.appendChild(btnWrap);
-      list.appendChild(li);
-    });
-  }
-
-  var draggingId = null;
-  var sectionsListEl = document.getElementById('pref-sections-list');
-  if (sectionsListEl) {
-    sectionsListEl.addEventListener('click', function (e) {
-      var btn = e.target.closest('button[data-move]');
-      if (!btn) return;
-      var dir = btn.getAttribute('data-move');
-      var id = btn.getAttribute('data-id');
-      var idx = sectionsOrder.indexOf(id);
-      if (idx === -1) return;
-      if (dir === 'up' && idx > 0) {
-        var tmp = sectionsOrder[idx - 1];
-        sectionsOrder[idx - 1] = sectionsOrder[idx];
-        sectionsOrder[idx] = tmp;
-      } else if (dir === 'down' && idx < sectionsOrder.length - 1) {
-        var tmp = sectionsOrder[idx + 1];
-        sectionsOrder[idx + 1] = sectionsOrder[idx];
-        sectionsOrder[idx] = tmp;
-      }
-      renderSectionsOrder();
-      sparaPreferenser();
-    });
-
-    sectionsListEl.addEventListener('dragstart', function (e) {
-      var li = e.target.closest('li[data-id]');
-      if (!li) return;
-      draggingId = li.dataset.id;
-      li.classList.add('prestationer-dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-
-    sectionsListEl.addEventListener('dragover', function (e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      var li = e.target.closest('li[data-id]');
-      sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
-      if (li && li.dataset.id !== draggingId) li.classList.add('prestationer-drag-over');
-    });
-
-    sectionsListEl.addEventListener('dragleave', function (e) {
-      if (!sectionsListEl.contains(e.relatedTarget)) {
-        sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
-      }
-    });
-
-    sectionsListEl.addEventListener('drop', function (e) {
-      e.preventDefault();
-      var li = e.target.closest('li[data-id]');
-      sectionsListEl.querySelectorAll('li').forEach(function (el) { el.classList.remove('prestationer-drag-over'); });
-      if (!li || !draggingId || li.dataset.id === draggingId) { draggingId = null; return; }
-      var fromIdx = sectionsOrder.indexOf(draggingId);
-      var toIdx = sectionsOrder.indexOf(li.dataset.id);
-      if (fromIdx === -1 || toIdx === -1) { draggingId = null; return; }
-      sectionsOrder.splice(fromIdx, 1);
-      sectionsOrder.splice(toIdx, 0, draggingId);
-      draggingId = null;
-      renderSectionsOrder();
-      sparaPreferenser();
-    });
-
-    sectionsListEl.addEventListener('dragend', function () {
-      draggingId = null;
-      sectionsListEl.querySelectorAll('li').forEach(function (el) {
-        el.classList.remove('prestationer-drag-over', 'prestationer-dragging');
-      });
-    });
-  }
-
-  function sparaPreferenser() {
-    const fun = document.getElementById('pref-fun-enabled').checked;
-    const toast = document.getElementById('pref-toast-on-new-yrke').checked;
-    const sound = document.getElementById('pref-sound-on-new-yrke').checked;
-    const sections = sectionsOrder && sectionsOrder.length ? sectionsOrder : SECTIONS_ALLOWED;
-    return fetch(API + '/me/preferences', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fun_enabled: fun, toast_on_new_yrke: toast, sound_on_new_yrke: sound, inmatning_sections_order: sections }),
-      credentials: 'include'
-    }).then(function (r) {
-      if (!r.ok) throw new Error('Kunde inte spara');
-      const sparadEl = document.getElementById('prestationer-sparad');
-      sparadEl.hidden = false;
-      sparadEl.textContent = 'Inställningar sparade.';
-      setTimeout(function () { sparadEl.hidden = true; }, 2500);
-    });
-  }
-
-  laddaPreferenser().then(function (me) {
-    if (!me || !me.preferences) return;
-    const p = me.preferences;
-    document.getElementById('pref-fun-enabled').checked = p.fun_enabled !== false;
-    document.getElementById('pref-toast-on-new-yrke').checked = p.toast_on_new_yrke !== false;
-    document.getElementById('pref-sound-on-new-yrke').checked = p.sound_on_new_yrke !== false;
-    sectionsOrder = normaliseraSectionsOrder(p.inmatning_sections_order);
-    renderSectionsOrder();
-    if (me.is_admin) {
-      var wrap = document.getElementById('prestationer-admin-lank-wrap');
-      if (wrap) wrap.hidden = false;
-    }
-  });
-
-  document.getElementById('pref-fun-enabled').addEventListener('change', sparaPreferenser);
-  document.getElementById('pref-toast-on-new-yrke').addEventListener('change', sparaPreferenser);
-  document.getElementById('pref-sound-on-new-yrke').addEventListener('change', sparaPreferenser);
 })();
   </script>
 </body>
