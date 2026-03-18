@@ -110,7 +110,7 @@
           fetch('/api/admin/users', { credentials: 'include' })
         ]).then(function([me, usersRes]) {
           if (me) currentUserId = me.id;
-          if (usersRes.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent('/admin'); return; }
+          if (usersRes.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent('/installningar/anvandare'); return; }
           if (usersRes.status === 403) { ingen.hidden = false; innehall.hidden = true; return; }
           if (!usersRes.ok) return usersRes.json().then(function(d) { throw new Error(d.detail || 'Kunde inte hämta användare'); });
           return usersRes.json();
@@ -136,7 +136,7 @@
               '<td><div class="admin-knappar">' +
                 '<button type="button" class="admin-btn admin-set-pwd" data-id="' + u.id + '">Sätt lösenord</button>' +
                 '<button type="button" class="admin-btn admin-byta-namn" data-id="' + u.id + '" data-username="' + uEsc + '">Byt namn</button>' +
-                '<a href="/admin/users/' + u.id + '/prestationer" class="admin-btn">Prestationer</a>' +
+                '<a href="/installningar/anvandare/' + u.id + '/prestationer" class="admin-btn">Prestationer</a>' +
                 '<button type="button" class="admin-btn admin-roliga-saker" data-id="' + u.id + '">Preferenser</button>' +
                 '<button type="button" class="admin-btn admin-btn-danger admin-ta-bort" data-id="' + u.id + '" data-username="' + uEsc + '"' + (isSelf ? ' disabled title="Du kan inte ta bort ditt eget konto"' : '') + '>Ta bort</button>' +
               '</div></td>';
