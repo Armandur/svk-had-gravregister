@@ -266,14 +266,15 @@
     return el;
   }
 
-  /** Renderar en lista av achievements i ett grid-element. */
+  /** Renderar en lista av achievements i ett grid-element (bara intjänade). */
   function renderGrid(listaEl, nivaer) {
     listaEl.innerHTML = '';
-    if (!nivaer || nivaer.length === 0) {
+    var intjanade = (nivaer || []).filter(function (n) { return !!n.earned_level; });
+    if (intjanade.length === 0) {
       listaEl.innerHTML = '<p class="prestationer-tomt">Inga utmärkelser hittills – fortsätt registrera!</p>';
       return;
     }
-    var sorterade = sorteraAchievements(nivaer);
+    var sorterade = sorteraAchievements(intjanade);
     sorterade.forEach(function (n) {
       listaEl.appendChild(renderKort(n));
     });

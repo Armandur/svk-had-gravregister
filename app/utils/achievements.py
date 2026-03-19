@@ -95,6 +95,29 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
     ).scalar()
     antal_nattugglan = int(natt_result or 0)
 
+    # Antal registreringar gjorda tidigt på morgonen (05:00–07:59 UTC) – "Tidig fågel"-achievement
+    tidig_result = db.execute(
+        text(
+            "SELECT COUNT(*) FROM gravplats_redigeringslogg"
+            " WHERE user_id = :uid"
+            " AND CAST(strftime('%H', edited_at) AS INTEGER) >= 5"
+            " AND CAST(strftime('%H', edited_at) AS INTEGER) < 8"
+        ),
+        {"uid": user_id},
+    ).scalar()
+    antal_tidig_fagel = int(tidig_result or 0)
+
+    # Antal registreringar gjorda på helger (lördag=6, söndag=0 i SQLite) – "Helgarbetare"-achievement
+    helg_result = db.execute(
+        text(
+            "SELECT COUNT(*) FROM gravplats_redigeringslogg"
+            " WHERE user_id = :uid"
+            " AND strftime('%w', edited_at) IN ('0', '6')"
+        ),
+        {"uid": user_id},
+    ).scalar()
+    antal_helgarbetare = int(helg_result or 0)
+
     niva_rows = db.query(AchievementNiva).order_by(AchievementNiva.achievement_key, AchievementNiva.threshold).all()
     key_to_thresholds = {}
     for n in niva_rows:
@@ -113,6 +136,8 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "unika_yrken": antal_unika_yrken,
         "storgravar": antal_storgravar,
         "nattugglan": antal_nattugglan,
+        "tidig_fagel": antal_tidig_fagel,
+        "helgarbetare": antal_helgarbetare,
     }
     # Lägg till alla dynamiska yrkesgrupper i value_by_key
     for key, count in yrkes_grupp_counts.items():
@@ -136,6 +161,8 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "yrke_fruar_mamseller": "Fruar & mamseller",
         "yrke_jord_och_gard": "Jord och gård",
         "nattugglan": "Nattugglan 🦉",
+        "tidig_fagel": "Tidig fågel ☀️",
+        "helgarbetare": "Helgarbetare 📅",
     }
     nivaer = []
     for key, thresholds in key_to_thresholds.items():

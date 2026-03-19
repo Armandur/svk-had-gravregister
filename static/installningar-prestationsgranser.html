@@ -111,6 +111,8 @@
     yrke_fruar_mamseller: 'Fruar & mamseller',
     yrke_jord_och_gard: 'Jord och gård (jordägare m.fl.)',
     nattugglan: 'Nattugglan 🦉 (registreringar 22–06 UTC)',
+    tidig_fagel: 'Tidig fågel ☀️ (registreringar 05–08 UTC)',
+    helgarbetare: 'Helgarbetare 📅 (registreringar på lördagar/söndagar)',
   };
 
   function levelClass(l) {
@@ -170,6 +172,8 @@
       yrke_fruar_mamseller: 'antal personer med fru/mamsell-roller du registrerat',
       yrke_jord_och_gard: 'antal personer med jord/gårds-yrken du registrerat',
       nattugglan: 'antal registreringar gjorda nattetid (22:00–06:00 UTC)',
+      tidig_fagel: 'antal registreringar gjorda tidigt på morgonen (05:00–08:00 UTC)',
+      helgarbetare: 'antal registreringar gjorda på lördagar eller söndagar',
     };
     var metricText = metricByKey[key] || ('antal ' + (label || key));
     var labelHtml = '<strong>' + metricText + '</strong>';

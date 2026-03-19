@@ -424,6 +424,14 @@ def init_db():
                     ("nattugglan", "bronze", 5, "5 nattregistreringar"),
                     ("nattugglan", "silver", 20, "20 nattregistreringar"),
                     ("nattugglan", "gold", 50, "50 nattregistreringar"),
+                    # Tidig fågel – registreringar gjorda 05:00–07:59 UTC
+                    ("tidig_fagel", "bronze", 5, "5 morgonregistreringar"),
+                    ("tidig_fagel", "silver", 20, "20 morgonregistreringar"),
+                    ("tidig_fagel", "gold", 50, "50 morgonregistreringar"),
+                    # Helgarbetare – registreringar gjorda på lördag eller söndag
+                    ("helgarbetare", "bronze", 10, "10 helgregistreringar"),
+                    ("helgarbetare", "silver", 50, "50 helgregistreringar"),
+                    ("helgarbetare", "gold", 150, "150 helgregistreringar"),
                 ]
                 for key, level, threshold, label in defaults:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
@@ -810,6 +818,29 @@ def init_db():
                 ]:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
                 db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: lägg till Tidig fågel + Helgarbetare om de saknas (befintliga databaser)
+    with SessionLocal() as db:
+        try:
+            for key, nivåer in [
+                ("tidig_fagel", [
+                    ("bronze", 5, "5 morgonregistreringar"),
+                    ("silver", 20, "20 morgonregistreringar"),
+                    ("gold", 50, "50 morgonregistreringar"),
+                ]),
+                ("helgarbetare", [
+                    ("bronze", 10, "10 helgregistreringar"),
+                    ("silver", 50, "50 helgregistreringar"),
+                    ("gold", 150, "150 helgregistreringar"),
+                ]),
+            ]:
+                exists = db.query(AchievementNiva).filter(AchievementNiva.achievement_key == key).first() is not None
+                if not exists:
+                    for level, threshold, label in nivåer:
+                        db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+            db.commit()
         except Exception:
             db.rollback()
 
