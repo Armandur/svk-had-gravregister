@@ -153,37 +153,21 @@
   function achievementTestText(key, level, label, threshold) {
     var nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
     var emoji = level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : level === 'gold' ? '🥇' : '🎉';
-    var metricByKey = {
-      registreringar: 'antal sparade registreringar',
-      fardigtranskriberade: 'antal färdigtranskriberade gravplatser',
-      innehavare: 'antal registrerade gravrättsinnehavare',
-      narmast_anhoriga: 'antal registrerade närmast anhöriga',
-      gravsatta: 'antal registrerade gravsatta',
-      skisser: 'antal registrerade skisser',
-      unika_yrken: 'antal unika yrken i dina gravplatser',
-      storgravar: 'antal storgravar (>3 gravsatta)',
-      yrke_kyrkans_man: 'antal personer med kyrkliga yrken du registrerat',
-      yrke_havets_man: 'antal personer med sjö-/lotsyrken du registrerat',
-      yrke_handelns_furste: 'antal personer med handelsyrken du registrerat',
-      yrke_fabrikens_herre: 'antal personer med bruk/fabrik-yrken du registrerat',
-      yrke_hantverkets_mastare: 'antal personer med hantverksyrken du registrerat',
-      yrke_lardomens_vaktare: 'antal personer med lärar-/skolyrken du registrerat',
-      yrke_lag_och_ordning: 'antal personer med lag/ordning-yrken du registrerat',
-      yrke_fruar_mamseller: 'antal personer med fru/mamsell-roller du registrerat',
-      yrke_jord_och_gard: 'antal personer med jord/gårds-yrken du registrerat',
-      nattugglan: 'antal registreringar gjorda nattetid (22:00–06:00 UTC)',
-      tidig_fagel: 'antal registreringar gjorda tidigt på morgonen (05:00–08:00 UTC)',
-      helgarbetare: 'antal registreringar gjorda på lördagar eller söndagar',
-    };
-    var metricText = metricByKey[key] || ('antal ' + (label || key));
-    var labelHtml = '<strong>' + metricText + '</strong>';
-    var countText = (typeof threshold === 'number' && !isNaN(threshold)) ? String(threshold) + ' st' : null;
-    var thresholdText = countText;
-    if (thresholdText) {
-      return emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml +
-        ' – du har nu ' + thresholdText + '!';
-    }
-    return emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + '!';
+    var safe = (label || key).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    var labelHtml = '<strong>' + safe + '</strong>';
+    var countText = (typeof threshold === 'number' && threshold > 0) ? threshold + ' st' : null;
+    var formuleringar = [
+      countText
+        ? emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + ' – ' + countText + '!'
+        : emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + '!',
+      countText
+        ? emoji + ' Ny utmärkelse i ' + labelHtml + ': ' + nivåNamn + ' (' + countText + ' totalt)!'
+        : emoji + ' Ny utmärkelse i ' + labelHtml + ': nivån ' + nivåNamn + '.',
+      countText
+        ? emoji + ' Bra jobbat – du har precis klättrat till ' + nivåNamn + '-nivå i ' + labelHtml + ' genom att nå ' + countText + '!'
+        : emoji + ' Bra jobbat – du har precis klättrat till ' + nivåNamn + '-nivå i ' + labelHtml + '.',
+    ];
+    return formuleringar[Math.floor(Math.random() * formuleringar.length)];
   }
 
   Promise.all([
