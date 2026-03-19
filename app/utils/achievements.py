@@ -45,7 +45,7 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
             continue
         if key not in yrkes_grupper:
             yrkes_grupper[key] = set()
-        yrke_val = (r.yrke or "").strip()
+        yrke_val = (r.yrke or "").strip().lower()
         if yrke_val:
             yrkes_grupper[key].add(yrke_val)
     yrkes_grupp_counts: dict[str, int] = {k: 0 for k in yrkes_grupper.keys()}
@@ -68,10 +68,11 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
                 y = str(row[0]).strip()
                 if not y:
                     continue
-                unika_yrken_set.add(y)
-                # Räkna in yrket i alla relevanta dynamiska grupper
+                unika_yrken_set.add(y.lower())
+                # Räkna in yrket i alla relevanta dynamiska grupper (skiftlägesokänslig)
+                y_lower = y.lower()
                 for key, yrken in yrkes_grupper.items():
-                    if y in yrken:
+                    if y_lower in yrken:
                         yrkes_grupp_counts[key] = yrkes_grupp_counts.get(key, 0) + 1
     antal_unika_yrken = len(unika_yrken_set)
 

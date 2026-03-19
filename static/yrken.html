@@ -19,6 +19,10 @@
     .yrken-tabell tr:last-child td { border-bottom: none; }
     .yrken-laddar { color: #64748b; }
     .yrken-fel { color: #b91c1c; }
+    .yrken-kontroller { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+    .yrken-sok { padding: 0.35rem 0.6rem; border: 1px solid var(--border, #ccc); border-radius: 5px; font-size: 0.92rem; width: 16rem; max-width: 100%; }
+    .yrken-sok:focus { outline: 2px solid var(--accent, #2c5f4a); outline-offset: 1px; }
+    .yrken-sammanfattning { color: #64748b; font-size: 0.88rem; }
   </style>
 </head>
 <body>
@@ -30,6 +34,10 @@
   <main class="yrken-main">
     <h2>Unika yrken (gravrättsinnehavare, närmast anhöriga, gravsatta)</h2>
     <p id="yrken-status" class="yrken-laddar" aria-live="polite">Laddar …</p>
+    <div id="yrken-kontroller" class="yrken-kontroller" hidden>
+      <input type="search" id="yrken-sok" class="yrken-sok" placeholder="Sök yrke…" aria-label="Sök yrke">
+      <span id="yrken-sammanfattning" class="yrken-sammanfattning" aria-live="polite"></span>
+    </div>
     <table class="yrken-tabell" id="yrken-tabell" hidden aria-label="Yrken och antal förekomster">
       <thead>
         <tr>
@@ -62,10 +70,20 @@
   const tbodyEl = document.getElementById('yrken-tbody');
   const thYrke = document.getElementById('yrken-th-yrke');
   const thAntal = document.getElementById('yrken-th-antal');
+  const sokEl = document.getElementById('yrken-sok');
+  const kontrollerEl = document.getElementById('yrken-kontroller');
+  const sammanfattningEl = document.getElementById('yrken-sammanfattning');
 
   let yrkenData = [];
+  let sokText = '';
   let sortBy = 'yrke';
   let sortAsc = true;
+
+  function filtreraYrken(list) {
+    if (!sokText) return list;
+    var q = sokText.toLowerCase();
+    return list.filter(function (r) { return (r.yrke || '').toLowerCase().includes(q); });
+  }
 
   function sortYrken(list) {
     return list.slice().sort(function (a, b) {
@@ -89,12 +107,21 @@
     thAntal.setAttribute('aria-sort', sortBy === 'antal' ? (sortAsc ? 'ascending' : 'descending') : 'none');
   }
 
+  function uppdateraSammanfattning(visade) {
+    var totalt = yrkenData.length;
+    sammanfattningEl.textContent = sokText
+      ? visade + ' av ' + totalt + ' yrken'
+      : totalt + ' unika yrken';
+  }
+
   function renderTable() {
-    var sorted = sortYrken(yrkenData);
+    var filtrerade = filtreraYrken(yrkenData);
+    var sorted = sortYrken(filtrerade);
     tbodyEl.innerHTML = sorted.map(function (r) {
       return '<tr><td>' + esc(r.yrke) + '</td><td class="yrken-antal">' + esc(String(r.antal)) + '</td></tr>';
     }).join('');
     updateSortPilar();
+    uppdateraSammanfattning(sorted.length);
   }
 
   function onThClick(col) {
@@ -110,6 +137,16 @@
   if (thYrke) thYrke.addEventListener('click', function () { onThClick('yrke'); });
   if (thAntal) thAntal.addEventListener('click', function () { onThClick('antal'); });
 
+  if (sokEl) {
+    sokEl.addEventListener('input', function () {
+      sokText = this.value;
+      renderTable();
+    });
+    sokEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { this.value = ''; sokText = ''; renderTable(); }
+    });
+  }
+
   fetch(API + '/yrken', { credentials: 'include' })
     .then(function (res) {
       if (!res.ok) throw new Error('Kunde inte ladda yrken');
@@ -123,6 +160,7 @@
         return;
       }
       statusEl.hidden = true;
+      if (kontrollerEl) kontrollerEl.hidden = false;
       tabellEl.removeAttribute('hidden');
       renderTable();
     })

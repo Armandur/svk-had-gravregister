@@ -1,6 +1,6 @@
 """Rutter för mappar, PDF-sidor och mappkonfiguration."""
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import fitz  # PyMuPDF
@@ -217,7 +217,12 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
 
 
 def _alla_yrken_med_antal(db: Session) -> list[dict]:
-    """Hämta alla yrken med förekomstantal."""
+    """Hämta alla yrken med förekomstantal, skiftlägesbaserat normaliserade.
+
+    Varianter som bara skiljer sig i skiftläge (t.ex. "Biskop"/"biskop") slås ihop.
+    Visningsnamnet väljs som den vanligaste varianten; vid lika antal föredras
+    versal inledning, annars alfabetiskt första.
+    """
     def yrke_values(q):
         return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
     alla = (
@@ -225,12 +230,23 @@ def _alla_yrken_med_antal(db: Session) -> list[dict]:
         + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
         + yrke_values(db.query(Gravsatt.yrke))
     )
-    counter = Counter(alla)
-    return [{"yrke": yrke, "antal": count} for yrke, count in sorted(counter.items(), key=lambda x: (x[0].lower(), x[0]))]
+    # Gruppera per lowercase-nyckel, räkna exakta varianter
+    groups: dict[str, Counter] = defaultdict(Counter)
+    for yrke in alla:
+        groups[yrke.lower()][yrke] += 1
+    result = []
+    for variants in groups.values():
+        display = max(variants, key=lambda v: (variants[v], v[0].isupper(), [-ord(c) for c in v]))
+        result.append({"yrke": display, "antal": sum(variants.values())})
+    return sorted(result, key=lambda x: x["yrke"].lower())
 
 
 def _unika_yrken_set(db: Session) -> set[str]:
-    """Returnera mängd av alla unika yrken i databasen."""
+    """Returnera mängd av alla unika yrken (gemener) i databasen.
+
+    Skiftlägesbaserat normaliserad – används för att avgöra om ett yrke är
+    nytt i systemet ("nytt yrke"-toast).
+    """
     def yrke_values(q):
         return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
     alla = (
@@ -238,7 +254,7 @@ def _unika_yrken_set(db: Session) -> set[str]:
         + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
         + yrke_values(db.query(Gravsatt.yrke))
     )
-    return set(alla)
+    return {y.lower() for y in alla}
 
 
 @router.get("/api/yrken")
