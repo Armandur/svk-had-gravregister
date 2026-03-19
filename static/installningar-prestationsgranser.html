@@ -612,7 +612,13 @@
       _laddadeFormData = toastData.formuleringar;
     }
 
-    /* Gränsvärden */
+    /* Gränsvärden – populera labelByKey med yrke-kategorier från API innan tabellerna byggs */
+    if (yrkeData && yrkeData.grupper) {
+      yrkeData.grupper.forEach(function (g) {
+        if (g.namn) labelByKey[g.achievement_key] = g.namn;
+      });
+    }
+
     var nivaer = nivaData.nivaer || [];
     var regNivaer  = nivaer.filter(function (n) { return !String(n.achievement_key).startsWith('yrke_'); });
     var yrkeNivaer = nivaer.filter(function (n) { return String(n.achievement_key).startsWith('yrke_'); });
@@ -652,11 +658,8 @@
       .finally(function () { btn.disabled = false; });
     });
 
-    /* Yrkesgrupper – bygg upp labelByKey dynamiskt från API */
+    /* Yrkesgrupper */
     if (yrkeData && yrkeData.grupper) {
-      yrkeData.grupper.forEach(function (g) {
-        if (g.namn) labelByKey[g.achievement_key] = g.namn;
-      });
       byggYrkesGrupp(document.getElementById('pa-yrke-lista'), yrkeData.grupper);
     }
 
