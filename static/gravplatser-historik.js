@@ -34,38 +34,46 @@ function _historikDiffData(ny, gammal) {
     else items.push({ typ: 'andring', text: 'Underhåll – överstruket avmarkerat' });
   }
 
-  // Djupjämförelse av listfält: detekterar tillagda, borttagna och ändrade poster
+  // Djupjämförelse av listfält med positionsbaserad matchning.
+  // Jämför element index för index – en namnändring visas som "andring" av förnamn/efternamn
+  // i stället för borttag + tillägg.
   function namnKey(x) { return ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?'; }
-  function diffListaDjup(nylista, gamallista, namnFn, etikett, extraFalt) {
-    const gaMap = new Map((gamallista || []).map((x) => [namnFn(x), x]));
-    const naMap = new Map((nylista || []).map((x) => [namnFn(x), x]));
-    for (const [n] of naMap) if (!gaMap.has(n)) items.push({ typ: 'tillagg', text: etikett + ' tillagd: ' + n });
-    for (const [n] of gaMap) if (!naMap.has(n)) items.push({ typ: 'borttagning', text: etikett + ' borttagen: ' + n });
-    for (const [n, nyX] of naMap) {
-      if (!gaMap.has(n)) continue;
-      const gaX = gaMap.get(n);
-      for (const [falt, faltEtikett] of Object.entries(extraFalt)) {
-        const a = (gaX[falt] ?? '').toString().trim();
-        const b = (nyX[falt] ?? '').toString().trim();
-        if (a !== b) {
-          if (!a) items.push({ typ: 'tillagg', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + b });
-          else if (!b) items.push({ typ: 'borttagning', text: etikett + ' ' + n + ' – ' + faltEtikett + ' borttagen' });
-          else items.push({ typ: 'andring', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + a + ' → ' + b });
+  function diffListaPositionsbaserad(nylista, gamallista, namnFn, etikett, extraFalt) {
+    const nyL = nylista || [];
+    const gaL = gamallista || [];
+    const maxLen = Math.max(nyL.length, gaL.length);
+    for (let i = 0; i < maxLen; i++) {
+      const nyX = nyL[i];
+      const gaX = gaL[i];
+      if (nyX && !gaX) {
+        items.push({ typ: 'tillagg', text: etikett + ' tillagd: ' + namnFn(nyX) });
+      } else if (!nyX && gaX) {
+        items.push({ typ: 'borttagning', text: etikett + ' borttagen: ' + namnFn(gaX) });
+      } else if (nyX && gaX) {
+        let ref = namnFn(gaX); if (!ref || ref === '?') ref = namnFn(nyX); if (!ref || ref === '?') ref = String(i + 1) + '.';
+        for (const [falt, faltEtikett] of Object.entries(extraFalt)) {
+          const a = (gaX[falt] ?? '').toString().trim();
+          const b = (nyX[falt] ?? '').toString().trim();
+          if (a !== b) {
+            if (!a) items.push({ typ: 'tillagg', text: etikett + ' ' + ref + ' – ' + faltEtikett + ': ' + b });
+            else if (!b) items.push({ typ: 'borttagning', text: etikett + ' ' + ref + ' – ' + faltEtikett + ' borttagen' });
+            else items.push({ typ: 'andring', text: etikett + ' ' + ref + ' – ' + faltEtikett + ': ' + a + ' → ' + b });
+          }
         }
       }
     }
   }
-  diffListaDjup(ny.innehavare, gammal.innehavare, namnKey, 'Innehavare',
-    { yrke: 'yrke', gatuadress: 'adress', postnummer: 'postnr', postort: 'postort', kommentar: 'kommentar' });
-  diffListaDjup(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnKey, 'Anhörig',
-    { yrke: 'yrke', adress: 'adress', kommentar: 'kommentar' });
+  diffListaPositionsbaserad(ny.innehavare, gammal.innehavare, namnKey, 'Innehavare',
+    { fornamn: 'förnamn', efternamn: 'efternamn', yrke: 'yrke', gatuadress: 'adress', postnummer: 'postnr', postort: 'postort', kommentar: 'kommentar' });
+  diffListaPositionsbaserad(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnKey, 'Anhörig',
+    { fornamn: 'förnamn', efternamn: 'efternamn', yrke: 'yrke', adress: 'adress', kommentar: 'kommentar' });
   function namnGravsatt(x) {
     const n = namnKey(x);
     const ar = [x.fodelse_ar, x.dods_ar].filter(Boolean).join('–');
     return ar ? n + ' (' + ar + ')' : n;
   }
-  diffListaDjup(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt',
-    { yrke: 'yrke', kommentar: 'kommentar' });
+  diffListaPositionsbaserad(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt',
+    { fornamn: 'förnamn', efternamn: 'efternamn', fodelse_ar: 'födelseår', dods_ar: 'dödsår', yrke: 'yrke', kommentar: 'kommentar' });
 
   // Skisser (antal)
   const nyS = (ny.skisser || []).length, gaS = (gammal.skisser || []).length;
