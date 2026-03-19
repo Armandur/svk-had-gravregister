@@ -62,6 +62,10 @@ class AchievementYrkesGruppBody(BaseModel):
     yrken: list[str]
 
 
+class ToastFormuleringUpdateBody(BaseModel):
+    text: str
+
+
 # ---------- Admin: kyrkogårdar ----------
 
 class KyrkogardCreateBody(BaseModel):

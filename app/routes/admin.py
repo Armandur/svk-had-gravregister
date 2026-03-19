@@ -14,6 +14,7 @@ from app.config import API_KEYS_PATH, BACKUP_DIR, DATABASE_PATH
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
+    ToastFormulering,
     Gravplats,
     GravplatsRedigeringslogg,
     Kyrkogard,
@@ -23,6 +24,7 @@ from app.database import (
 from app.schemas import (
     AchievementNivaUpdateBody,
     AchievementYrkesGruppBody,
+    ToastFormuleringUpdateBody,
     ApiKeysBody,
     ClaudeAktivBody,
     ClaudeBatchAktivBody,
@@ -556,3 +558,34 @@ async def update_achievement_yrkesgrupp(
         db.add(AchievementYrkesGrupp(achievement_key=key, yrke=y))
     db.commit()
     return {"ok": True, "achievement_key": key, "antal_yrken": len(seen)}
+
+
+# ---------- Toast-formuleringar (admin) ----------
+
+@router.get("/api/admin/toast-formuleringar")
+async def list_toast_formuleringar_admin(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista alla redigerbara toast-texter – endast admin."""
+    rows = db.query(ToastFormulering).order_by(ToastFormulering.typ, ToastFormulering.sortering).all()
+    return {
+        "formuleringar": [
+            {"id": r.id, "typ": r.typ, "sortering": r.sortering, "text": r.text}
+            for r in rows
+        ]
+    }
+
+
+@router.patch("/api/admin/toast-formulering/{formulering_id:int}")
+async def update_toast_formulering(
+    formulering_id: int,
+    body: ToastFormuleringUpdateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Uppdatera texten för en toast-formulering – endast admin."""
+    row = db.query(ToastFormulering).filter(ToastFormulering.id == formulering_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Formulering hittades inte")
+    row.text = (body.text or "").strip()
+    db.commit()
+    return {"ok": True, "id": row.id, "typ": row.typ, "text": row.text}
+

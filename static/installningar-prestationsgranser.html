@@ -3,94 +3,213 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Prestationsgränser – Gravregister</title>
+  <title>Prestationsadministration – Gravregister</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    .admin-ach-sida { max-width: 44rem; margin: 2rem auto; padding: 2rem; }
-    .admin-ach-sida h1 { font-size: 1.25rem; margin-bottom: 1rem; }
-    .admin-ach-sida a { color: var(--accent, #2563eb); }
-    .admin-ach-tabell { width: 100%; border-collapse: collapse; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; overflow: hidden; }
-    .admin-ach-tabell th, .admin-ach-tabell td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid #eee; }
-    .admin-ach-tabell th { background: #f1f5f9; font-weight: 600; }
-    .admin-ach-tabell tr:last-child td { border-bottom: none; }
-    .admin-ach-tabell input[type="number"] { width: 5rem; padding: 0.3rem 0.4rem; }
-    .admin-ach-tabell .niva-brons { color: #b45309; }
-    .admin-ach-tabell .niva-silver { color: #64748b; }
-    .admin-ach-tabell .niva-gold { color: #b8860b; }
-    .admin-ach-fel { color: #b91c1c; margin-top: 0.5rem; }
-    .admin-ach-ok { color: #16a34a; margin-top: 0.5rem; }
-    .admin-ach-laddar { color: #64748b; }
-    .admin-ach-test-btn {
-      padding: 0;
-      margin: 0;
-      border: none;
-      background: none;
-      color: inherit;
-      font: inherit;
-      text-align: left;
-      cursor: pointer;
+    .pa-sida { max-width: 54rem; margin: 2rem auto; padding: 0 1rem 4rem; }
+    .pa-sida h1 { font-size: 1.25rem; margin-bottom: 0.25rem; }
+    .pa-sida > nav { margin-bottom: 1.5rem; font-size: 0.9rem; color: #64748b; }
+    .pa-sida > nav a { color: var(--accent, #2563eb); }
+
+    /* Sektionsrubriker */
+    .pa-sektion { margin-bottom: 2.5rem; }
+    .pa-sektion-rubrik {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent, #2c5f4a);
+      border-bottom: 2px solid var(--border, #e2e8f0);
+      padding-bottom: 0.4rem;
+      margin: 0 0 0.6rem;
     }
-    .admin-ach-test-btn:hover {
-      text-decoration: underline;
+    .pa-sektion-beskr { font-size: 0.88rem; color: #64748b; margin-bottom: 1rem; }
+
+    /* Sub-rubrik inom sektion */
+    .pa-underrubrik { font-size: 0.92rem; font-weight: 600; margin: 1.25rem 0 0.4rem; color: #334155; }
+
+    /* Gränsvärde-tabell */
+    .pa-tabell { width: 100%; border-collapse: collapse; background: var(--card, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; overflow: hidden; margin-bottom: 0.5rem; }
+    .pa-tabell th, .pa-tabell td { padding: 0.45rem 0.7rem; text-align: left; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; }
+    .pa-tabell th { background: #f8fafc; font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; color: #64748b; }
+    .pa-tabell tr:last-child td { border-bottom: none; }
+    .pa-tabell tr.pa-grupp-start td { border-top: 2px solid #e2e8f0; }
+    .pa-tabell tr.pa-grupp-start.pa-forsta td { border-top: none; }
+
+    /* Medalj-badge */
+    .pa-niva-badge {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      font-size: 0.82rem; font-weight: 600; padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
     }
+    .pa-niva-guld   { background: #fef3c7; color: #92400e; }
+    .pa-niva-silver { background: #f1f5f9; color: #475569; }
+    .pa-niva-brons  { background: #fde8d8; color: #7c3d1a; }
+
+    .pa-tabell input[type="number"] { width: 5.5rem; padding: 0.28rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.88rem; }
+    .pa-tabell input[type="text"]   { width: 9rem;   padding: 0.28rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.88rem; }
+
+    /* Testa-knapp */
+    .pa-testa-btn {
+      padding: 0.22rem 0.6rem; font-size: 0.8rem; border: 1px solid #cbd5e1;
+      border-radius: 4px; background: #f8fafc; cursor: pointer; white-space: nowrap;
+      transition: background 0.12s;
+    }
+    .pa-testa-btn:hover { background: #e2e8f0; }
+
+    /* Spara-rad */
+    .pa-spara-rad { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; }
+    .pa-spara-ok  { font-size: 0.88rem; color: #16a34a; }
+    .pa-spara-fel { font-size: 0.88rem; color: #b91c1c; }
+
+    /* Yrkesgrupp-accordion */
+    .pa-yrke-lista { display: flex; flex-direction: column; gap: 0.5rem; }
+    .pa-yrke-kort {
+      background: var(--card, #fff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .pa-yrke-header {
+      display: flex; align-items: center; gap: 0.6rem;
+      padding: 0.6rem 0.85rem; cursor: pointer; user-select: none;
+      background: #f8fafc;
+    }
+    .pa-yrke-header:hover { background: #f1f5f9; }
+    .pa-yrke-namn { font-weight: 600; font-size: 0.92rem; flex: 1; }
+    .pa-yrke-badge {
+      font-size: 0.78rem; background: #e2e8f0; color: #475569;
+      padding: 0.1rem 0.5rem; border-radius: 9999px;
+    }
+    .pa-yrke-chevron { font-size: 0.75rem; color: #94a3b8; transition: transform 0.15s; }
+    .pa-yrke-kort[open] .pa-yrke-chevron { transform: rotate(90deg); }
+    .pa-yrke-body { padding: 0.75rem 0.85rem; border-top: 1px solid #f1f5f9; }
+    .pa-yrke-rad-lista { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
+    .pa-yrke-rad { display: flex; align-items: center; gap: 0.3rem; }
+    .pa-yrke-rad input { flex: 1 1 auto; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; }
+    .pa-rm-btn { padding: 0.1rem 0.45rem; border: 1px solid #fca5a5; border-radius: 4px; background: #fee2e2; cursor: pointer; font-size: 0.85rem; line-height: 1.4; }
+    .pa-rm-btn:hover { background: #fecaca; }
+    .pa-add-btn { padding: 0.2rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #f1f5f9; cursor: pointer; font-size: 0.82rem; }
+    .pa-add-btn:hover { background: #e2e8f0; }
+    .pa-yrke-fot { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; }
+
+    /* Toast-texter */
+    .pa-toast-sektion { margin-bottom: 1.5rem; }
+    .pa-toast-sektion h4 { font-size: 0.9rem; font-weight: 600; margin: 0 0 0.2rem; }
+    .pa-toast-sektion .pa-platshallare { font-size: 0.78rem; color: #64748b; margin-bottom: 0.5rem; font-family: monospace; }
+    .pa-toast-rad { display: flex; gap: 0.5rem; align-items: flex-start; margin-bottom: 0.4rem; }
+    .pa-toast-rad textarea { flex: 1; padding: 0.35rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.85rem; font-family: inherit; resize: vertical; min-height: 2.5rem; }
+    .pa-toast-rad textarea:focus { outline: 2px solid var(--accent, #2563eb); }
+    .pa-toast-forhandsgr { padding: 0.25rem 0.55rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
+    .pa-toast-forhandsgr:hover { background: #e2e8f0; }
+
+    /* Laddar/fel */
+    .pa-laddar { color: #64748b; font-size: 0.92rem; }
+    .pa-fel { color: #b91c1c; font-size: 0.92rem; }
+    .pa-ingen { color: #b91c1c; }
   </style>
 </head>
 <body>
-  <main class="admin-ach-sida">
-    <h1>Prestationsgränser</h1>
-    <p><a href="/installningar">← Tillbaka till Inställningar</a></p>
-    <p id="admin-ach-ingen" class="admin-ach-fel" hidden>Endast administratörer kan justera gränserna.</p>
-    <p id="admin-ach-status" class="admin-ach-laddar" aria-live="polite">Laddar …</p>
-    <div id="admin-ach-innehall" hidden>
-      <p class="admin-ach-brodtext" style="font-size: 0.9rem; color: #555; margin-bottom: 1rem;">Justera gränsvärdena för brons-, silver- och guldmedaljer. Ändringarna gäller för alla användare.</p>
-      <table class="admin-ach-tabell" aria-label="Prestationsnivåer">
-        <thead>
-          <tr>
-            <th scope="col">Prestation</th>
-            <th scope="col">Nivå</th>
-            <th scope="col">Gränsvärde (min antal)</th>
-            <th scope="col">Beskrivning</th>
-          </tr>
-        </thead>
-        <tbody id="admin-ach-tbody"></tbody>
-      </table>
-      <p style="margin-top: 1rem;">
-        <button type="button" id="admin-ach-spara">Spara alla ändringar</button>
-        <span id="admin-ach-sparad" class="admin-ach-ok" hidden aria-live="polite">Sparat.</span>
-      </p>
+  <main class="pa-sida">
+    <h1>Prestationsadministration</h1>
+    <nav><a href="/installningar">← Tillbaka till Inställningar</a></nav>
 
-      <h2 style="font-size:1.05rem;margin-top:2rem;margin-bottom:0.5rem;">Yrkesgrupper för yrkesbaserade prestationer</h2>
-      <p class="admin-ach-brodtext" style="font-size: 0.85rem; color: #555; margin-bottom: 0.75rem;">
-        Här kan du styra vilka yrkestitlar som räknas in i respektive yrkesbaserad prestation.
-        Skriv titlarna kommaseparerade. Ändringarna gäller för alla användare.
-      </p>
-      <table class="admin-ach-tabell" aria-label="Yrkesgrupper för prestationer">
-        <thead>
-          <tr>
-            <th scope="col">Yrkesprestation</th>
-            <th scope="col">Yrken som ingår (kommaseparerade)</th>
-          </tr>
-        </thead>
-        <tbody id="admin-yrkes-tbody"></tbody>
-      </table>
-      <p style="margin-top: 1rem;">
-        <button type="button" id="admin-yrkes-spara">Spara yrkesgrupper</button>
-      </p>
-    </div>
+    <p id="pa-ingen" class="pa-ingen" hidden>Endast administratörer har tillgång till den här sidan.</p>
+    <p id="pa-status" class="pa-laddar" aria-live="polite">Laddar …</p>
+
+    <div id="pa-innehall" hidden>
+
+      <!-- ════════════ 1. Gränsvärden ════════════ -->
+      <section class="pa-sektion">
+        <h2 class="pa-sektion-rubrik">Prestationsgränser</h2>
+        <p class="pa-sektion-beskr">
+          Justera gränsvärdena för brons-, silver- och guldmedaljer. Klicka på <strong>▶ Testa</strong> för att
+          förhandsgranska hur toasten ser ut. Ändringarna gäller för alla användare direkt.
+        </p>
+
+        <h3 class="pa-underrubrik">Registreringar &amp; övrigt</h3>
+        <table class="pa-tabell" id="pa-tabell-reg" aria-label="Gränsvärden – registreringar">
+          <thead><tr>
+            <th>Prestation</th><th>Nivå</th><th>Gränsvärde</th><th>Etikett</th><th></th>
+          </tr></thead>
+          <tbody id="pa-tbody-reg"></tbody>
+        </table>
+
+        <h3 class="pa-underrubrik">Yrkes-prestationer</h3>
+        <table class="pa-tabell" id="pa-tabell-yrke" aria-label="Gränsvärden – yrkes-prestationer">
+          <thead><tr>
+            <th>Prestation</th><th>Nivå</th><th>Gränsvärde</th><th>Etikett</th><th></th>
+          </tr></thead>
+          <tbody id="pa-tbody-yrke"></tbody>
+        </table>
+
+        <div class="pa-spara-rad">
+          <button type="button" id="pa-spara-granser">Spara gränsvärden</button>
+          <span id="pa-spara-granser-ok" class="pa-spara-ok" hidden aria-live="polite">Sparat!</span>
+          <span id="pa-spara-granser-fel" class="pa-spara-fel" hidden aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- ════════════ 2. Yrkesgrupper ════════════ -->
+      <section class="pa-sektion">
+        <h2 class="pa-sektion-rubrik">Yrkesgrupper</h2>
+        <p class="pa-sektion-beskr">
+          Styr vilka yrkestitlar som räknas in i respektive yrkesbaserad prestation.
+          Varje grupp sparas separat – expandera en grupp för att redigera.
+        </p>
+        <div id="pa-yrke-lista" class="pa-yrke-lista"></div>
+      </section>
+
+      <!-- ════════════ 3. Toast-texter ════════════ -->
+      <section class="pa-sektion">
+        <h2 class="pa-sektion-rubrik">Toast-texter</h2>
+        <p class="pa-sektion-beskr">
+          Redigera de meddelanden som visas för användare. En slumpad text väljs varje gång.
+          Klicka <strong>▶</strong> för att förhandsgranska toasten med exempelvärden.
+        </p>
+
+        <div class="pa-toast-sektion">
+          <h4>Achievement-toasts</h4>
+          <p class="pa-platshallare">Platshållare: {emoji} &nbsp; {niva} &nbsp; {label} &nbsp; {antal}</p>
+          <div id="pa-toast-achievement"></div>
+          <div class="pa-spara-rad">
+            <button type="button" class="pa-spara-toast-btn" data-typ="achievement">Spara achievement-toasts</button>
+            <span class="pa-spara-ok" data-sparad="achievement" hidden>Sparat!</span>
+          </div>
+        </div>
+
+        <div class="pa-toast-sektion">
+          <h4>Nytt yrke-toasts</h4>
+          <p class="pa-platshallare">Platshållare: {yrke}</p>
+          <div id="pa-toast-nytt_yrke"></div>
+          <div class="pa-spara-rad">
+            <button type="button" class="pa-spara-toast-btn" data-typ="nytt_yrke">Spara yrkestoasts</button>
+            <span class="pa-spara-ok" data-sparad="nytt_yrke" hidden>Sparat!</span>
+          </div>
+        </div>
+
+        <div class="pa-toast-sektion">
+          <h4>Nästan framme-toasts</h4>
+          <p class="pa-platshallare">Platshållare: {label} &nbsp; {kvar} &nbsp; {nasta}</p>
+          <div id="pa-toast-nastan_framme"></div>
+          <div class="pa-spara-rad">
+            <button type="button" class="pa-spara-toast-btn" data-typ="nastan_framme">Spara nästan-framme-toasts</button>
+            <span class="pa-spara-ok" data-sparad="nastan_framme" hidden>Sparat!</span>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /pa-innehall -->
   </main>
+
+  <!-- Toast-container för förhandsgranskning -->
+  <div id="pa-toast-container" style="position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;z-index:10000;"></div>
+
   <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
 (function () {
   const API = '/api';
-  const innehall = document.getElementById('admin-ach-innehall');
-  const ingen = document.getElementById('admin-ach-ingen');
-  const statusEl = document.getElementById('admin-ach-status');
-  const tbody = document.getElementById('admin-ach-tbody');
-  const sparaBtn = document.getElementById('admin-ach-spara');
-  const sparadEl = document.getElementById('admin-ach-sparad');
-  const yrkesTbodyId = 'admin-yrkes-tbody';
-  const yrkesSparaId = 'admin-yrkes-spara';
+
+  /* ── Hjälpfunktioner ── */
 
   const labelByKey = {
     registreringar: 'Sparade registreringar',
@@ -101,308 +220,400 @@
     skisser: 'Skisser',
     unika_yrken: 'Unika yrken',
     storgravar: 'Storgravar (>3 gravsatta)',
-    yrke_kyrkans_man: 'Kyrkans man (kyrkliga yrken)',
-    yrke_havets_man: 'Havets män (sjöfolk/lotser)',
-    yrke_handelns_furste: 'Handelns furste (handelsyrken)',
-    yrke_fabrikens_herre: 'Fabrikens herre (bruk/fabrik)',
-    yrke_hantverkets_mastare: 'Hantverkets mästare (hantverkare)',
-    yrke_lardomens_vaktare: 'Lärdomens väktare (lärare m.fl.)',
-    yrke_lag_och_ordning: 'Lag & ordning (juridik/polis/tull)',
+    nattugglan: 'Nattugglan 🦉',
+    tidig_fagel: 'Tidig fågel ☀️',
+    helgarbetare: 'Helgarbetare 📅',
+    yrke_kyrkans_man: 'Kyrkans man',
+    yrke_havets_man: 'Havets män',
+    yrke_handelns_furste: 'Handelns furste',
+    yrke_fabrikens_herre: 'Fabrikens herre',
+    yrke_hantverkets_mastare: 'Hantverkets mästare',
+    yrke_lardomens_vaktare: 'Lärdomens väktare',
+    yrke_lag_och_ordning: 'Lag & ordning',
     yrke_fruar_mamseller: 'Fruar & mamseller',
-    yrke_jord_och_gard: 'Jord och gård (jordägare m.fl.)',
-    nattugglan: 'Nattugglan 🦉 (registreringar 22–06 UTC)',
-    tidig_fagel: 'Tidig fågel ☀️ (registreringar 05–08 UTC)',
-    helgarbetare: 'Helgarbetare 📅 (registreringar på lördagar/söndagar)',
+    yrke_jord_och_gard: 'Jord och gård',
   };
 
-  function levelClass(l) {
-    if (l === 'bronze') return 'niva-brons';
-    if (l === 'silver') return 'niva-silver';
-    if (l === 'gold') return 'niva-gold';
-    return '';
+  function nivaKlass(l) {
+    return l === 'gold' ? 'pa-niva-guld' : l === 'silver' ? 'pa-niva-silver' : 'pa-niva-brons';
+  }
+  function nivaEmoji(l) {
+    return l === 'gold' ? '🥇' : l === 'silver' ? '🥈' : '🥉';
+  }
+  function nivaText(l) {
+    return l === 'gold' ? 'Guld' : l === 'silver' ? 'Silver' : 'Brons';
   }
 
-  function levelLabel(l) {
-    if (l === 'bronze') return 'Brons';
-    if (l === 'silver') return 'Silver';
-    if (l === 'gold') return 'Guld';
-    return l;
-  }
-
-  function showTestToast(text) {
-    var container = document.getElementById('admin-toast-container');
-    if (!container) {
-      container = document.createElement('div');
-      container.id = 'admin-toast-container';
-      container.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:flex-end;z-index:10000;';
-      document.body.appendChild(container);
-    }
-    var el = document.createElement('div');
+  function visaToast(html) {
+    const c = document.getElementById('pa-toast-container');
+    const el = document.createElement('div');
     el.setAttribute('role', 'alert');
-    el.setAttribute('aria-live', 'polite');
     el.style.cssText = 'max-width:22rem;padding:0.8rem 1rem;background:#1e293b;color:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.25);font-size:0.9rem;';
-    el.innerHTML = text;
-    container.appendChild(el);
+    el.innerHTML = html;
+    c.appendChild(el);
     setTimeout(function () {
+      el.style.transition = 'opacity 0.2s';
       el.style.opacity = '0';
-      el.style.transform = 'translateY(4px)';
-      setTimeout(function () { el.remove(); }, 250);
+      setTimeout(function () { el.remove(); }, 220);
     }, 5500);
   }
 
-  function achievementTestText(key, level, label, threshold) {
-    var nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
-    var emoji = level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : level === 'gold' ? '🥇' : '🎉';
-    var safe = (label || key).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    var labelHtml = '<strong>' + safe + '</strong>';
-    var countText = (typeof threshold === 'number' && threshold > 0) ? threshold + ' st' : null;
-    var formuleringar = [
-      countText
-        ? emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + ' – ' + countText + '!'
-        : emoji + ' Du har nått ' + nivåNamn + ' i ' + labelHtml + '!',
-      countText
-        ? emoji + ' Ny utmärkelse i ' + labelHtml + ': ' + nivåNamn + ' (' + countText + ' totalt)!'
-        : emoji + ' Ny utmärkelse i ' + labelHtml + ': nivån ' + nivåNamn + '.',
-      countText
-        ? emoji + ' Bra jobbat – du har precis klättrat till ' + nivåNamn + '-nivå i ' + labelHtml + ' genom att nå ' + countText + '!'
-        : emoji + ' Bra jobbat – du har precis klättrat till ' + nivåNamn + '-nivå i ' + labelHtml + '.',
-    ];
-    return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+  /* Interpolera en mall med exempelvärden för förhandsgranskning */
+  function interpolera(mall, vars) {
+    return mall.replace(/\{(\w+)\}/g, function (_, k) {
+      var val = vars[k];
+      if (val == null) return '{' + k + '}';
+      var s = String(val);
+      if (k === 'label' || k === 'yrke') return '<strong>' + s.replace(/</g,'&lt;') + '</strong>';
+      return s;
+    });
   }
+
+  const EXEMPEL = {
+    achievement: { emoji: '🥇', niva: 'guld', label: 'Gravsatta', antal: '500 st' },
+    nytt_yrke:   { yrke: 'Kronofogden' },
+    nastan_framme: { label: 'Registreringar', kvar: '12 st', nasta: 'silver' },
+  };
+
+  function slumpadTestToast(text, typ) {
+    var vars = EXEMPEL[typ] || {};
+    return interpolera(text, vars);
+  }
+
+  /* Gränsvärde-testtoast baserat på tabellraden */
+  function testToastFranRad(key, level, label, threshold) {
+    var emoji = nivaEmoji(level);
+    var niva = level === 'gold' ? 'guld' : level === 'silver' ? 'silver' : 'brons';
+    var antal = threshold > 0 ? threshold + ' st' : '';
+    var mall = '{emoji} Du har nått {niva} i {label}' + (antal ? ' – {antal}!' : '!');
+    return interpolera(mall, { emoji, niva, label: label || key, antal });
+  }
+
+  /* ── Bygg gränsvärde-tabeller ── */
+
+  function byggTabell(tbodyEl, nivaer) {
+    tbodyEl.innerHTML = '';
+    var foregatKey = null;
+    var radIndex = 0;
+    nivaer.forEach(function (n) {
+      var tr = document.createElement('tr');
+      var arNyGrupp = n.achievement_key !== foregatKey;
+      if (arNyGrupp) {
+        tr.className = 'pa-grupp-start' + (radIndex === 0 ? ' pa-forsta' : '');
+        foregatKey = n.achievement_key;
+        radIndex++;
+      }
+      var labelText = labelByKey[n.achievement_key] || n.achievement_key;
+      var safe = function (s) { return String(s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;'); };
+
+      var tdNamn = document.createElement('td');
+      if (arNyGrupp) {
+        tdNamn.style.fontWeight = '500';
+        tdNamn.textContent = labelText;
+      } else {
+        tdNamn.style.color = '#94a3b8';
+        tdNamn.textContent = '↳';
+      }
+
+      var tdNiva = document.createElement('td');
+      tdNiva.innerHTML = '<span class="pa-niva-badge ' + nivaKlass(n.level) + '">' + nivaEmoji(n.level) + ' ' + nivaText(n.level) + '</span>';
+
+      var tdGrans = document.createElement('td');
+      var inp = document.createElement('input');
+      inp.type = 'number'; inp.min = '0';
+      inp.value = n.threshold != null ? n.threshold : 0;
+      inp.dataset.key = n.achievement_key;
+      inp.dataset.level = n.level;
+      inp.className = 'pa-gransvarde-inp';
+      tdGrans.appendChild(inp);
+
+      var tdEtikett = document.createElement('td');
+      var inpEt = document.createElement('input');
+      inpEt.type = 'text';
+      inpEt.value = n.label || '';
+      inpEt.placeholder = 't.ex. 10 st';
+      inpEt.dataset.key = n.achievement_key;
+      inpEt.dataset.level = n.level;
+      inpEt.className = 'pa-etikett-inp';
+      tdEtikett.appendChild(inpEt);
+
+      var tdTesta = document.createElement('td');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pa-testa-btn';
+      btn.textContent = '▶ Testa';
+      btn.dataset.key = n.achievement_key;
+      btn.dataset.level = n.level;
+      btn.dataset.label = labelText;
+      btn.dataset.threshold = n.threshold != null ? n.threshold : 0;
+      btn.addEventListener('click', function () {
+        var t = parseInt(this.dataset.threshold, 10) || 0;
+        visaToast(testToastFranRad(this.dataset.key, this.dataset.level, this.dataset.label, t));
+      });
+      tdTesta.appendChild(btn);
+
+      tr.appendChild(tdNamn);
+      tr.appendChild(tdNiva);
+      tr.appendChild(tdGrans);
+      tr.appendChild(tdEtikett);
+      tr.appendChild(tdTesta);
+      tbodyEl.appendChild(tr);
+    });
+  }
+
+  /* ── Bygg yrkesgrupp-accordion ── */
+
+  function byggYrkesGrupp(container, grupper) {
+    container.innerHTML = '';
+    grupper.forEach(function (g) {
+      var key = g.achievement_key;
+      var yrken = g.yrken || [];
+      var labelText = labelByKey[key] || key;
+
+      var kort = document.createElement('details');
+      kort.className = 'pa-yrke-kort';
+
+      var summary = document.createElement('summary');
+      summary.className = 'pa-yrke-header';
+      summary.innerHTML =
+        '<span class="pa-yrke-namn">' + labelText + '</span>' +
+        '<span class="pa-yrke-badge" data-badge="' + key + '">' + yrken.length + ' yrken</span>' +
+        '<span class="pa-yrke-chevron">▶</span>';
+      kort.appendChild(summary);
+
+      var body = document.createElement('div');
+      body.className = 'pa-yrke-body';
+
+      var radLista = document.createElement('div');
+      radLista.className = 'pa-yrke-rad-lista';
+
+      function laggTillYrkeRad(val) {
+        var rad = document.createElement('div');
+        rad.className = 'pa-yrke-rad';
+        var inp = document.createElement('input');
+        inp.type = 'text'; inp.value = val || '';
+        inp.setAttribute('data-yrke', '1');
+        var rm = document.createElement('button');
+        rm.type = 'button'; rm.textContent = '✕'; rm.className = 'pa-rm-btn'; rm.title = 'Ta bort';
+        rm.addEventListener('click', function () {
+          rad.remove();
+          uppdateraBadge(key, radLista, body.querySelector('[data-badge-lokal]'));
+        });
+        rad.appendChild(inp); rad.appendChild(rm);
+        radLista.appendChild(rad);
+      }
+
+      if (yrken.length === 0) laggTillYrkeRad('');
+      else yrken.forEach(laggTillYrkeRad);
+
+      var addBtn = document.createElement('button');
+      addBtn.type = 'button'; addBtn.className = 'pa-add-btn'; addBtn.textContent = '+ Lägg till yrke';
+      addBtn.addEventListener('click', function () { laggTillYrkeRad(''); });
+
+      var fotsteg = document.createElement('div');
+      fotsteg.className = 'pa-yrke-fot';
+
+      var sparaBtn = document.createElement('button');
+      sparaBtn.type = 'button'; sparaBtn.textContent = 'Spara gruppen';
+      sparaBtn.addEventListener('click', function () {
+        var nyaYrken = [];
+        radLista.querySelectorAll('input[data-yrke]').forEach(function (i) {
+          var v = (i.value || '').trim();
+          if (v && nyaYrken.indexOf(v) === -1) nyaYrken.push(v);
+        });
+        sparaBtn.disabled = true;
+        fetch(API + '/admin/achievement-yrkesgrupp', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ achievement_key: key, yrken: nyaYrken }),
+          credentials: 'include',
+        })
+        .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+        .then(function (data) {
+          okEl.hidden = false;
+          okEl.textContent = 'Sparat – ' + (data.antal_yrken || 0) + ' yrken.';
+          // Uppdatera badge
+          var badge = summary.querySelector('.pa-yrke-badge');
+          if (badge) badge.textContent = nyaYrken.length + ' yrken';
+          setTimeout(function () { okEl.hidden = true; }, 3000);
+        })
+        .catch(function () { okEl.textContent = 'Fel vid sparande.'; okEl.className = 'pa-spara-fel'; okEl.hidden = false; })
+        .finally(function () { sparaBtn.disabled = false; });
+      });
+
+      var okEl = document.createElement('span');
+      okEl.className = 'pa-spara-ok'; okEl.hidden = true;
+
+      fotsteg.appendChild(addBtn);
+      fotsteg.appendChild(sparaBtn);
+      fotsteg.appendChild(okEl);
+
+      body.appendChild(radLista);
+      body.appendChild(fotsteg);
+      kort.appendChild(body);
+      container.appendChild(kort);
+    });
+  }
+
+  function uppdateraBadge(key, radLista, _el) {
+    /* räknas om på sparning – inget extra behövs */
+  }
+
+  /* ── Bygg toast-text-editorer ── */
+
+  function byggToastEditor(containerId, formuleringar) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    formuleringar.forEach(function (f) {
+      var rad = document.createElement('div');
+      rad.className = 'pa-toast-rad';
+
+      var ta = document.createElement('textarea');
+      ta.value = f.text;
+      ta.rows = 2;
+      ta.dataset.id = f.id;
+      ta.dataset.typ = f.typ;
+
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'pa-toast-forhandsgr'; btn.title = 'Förhandsgranska';
+      btn.textContent = '▶';
+      btn.addEventListener('click', function () {
+        visaToast(slumpadTestToast(ta.value, f.typ));
+      });
+
+      rad.appendChild(ta); rad.appendChild(btn);
+      container.appendChild(rad);
+    });
+  }
+
+  /* ── Huvudladdning ── */
 
   Promise.all([
     fetch(API + '/me', { credentials: 'include' }).then(function (r) { return r.ok ? r.json() : null; }),
     fetch(API + '/admin/achievement-niva', { credentials: 'include' }),
-    fetch(API + '/admin/achievement-yrkesgrupp', { credentials: 'include' })
-  ]).then(function ([me, resNiva, resYrken]) {
+    fetch(API + '/admin/achievement-yrkesgrupp', { credentials: 'include' }),
+    fetch(API + '/admin/toast-formuleringar', { credentials: 'include' }),
+  ]).then(function (results) {
+    var me = results[0];
+    var resNiva = results[1];
+    var resYrken = results[2];
+    var resToast = results[3];
+
     if (!me || !me.is_admin) {
-      ingen.hidden = false;
-      statusEl.hidden = true;
+      document.getElementById('pa-ingen').hidden = false;
+      document.getElementById('pa-status').hidden = true;
       return null;
     }
-    if (resNiva.status === 401) {
-      window.location.href = '/login?redirect=' + encodeURIComponent('/installningar/prestationsgranser');
-      return null;
-    }
-    if (resNiva.status === 403) {
-      ingen.hidden = false;
-      statusEl.hidden = true;
-      return null;
-    }
+    if (resNiva.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent(location.pathname); return null; }
     if (!resNiva.ok) throw new Error('Kunde inte ladda nivåer');
-    if (resYrken.status === 401 || resYrken.status === 403) {
-      // Om vi inte får yrkesgrupper men nivåer fungerar så fortsätter vi ändå
-      return Promise.all([resNiva.json(), null]);
-    }
-    return Promise.all([resNiva.json(), resYrken.ok ? resYrken.json() : null]);
+
+    return Promise.all([
+      resNiva.json(),
+      resYrken.ok ? resYrken.json() : null,
+      resToast.ok ? resToast.json() : null,
+    ]);
   })
   .then(function (allData) {
     if (!allData) return;
-    var data = allData[0];
-    var yrkesData = allData[1];
-    ingen.hidden = true;
-    statusEl.hidden = true;
-    innehall.hidden = false;
-    tbody.innerHTML = '';
-    (data.nivaer || []).forEach(function (n) {
-      const tr = document.createElement('tr');
-      const keyAttr = (n.achievement_key || '').replace(/"/g, '&quot;');
-      const levelAttr = (n.level || '').replace(/"/g, '&quot;');
-      const labelText = labelByKey[n.achievement_key] || n.achievement_key;
-      tr.innerHTML =
-        '<td><button type="button" class="admin-ach-test-btn" data-key="' + keyAttr + '" data-level="' + levelAttr + '" data-label="' + labelText.replace(/"/g, '&quot;') + '" data-threshold="' + (n.threshold != null ? n.threshold : 0) + '">' + labelText + '</button></td>' +
-        '<td><span class="' + levelClass(n.level) + '">' + levelLabel(n.level) + '</span></td>' +
-        '<td><input type="number" min="0" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.threshold != null ? n.threshold : 0) + '" /></td>' +
-        '<td><input type="text" data-key="' + (n.achievement_key || '').replace(/"/g, '&quot;') + '" data-level="' + (n.level || '').replace(/"/g, '&quot;') + '" value="' + (n.label || '') + '" placeholder="t.ex. 10 st" style="width:8rem;padding:0.3rem 0.4rem;" /></td>';
-      tbody.appendChild(tr);
+    var nivaData = allData[0];
+    var yrkeData = allData[1];
+    var toastData = allData[2];
+
+    document.getElementById('pa-status').hidden = true;
+    document.getElementById('pa-innehall').hidden = false;
+
+    /* Gränsvärden */
+    var nivaer = nivaData.nivaer || [];
+    var regNivaer  = nivaer.filter(function (n) { return !String(n.achievement_key).startsWith('yrke_'); });
+    var yrkeNivaer = nivaer.filter(function (n) { return String(n.achievement_key).startsWith('yrke_'); });
+    byggTabell(document.getElementById('pa-tbody-reg'),  regNivaer);
+    byggTabell(document.getElementById('pa-tbody-yrke'), yrkeNivaer);
+
+    /* Spara gränsvärden */
+    document.getElementById('pa-spara-granser').addEventListener('click', function () {
+      var inputs = document.querySelectorAll('.pa-gransvarde-inp');
+      var etiketter = document.querySelectorAll('.pa-etikett-inp');
+      var updates = [];
+      inputs.forEach(function (inp) {
+        updates.push({ achievement_key: inp.dataset.key, level: inp.dataset.level, threshold: parseInt(inp.value, 10) || 0, label: null });
+      });
+      etiketter.forEach(function (inp) {
+        var u = updates.find(function (x) { return x.achievement_key === inp.dataset.key && x.level === inp.dataset.level; });
+        if (u) u.label = (inp.value || '').trim() || null;
+      });
+      var btn = this; btn.disabled = true;
+      var okEl  = document.getElementById('pa-spara-granser-ok');
+      var felEl = document.getElementById('pa-spara-granser-fel');
+      okEl.hidden = true; felEl.hidden = true;
+
+      Promise.all(updates.map(function (u) {
+        return fetch(API + '/admin/achievement-niva', {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(u),
+        });
+      }))
+      .then(function (rs) {
+        if (rs.some(function (r) { return !r.ok; })) throw new Error();
+        okEl.hidden = false;
+        setTimeout(function () { okEl.hidden = true; }, 3000);
+      })
+      .catch(function () { felEl.textContent = 'Kunde inte spara alla.'; felEl.hidden = false; })
+      .finally(function () { btn.disabled = false; });
     });
 
-    // Bygg yrkesgrupp-tabellen om vi har data
-    if (yrkesData && yrkesData.grupper) {
-      var yrkesTbody = document.getElementById(yrkesTbodyId);
-      if (yrkesTbody) {
-        yrkesTbody.innerHTML = '';
-
-        function skapaYrkesInput(radLista, key, value) {
-          var rad = document.createElement('div');
-          rad.style.display = 'flex';
-          rad.style.alignItems = 'center';
-          rad.style.gap = '0.25rem';
-          rad.style.marginBottom = '0.25rem';
-
-          var inp = document.createElement('input');
-          inp.type = 'text';
-          inp.value = value || '';
-          inp.setAttribute('data-yrke', '1');
-          inp.style.flex = '1 1 auto';
-          inp.style.padding = '0.25rem 0.4rem';
-
-          var rmBtn = document.createElement('button');
-          rmBtn.type = 'button';
-          rmBtn.textContent = '−';
-          rmBtn.title = 'Ta bort yrke';
-          rmBtn.style.padding = '0.1rem 0.4rem';
-          rmBtn.style.border = '1px solid #e2e8f0';
-          rmBtn.style.background = '#fee2e2';
-          rmBtn.style.cursor = 'pointer';
-          rmBtn.addEventListener('click', function () {
-            rad.remove();
-          });
-
-          rad.appendChild(inp);
-          rad.appendChild(rmBtn);
-          radLista.appendChild(rad);
-        }
-
-        (yrkesData.grupper || []).forEach(function (g) {
-          var key = g.achievement_key;
-          var yrken = g.yrken || [];
-          var labelText = labelByKey[key] || key;
-
-          var tr = document.createElement('tr');
-          var tdLabel = document.createElement('td');
-          tdLabel.innerHTML = labelText + '<br><small style="color:#64748b;">' + key + '</small>';
-
-          var tdYrken = document.createElement('td');
-          var wrapper = document.createElement('div');
-          wrapper.setAttribute('data-key', key);
-          wrapper.style.display = 'flex';
-          wrapper.style.flexDirection = 'column';
-          wrapper.style.gap = '0.25rem';
-
-          var radLista = document.createElement('div');
-          radLista.className = 'yrkes-rad-list';
-
-          if (yrken.length === 0) {
-            skapaYrkesInput(radLista, key, '');
-          } else {
-            yrken.forEach(function (y) {
-              skapaYrkesInput(radLista, key, y);
-            });
-          }
-
-          var addBtn = document.createElement('button');
-          addBtn.type = 'button';
-          addBtn.textContent = '+ Lägg till yrke';
-          addBtn.className = 'yrkes-add-btn';
-          addBtn.style.alignSelf = 'flex-start';
-          addBtn.style.padding = '0.15rem 0.5rem';
-          addBtn.style.border = '1px solid #e2e8f0';
-          addBtn.style.background = '#f1f5f9';
-          addBtn.style.cursor = 'pointer';
-          addBtn.addEventListener('click', function () {
-            skapaYrkesInput(radLista, key, '');
-          });
-
-          wrapper.appendChild(radLista);
-          wrapper.appendChild(addBtn);
-          tdYrken.appendChild(wrapper);
-
-          tr.appendChild(tdLabel);
-          tr.appendChild(tdYrken);
-          yrkesTbody.appendChild(tr);
-        });
-      }
+    /* Yrkesgrupper */
+    if (yrkeData && yrkeData.grupper) {
+      byggYrkesGrupp(document.getElementById('pa-yrke-lista'), yrkeData.grupper);
     }
+
+    /* Toast-texter */
+    if (toastData && toastData.formuleringar) {
+      var formByTyp = {};
+      toastData.formuleringar.forEach(function (f) {
+        if (!formByTyp[f.typ]) formByTyp[f.typ] = [];
+        formByTyp[f.typ].push(f);
+      });
+      ['achievement', 'nytt_yrke', 'nastan_framme'].forEach(function (typ) {
+        byggToastEditor('pa-toast-' + typ, formByTyp[typ] || []);
+      });
+    }
+
+    /* Spara toast-texter per typ */
+    document.querySelectorAll('.pa-spara-toast-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var typ = this.dataset.typ;
+        var textareas = document.querySelectorAll('#pa-toast-' + typ + ' textarea');
+        var okEl = document.querySelector('[data-sparad="' + typ + '"]');
+        btn.disabled = true;
+        var sparningar = [];
+        textareas.forEach(function (ta) {
+          var id = parseInt(ta.dataset.id, 10);
+          var text = (ta.value || '').trim();
+          if (!text) return;
+          sparningar.push(fetch(API + '/admin/toast-formulering/' + id, {
+            method: 'PATCH', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text }),
+          }));
+        });
+        Promise.all(sparningar)
+          .then(function (rs) {
+            if (rs.some(function (r) { return !r.ok; })) throw new Error();
+            if (okEl) { okEl.hidden = false; setTimeout(function () { okEl.hidden = true; }, 3000); }
+          })
+          .catch(function () { showToast('Fel vid sparande av toast-texter', 'fel'); })
+          .finally(function () { btn.disabled = false; });
+      });
+    });
   })
   .catch(function (e) {
-    statusEl.textContent = 'Fel: ' + (e.message || 'nätverksfel');
-    statusEl.className = 'admin-ach-fel';
+    var s = document.getElementById('pa-status');
+    s.textContent = 'Fel: ' + (e.message || 'nätverksfel');
+    s.className = 'pa-fel';
   });
 
-  sparaBtn.addEventListener('click', function () {
-    const rows = tbody.querySelectorAll('tr');
-    const updates = [];
-    rows.forEach(function (tr) {
-      const numInp = tr.querySelector('input[type="number"]');
-      const textInp = tr.querySelector('input[type="text"]');
-      if (!numInp || !textInp) return;
-      updates.push({
-        achievement_key: numInp.dataset.key,
-        level: numInp.dataset.level,
-        threshold: parseInt(numInp.value, 10) || 0,
-        label: (textInp.value || '').trim() || null,
-      });
-    });
-    sparaBtn.disabled = true;
-    Promise.all(updates.map(function (u) {
-      return fetch(API + '/admin/achievement-niva', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(u),
-        credentials: 'include',
-      });
-    }))
-    .then(function (responses) {
-      const failed = responses.some(function (r) { return !r.ok; });
-      if (failed) throw new Error('Kunde inte spara alla');
-      sparadEl.hidden = false;
-      sparadEl.textContent = 'Sparat.';
-      setTimeout(function () { sparadEl.hidden = true; }, 3000);
-    })
-    .catch(function (e) {
-      showToast('Kunde inte spara: ' + (e.message || 'nätverksfel'), 'fel');
-    })
-    .finally(function () {
-      sparaBtn.disabled = false;
-    });
-  });
-
-  tbody.addEventListener('click', function (e) {
-    const btn = e.target.closest('.admin-ach-test-btn');
-    if (!btn) return;
-    const key = btn.dataset.key;
-    const level = btn.dataset.level;
-    const label = btn.dataset.label || key;
-    const threshold = parseInt(btn.dataset.threshold || '0', 10) || 0;
-    const text = achievementTestText(key, level, label, threshold);
-    showTestToast(text);
-  });
-
-  // Händelse för att spara yrkesgrupper (hela tabellen)
-  document.addEventListener('click', function (e) {
-    var yrkesSparaBtn = e.target.closest('#' + yrkesSparaId);
-    if (!yrkesSparaBtn) return;
-    var yrkesTbody = document.getElementById(yrkesTbodyId);
-    if (!yrkesTbody) return;
-    var rows = yrkesTbody.querySelectorAll('tr');
-    var updates = [];
-    rows.forEach(function (tr) {
-      var wrapper = tr.querySelector('td:nth-child(2) [data-key]');
-      if (!wrapper) return;
-      var key = wrapper.getAttribute('data-key');
-      var yrken = [];
-      var inps = wrapper.querySelectorAll('input[type="text"][data-yrke]');
-      inps.forEach(function (inp) {
-        var v = (inp.value || '').trim();
-        if (v && yrken.indexOf(v) === -1) {
-          yrken.push(v);
-        }
-      });
-      updates.push({ achievement_key: key, yrken: yrken });
-    });
-    if (!updates.length) return;
-    yrkesSparaBtn.disabled = true;
-    Promise.all(updates.map(function (u) {
-      return fetch(API + '/admin/achievement-yrkesgrupp', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(u),
-        credentials: 'include',
-      });
-    }))
-    .then(function (responses) {
-      var failed = responses.some(function (r) { return !r.ok; });
-      if (failed) throw new Error('Kunde inte spara alla yrkesgrupper');
-      showTestToast('Yrkesgrupper sparade.');
-    })
-    .catch(function (e) {
-      showToast('Kunde inte spara yrkesgrupper: ' + (e.message || 'nätverksfel'), 'fel');
-    })
-    .finally(function () {
-      yrkesSparaBtn.disabled = false;
-    });
-  });
 })();
   </script>
 </body>

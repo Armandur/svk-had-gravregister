@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, hash_password, verify_password
 from app.database import (
     GravplatsRedigeringslogg,
+    ToastFormulering,
     User,
     get_db,
 )
@@ -168,4 +169,16 @@ async def me_achievements(
         "forsta_registrering": first_at,
         "senaste_registrering": last_at,
         "nivaer": nivaer,
+    }
+
+
+@router.get("/api/toast-formuleringar")
+async def get_toast_formuleringar(db: Session = Depends(get_db)):
+    """Hämta redigerbara toast-texter. Ingen inloggning krävs (texterna är inte känsliga)."""
+    rows = db.query(ToastFormulering).order_by(ToastFormulering.typ, ToastFormulering.sortering).all()
+    return {
+        "formuleringar": [
+            {"id": r.id, "typ": r.typ, "sortering": r.sortering, "text": r.text}
+            for r in rows
+        ]
     }
