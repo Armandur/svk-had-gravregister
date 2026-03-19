@@ -24,6 +24,7 @@ from app.database import (
 from app.schemas import (
     AchievementNivaUpdateBody,
     AchievementYrkesGruppBody,
+    ToastFormuleringCreateBody,
     ToastFormuleringUpdateBody,
     ApiKeysBody,
     ClaudeAktivBody,
@@ -588,4 +589,39 @@ async def update_toast_formulering(
     row.text = (body.text or "").strip()
     db.commit()
     return {"ok": True, "id": row.id, "typ": row.typ, "text": row.text}
+
+
+@router.post("/api/admin/toast-formulering")
+async def create_toast_formulering(
+    body: ToastFormuleringCreateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Skapa en ny toast-formulering – endast admin."""
+    from sqlalchemy import func as sqlfunc
+    typ = (body.typ or "").strip()
+    text = (body.text or "").strip()
+    if not typ or not text:
+        raise HTTPException(status_code=400, detail="typ och text krävs")
+    max_sort = db.query(sqlfunc.max(ToastFormulering.sortering)).filter(ToastFormulering.typ == typ).scalar() or 0
+    row = ToastFormulering(typ=typ, sortering=max_sort + 1, text=text)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"ok": True, "id": row.id, "typ": row.typ, "sortering": row.sortering, "text": row.text}
+
+
+@router.delete("/api/admin/toast-formulering/{formulering_id:int}")
+async def delete_toast_formulering(
+    formulering_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort en toast-formulering – endast admin."""
+    row = db.query(ToastFormulering).filter(ToastFormulering.id == formulering_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Formulering hittades inte")
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": formulering_id}
 

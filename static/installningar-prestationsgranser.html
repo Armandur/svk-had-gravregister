@@ -101,6 +101,16 @@
     .pa-toast-forhandsgr { padding: 0.25rem 0.55rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #f8fafc; cursor: pointer; font-size: 0.8rem; white-space: nowrap; }
     .pa-toast-forhandsgr:hover { background: #e2e8f0; }
 
+    /* Primärknapp */
+    .pa-btn {
+      padding: 0.35rem 0.9rem; font-size: 0.88rem; font-weight: 500;
+      border: 1px solid #2563eb; border-radius: 5px;
+      background: #2563eb; color: #fff; cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .pa-btn:hover   { background: #1d4ed8; border-color: #1d4ed8; }
+    .pa-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
     /* Laddar/fel */
     .pa-laddar { color: #64748b; font-size: 0.92rem; }
     .pa-fel { color: #b91c1c; font-size: 0.92rem; }
@@ -142,7 +152,7 @@
         </table>
 
         <div class="pa-spara-rad">
-          <button type="button" id="pa-spara-granser">Spara gränsvärden</button>
+          <button type="button" id="pa-spara-granser" class="pa-btn">Spara gränsvärden</button>
           <span id="pa-spara-granser-ok" class="pa-spara-ok" hidden aria-live="polite">Sparat!</span>
           <span id="pa-spara-granser-fel" class="pa-spara-fel" hidden aria-live="polite"></span>
         </div>
@@ -171,7 +181,7 @@
           <p class="pa-platshallare">Platshållare: {emoji} &nbsp; {niva} &nbsp; {label} &nbsp; {antal}</p>
           <div id="pa-toast-achievement"></div>
           <div class="pa-spara-rad">
-            <button type="button" class="pa-spara-toast-btn" data-typ="achievement">Spara achievement-toasts</button>
+            <button type="button" class="pa-btn pa-spara-toast-btn" data-typ="achievement">Spara</button>
             <span class="pa-spara-ok" data-sparad="achievement" hidden>Sparat!</span>
           </div>
         </div>
@@ -181,7 +191,7 @@
           <p class="pa-platshallare">Platshållare: {yrke}</p>
           <div id="pa-toast-nytt_yrke"></div>
           <div class="pa-spara-rad">
-            <button type="button" class="pa-spara-toast-btn" data-typ="nytt_yrke">Spara yrkestoasts</button>
+            <button type="button" class="pa-btn pa-spara-toast-btn" data-typ="nytt_yrke">Spara</button>
             <span class="pa-spara-ok" data-sparad="nytt_yrke" hidden>Sparat!</span>
           </div>
         </div>
@@ -191,7 +201,7 @@
           <p class="pa-platshallare">Platshållare: {label} &nbsp; {kvar} &nbsp; {nasta}</p>
           <div id="pa-toast-nastan_framme"></div>
           <div class="pa-spara-rad">
-            <button type="button" class="pa-spara-toast-btn" data-typ="nastan_framme">Spara nästan-framme-toasts</button>
+            <button type="button" class="pa-btn pa-spara-toast-btn" data-typ="nastan_framme">Spara</button>
             <span class="pa-spara-ok" data-sparad="nastan_framme" hidden>Sparat!</span>
           </div>
         </div>
@@ -208,6 +218,9 @@
   <script>
 (function () {
   const API = '/api';
+
+  /* Laddade toast-texter – används för randomisering i testknapparna */
+  var _laddadeFormData = [];
 
   /* ── Hjälpfunktioner ── */
 
@@ -280,13 +293,16 @@
     return interpolera(text, vars);
   }
 
-  /* Gränsvärde-testtoast baserat på tabellraden */
+  /* Gränsvärde-testtoast – slumpar bland achievement-texterna från DB */
   function testToastFranRad(key, level, label, threshold) {
     var emoji = nivaEmoji(level);
     var niva = level === 'gold' ? 'guld' : level === 'silver' ? 'silver' : 'brons';
     var antal = threshold > 0 ? threshold + ' st' : '';
-    var mall = '{emoji} Du har nått {niva} i {label}' + (antal ? ' – {antal}!' : '!');
-    return interpolera(mall, { emoji, niva, label: label || key, antal });
+    var texter = _laddadeFormData.filter(function (f) { return f.typ === 'achievement'; });
+    var mall = texter.length
+      ? texter[Math.floor(Math.random() * texter.length)].text
+      : '{emoji} Du har nått {niva} i {label}' + (antal ? ' – {antal}!' : '!');
+    return interpolera(mall, { emoji: emoji, niva: niva, label: label || key, antal: antal });
   }
 
   /* ── Bygg gränsvärde-tabeller ── */
@@ -414,7 +430,7 @@
       fotsteg.className = 'pa-yrke-fot';
 
       var sparaBtn = document.createElement('button');
-      sparaBtn.type = 'button'; sparaBtn.textContent = 'Spara gruppen';
+      sparaBtn.type = 'button'; sparaBtn.className = 'pa-btn'; sparaBtn.textContent = 'Spara gruppen';
       sparaBtn.addEventListener('click', function () {
         var nyaYrken = [];
         radLista.querySelectorAll('input[data-yrke]').forEach(function (i) {
@@ -461,30 +477,57 @@
 
   /* ── Bygg toast-text-editorer ── */
 
+  function skapaToastRad(id, text, typ, container) {
+    var rad = document.createElement('div');
+    rad.className = 'pa-toast-rad';
+    if (id) rad.dataset.id = String(id);
+    rad.dataset.typ = typ;
+
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.rows = 2;
+
+    var forBtn = document.createElement('button');
+    forBtn.type = 'button'; forBtn.className = 'pa-toast-forhandsgr'; forBtn.title = 'Förhandsgranska';
+    forBtn.textContent = '▶';
+    forBtn.addEventListener('click', function () { visaToast(slumpadTestToast(ta.value, typ)); });
+
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button'; rmBtn.className = 'pa-rm-btn'; rmBtn.title = 'Ta bort';
+    rmBtn.textContent = '✕';
+    rmBtn.addEventListener('click', function () {
+      if (rad.dataset.id) {
+        /* Befintlig rad – spara ID för borttagning och göm */
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden'; hidden.className = 'pa-delete-id';
+        hidden.value = rad.dataset.id;
+        container.appendChild(hidden);
+      }
+      rad.remove();
+    });
+
+    rad.appendChild(ta); rad.appendChild(forBtn); rad.appendChild(rmBtn);
+    return rad;
+  }
+
   function byggToastEditor(containerId, formuleringar) {
     var container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = '';
+    var typ = containerId.replace('pa-toast-', '');
+
     formuleringar.forEach(function (f) {
-      var rad = document.createElement('div');
-      rad.className = 'pa-toast-rad';
-
-      var ta = document.createElement('textarea');
-      ta.value = f.text;
-      ta.rows = 2;
-      ta.dataset.id = f.id;
-      ta.dataset.typ = f.typ;
-
-      var btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'pa-toast-forhandsgr'; btn.title = 'Förhandsgranska';
-      btn.textContent = '▶';
-      btn.addEventListener('click', function () {
-        visaToast(slumpadTestToast(ta.value, f.typ));
-      });
-
-      rad.appendChild(ta); rad.appendChild(btn);
-      container.appendChild(rad);
+      container.appendChild(skapaToastRad(f.id, f.text, f.typ, container));
     });
+
+    var addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'pa-add-btn'; addBtn.textContent = '+ Ny variant';
+    addBtn.addEventListener('click', function () {
+      var ny = skapaToastRad(null, '', typ, container);
+      container.insertBefore(ny, addBtn);
+      ny.querySelector('textarea').focus();
+    });
+    container.appendChild(addBtn);
   }
 
   /* ── Huvudladdning ── */
@@ -522,6 +565,11 @@
 
     document.getElementById('pa-status').hidden = true;
     document.getElementById('pa-innehall').hidden = false;
+
+    /* Spara laddade toast-texter för randomisering i testknapparna */
+    if (toastData && toastData.formuleringar) {
+      _laddadeFormData = toastData.formuleringar;
+    }
 
     /* Gränsvärden */
     var nivaer = nivaData.nivaer || [];
@@ -580,27 +628,62 @@
       });
     }
 
-    /* Spara toast-texter per typ */
+    /* Spara toast-texter per typ: PATCH befintliga, POST nya, DELETE borttagna */
     document.querySelectorAll('.pa-spara-toast-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var typ = this.dataset.typ;
-        var textareas = document.querySelectorAll('#pa-toast-' + typ + ' textarea');
+        var container = document.getElementById('pa-toast-' + typ);
         var okEl = document.querySelector('[data-sparad="' + typ + '"]');
         btn.disabled = true;
         var sparningar = [];
-        textareas.forEach(function (ta) {
-          var id = parseInt(ta.dataset.id, 10);
+
+        /* Befintliga (med data-id) och nya (utan data-id) */
+        container.querySelectorAll('.pa-toast-rad').forEach(function (rad) {
+          var ta = rad.querySelector('textarea');
           var text = (ta.value || '').trim();
           if (!text) return;
-          sparningar.push(fetch(API + '/admin/toast-formulering/' + id, {
-            method: 'PATCH', credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text }),
+          var id = rad.dataset.id ? parseInt(rad.dataset.id, 10) : null;
+          if (id) {
+            sparningar.push(fetch(API + '/admin/toast-formulering/' + id, {
+              method: 'PATCH', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: text }),
+            }));
+          } else {
+            sparningar.push(fetch(API + '/admin/toast-formulering', {
+              method: 'POST', credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ typ: typ, text: text }),
+            }).then(function (r) {
+              if (!r.ok) throw new Error();
+              return r.json();
+            }).then(function (data) {
+              /* Uppdatera rad med det nya ID:t från servern */
+              if (data && data.id) rad.dataset.id = String(data.id);
+              return { ok: true };
+            }));
+          }
+        });
+
+        /* Borttagningar */
+        container.querySelectorAll('.pa-delete-id').forEach(function (inp) {
+          sparningar.push(fetch(API + '/admin/toast-formulering/' + inp.value, {
+            method: 'DELETE', credentials: 'include',
           }));
         });
+
         Promise.all(sparningar)
           .then(function (rs) {
-            if (rs.some(function (r) { return !r.ok; })) throw new Error();
+            /* Rensa borttagningsmarkeringar */
+            container.querySelectorAll('.pa-delete-id').forEach(function (inp) { inp.remove(); });
+            /* Uppdatera cache */
+            var alla = [];
+            container.querySelectorAll('.pa-toast-rad').forEach(function (rad) {
+              var ta = rad.querySelector('textarea');
+              var text = (ta.value || '').trim();
+              if (text && rad.dataset.id) alla.push({ id: parseInt(rad.dataset.id, 10), typ: typ, text: text });
+            });
+            _laddadeFormData = _laddadeFormData.filter(function (f) { return f.typ !== typ; }).concat(alla);
             if (okEl) { okEl.hidden = false; setTimeout(function () { okEl.hidden = true; }, 3000); }
           })
           .catch(function () { showToast('Fel vid sparande av toast-texter', 'fel'); })

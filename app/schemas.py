@@ -66,6 +66,11 @@ class ToastFormuleringUpdateBody(BaseModel):
     text: str
 
 
+class ToastFormuleringCreateBody(BaseModel):
+    typ: str   # achievement | nytt_yrke | nastan_framme
+    text: str
+
+
 # ---------- Admin: kyrkogårdar ----------
 
 class KyrkogardCreateBody(BaseModel):
