@@ -3,6 +3,53 @@
  * Extraherat från gravplatser.js. Laddas före gravplatser.js.
  */
 
+// ---- Toast-texter från API ----
+
+/** Cache för laddade toast-texter (null = ej laddade ännu, [] = laddade men tomma). */
+var _gpToastTexter = null;
+
+/** Hämtar toast-texterna från /api/toast-formuleringar en gång och cachar dem. */
+function _gpHämtaToastTexter() {
+  if (_gpToastTexter !== null) return Promise.resolve(_gpToastTexter);
+  return fetch('/api/toast-formuleringar')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (data) {
+      _gpToastTexter = (data && data.formuleringar) ? data.formuleringar : [];
+      return _gpToastTexter;
+    })
+    .catch(function () { _gpToastTexter = []; return []; });
+}
+
+// Förhämta vid sidladdning så texterna finns redo när användaren sparar
+_gpHämtaToastTexter();
+
+/**
+ * Interpolerar en mall-sträng med givna variabler.
+ * {label} och {yrke} escapes och wrappas i <strong>.
+ * Övriga platshållare ersätts med plain text.
+ */
+function _gpInterpolera(mall, vars) {
+  return mall.replace(/\{(\w+)\}/g, function (_, k) {
+    var val = vars[k];
+    if (val == null || val === '') return '';
+    var s = String(val);
+    if (k === 'label' || k === 'yrke') {
+      var safe = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return '<strong>' + safe + '</strong>';
+    }
+    return s;
+  });
+}
+
+/** Slumpar en text bland de av given typ. Faller tillbaka på hårdkodat om listan är tom. */
+function _gpSlumpText(typ, fallback) {
+  var texter = (_gpToastTexter || []).filter(function (t) { return t.typ === typ; });
+  if (!texter.length) return fallback;
+  return texter[Math.floor(Math.random() * texter.length)].text;
+}
+
+// ---- Achievement-logik ----
+
 function gpAchievementLevelRank(level) {
   if (!level) return 0;
   if (level === 'bronze') return 1;
@@ -38,88 +85,108 @@ function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
   return result;
 }
 
+/**
+ * Returnerar achievements där användaren just passerat 80%-tröskeln mot nästa nivå
+ * (men inte precis nått den – det hanteras av gpNewlyEarnedAchievements).
+ */
+function gpNastanFrammeAchievements(beforeNivaer, afterNivaer) {
+  const beforeByKey = {};
+  (beforeNivaer || []).forEach(function (n) { beforeByKey[n.achievement_key] = n; });
+  const result = [];
+  (afterNivaer || []).forEach(function (n) {
+    if (n.earned_level === 'gold') return;
+    var nextLevel = null, nextThreshold = null;
+    if (!n.earned_level && n.bronze) { nextLevel = 'bronze'; nextThreshold = n.bronze.threshold; }
+    else if (n.earned_level === 'bronze' && n.silver) { nextLevel = 'silver'; nextThreshold = n.silver.threshold; }
+    else if (n.earned_level === 'silver' && n.gold) { nextLevel = 'gold'; nextThreshold = n.gold.threshold; }
+    if (!nextThreshold || nextThreshold <= 0) return;
+    var afterVal = n.current_value || 0;
+    var afterPct = afterVal / nextThreshold;
+    if (afterPct < 0.8 || afterVal >= nextThreshold) return;
+    var beforeN = beforeByKey[n.achievement_key];
+    var beforeVal = (beforeN && typeof beforeN.current_value === 'number') ? beforeN.current_value : 0;
+    var beforePct = beforeVal / nextThreshold;
+    if (beforePct >= 0.8) return;
+    result.push({ key: n.achievement_key, label: n.label, nextLevel, afterVal, nextThreshold });
+  });
+  return result;
+}
+
 /** Visar achievement- och yrkes-toasts efter sparning. Anropas från sparaInmatning och fardigtranskriberad-knappen. */
 function visaSparToasts(achievementsBefore, data) {
   if (!data) return;
-  if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
-    fetch(`${API}/me`, { credentials: 'include' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((me) => {
-        const p = (me && me.preferences) || {};
-        if (p.fun_enabled !== false) {
-          if (p.toast_on_new_yrke !== false) {
-            (data.new_unique_yrken || []).forEach((yrke) => {
-              gpShowToast(gpToastTextFörNyttYrke([yrke]));
-            });
-          }
-          if (p.sound_on_new_yrke !== false) {
-            gpPlayPling();
-          }
+  const hasYrke = data.new_unique_yrken && data.new_unique_yrken.length > 0;
+  const hasAch = data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0;
+  if (!hasYrke && !hasAch) return;
+
+  // Säkra att toast-texterna är laddade, gör sedan ett enda /api/me-anrop
+  _gpHämtaToastTexter().then(function () {
+    return fetch(`${API}/me`, { credentials: 'include' });
+  })
+    .then((r) => r.ok ? r.json() : null)
+    .then((me) => {
+      const p = (me && me.preferences) || {};
+      if (p.fun_enabled === false) return;
+
+      // Yrke-toasts
+      if (hasYrke && p.toast_on_new_yrke !== false) {
+        (data.new_unique_yrken || []).forEach((yrke) => {
+          gpShowToast(gpToastTextFörNyttYrke([yrke]));
+        });
+      }
+
+      // Achievement-toasts
+      if (hasAch) {
+        const beforeNivaer = achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [];
+        const afterNivaer = data.achievements_snapshot;
+
+        const newlyEarned = gpNewlyEarnedAchievements(beforeNivaer, afterNivaer);
+        newlyEarned.forEach((item) => {
+          gpShowToast(gpToastTextFörAchievement(item.level, item.label, item.threshold, item.current));
+        });
+
+        // "Nästan framme"-nudge om inga medaljer precis intjänades (för att inte störa)
+        if (newlyEarned.length === 0 && p.toast_on_new_yrke !== false) {
+          const nastanLista = gpNastanFrammeAchievements(beforeNivaer, afterNivaer);
+          nastanLista.forEach((item) => {
+            gpShowToast(gpToastTextFörNastan(item.label, item.nextLevel, item.afterVal, item.nextThreshold));
+          });
         }
-      })
-      .catch(() => {});
-  }
-  if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
-    const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
-    if (newlyEarned.length > 0) {
-      fetch(`${API}/me`, { credentials: 'include' })
-        .then((r) => r.ok ? r.json() : null)
-        .then((me) => {
-          const p = (me && me.preferences) || {};
-          if (p.fun_enabled !== false) {
-            newlyEarned.forEach((item) => {
-              gpShowToast(gpToastTextFörAchievement(item.level, item.label, item.threshold, item.current));
-            });
-            if (p.sound_on_new_yrke !== false) {
-              gpPlayPling();
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }
+      }
+
+      // Ljud
+      if (p.sound_on_new_yrke !== false && (hasYrke || hasAch)) {
+        gpPlayPling();
+      }
+    })
+    .catch(() => {});
 }
 
 function gpToastTextFörAchievement(level, label, threshold, current) {
-  const nivåNamn = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
   const emoji = level === 'bronze' ? '🥉' : level === 'silver' ? '🥈' : level === 'gold' ? '🥇' : '🎉';
-  const labelHtml = label ? `<strong>${esc(label)}</strong>` : '';
-  const countText = typeof current === 'number' ? `${current} st` : null;
-  const thresholdText = typeof threshold === 'number' ? `${threshold} st` : null;
-  const formuleringar = [
-    thresholdText && countText
-      ? `${emoji} Du har nått ${nivåNamn} i ${labelHtml} – ${countText}!.`
-      : `${emoji} Du har nått ${nivåNamn} i ${labelHtml}!`,
-    thresholdText && countText
-      ? `${emoji} Ny utmärkelse i ${labelHtml}: ${nivåNamn} (${countText} totalt!`
-      : `${emoji} Ny utmärkelse i ${labelHtml}: nivån ${nivåNamn}.`,
-    thresholdText && countText
-      ? `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml} genom att nå ${countText}!`
-      : `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml}.`,
-  ];
-  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+  const niva = level === 'bronze' ? 'brons' : level === 'silver' ? 'silver' : level === 'gold' ? 'guld' : (level || '');
+  const antal = typeof current === 'number' ? current + ' st' : '';
+  const mall = _gpSlumpText('achievement',
+    emoji + ' Du har nått ' + niva + ' i {label}' + (antal ? ' – ' + antal + '!' : '!')
+  );
+  return _gpInterpolera(mall, { emoji, niva, label, antal });
+}
+
+/** Slumpad uppmuntrande text när användaren är nära nästa nivå (80–99%). */
+function gpToastTextFörNastan(label, nextLevel, afterVal, threshold) {
+  const kvar = (threshold - afterVal) + ' st';
+  const nasta = nextLevel === 'gold' ? 'guld' : nextLevel === 'silver' ? 'silver' : 'brons';
+  const mall = _gpSlumpText('nastan_framme',
+    '⏳ Nästan framme i {label}! Bara {kvar} kvar till {nasta}.'
+  );
+  return _gpInterpolera(mall, { label, kvar, nasta });
 }
 
 /** Slumpad gratulation när användaren upptäcker ett nytt unikt yrke. */
 function gpToastTextFörNyttYrke(yrkenLista) {
-  const yrken = yrkenLista && yrkenLista.length ? yrkenLista : [];
-  const yrkeText = yrken.length > 1 ? yrken.join(', ') : (yrken[0] || '');
-  const yrkeHtml = yrkeText ? `<strong>${esc(yrkeText)}</strong>` : '';
-  const formuleringar = [
-    'Nytt yrke upptäckt: ' + yrkeHtml + '!',
-    'Du upptäckte yrket ' + yrkeHtml + '!',
-    'Ett yrke vi inte sett förut: ' + yrkeHtml + '!',
-    'Upptäckt! ' + yrkeHtml + ' fanns inte i registret tidigare.',
-    'Pling! Yrket ' + yrkeHtml + ' har vi inte sett förut!.',
-    'Första gången vi ser ' + yrkeHtml + ' i arkivet!',
-    'Snyggt - du hittade yrket ' + yrkeHtml + '!',
-    'Yrket ' + yrkeHtml + ' dyker upp för första gången.',
-    'Ny upptäckt i registret: ' + yrkeHtml + '.',
-    'Oj, ' + yrkeHtml + ' - det hade vi inte sett tidigare!',
-    'Kanon - ett nytt yrke upptäckt: ' + yrkeHtml + '.',
-    'Rätt coolt - ' + yrkeHtml + ' syns nu i systemet för första gången!',
-  ];
-  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+  const yrke = (yrkenLista && yrkenLista.length) ? (yrkenLista[0] || '') : '';
+  const mall = _gpSlumpText('nytt_yrke', 'Nytt yrke upptäckt: {yrke}!');
+  return _gpInterpolera(mall, { yrke });
 }
 
 /** Toast för "roliga saker" (t.ex. nytt unikt yrke). */

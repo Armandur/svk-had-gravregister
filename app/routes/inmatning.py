@@ -31,7 +31,7 @@ router = APIRouter()
 
 
 def _unika_yrken_set(db: Session) -> set[str]:
-    """Returnera mängd av alla unika yrken i databasen."""
+    """Returnera mängd av alla unika yrken (gemener) i databasen."""
     def yrke_values(q):
         return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
     alla = (
@@ -39,7 +39,7 @@ def _unika_yrken_set(db: Session) -> set[str]:
         + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
         + yrke_values(db.query(Gravsatt.yrke))
     )
-    return set(alla)
+    return {y.lower() for y in alla}
 
 
 @router.get("/api/gravplats/{gravplats_id:int}/inmatning")
@@ -177,20 +177,19 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
     db.commit()
     yrken_efter = _unika_yrken_set(db)
     nya_yrken_i_systemet = yrken_efter - yrken_före
-    yrken_i_bodyn = set()
-    for inv in body.innehavare or []:
-        y = (inv.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    for na in body.narmast_anhoriga or []:
-        y = (na.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    for gs in body.gravsatta or []:
-        y = (gs.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    new_unique_yrken = sorted(nya_yrken_i_systemet & yrken_i_bodyn)
+    # Bygg lowercase-set för snittberäkning samt original-map för visning i toast
+    yrken_i_bodyn: set[str] = set()
+    yrken_original: dict[str, str] = {}  # lowercase → originalform (för toast)
+    for sources in [body.innehavare, body.narmast_anhoriga, body.gravsatta]:
+        for item in (sources or []):
+            y_raw = (getattr(item, "yrke", None) or "").strip()
+            if y_raw:
+                y_low = y_raw.lower()
+                yrken_i_bodyn.add(y_low)
+                yrken_original.setdefault(y_low, y_raw)
+    new_unique_yrken = sorted(
+        yrken_original.get(y, y) for y in (nya_yrken_i_systemet & yrken_i_bodyn)
+    )
     resp = _inmatning_response(gravplats_id, db)
     resp["new_unique_yrken"] = new_unique_yrken
     resp["achievements_snapshot"] = _compute_achievements_niva(db, current_user.id)

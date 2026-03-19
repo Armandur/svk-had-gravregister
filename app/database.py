@@ -335,6 +335,34 @@ class AchievementYrkesGrupp(Base):
     yrke: Mapped[str] = mapped_column(index=True)
 
 
+class AchievementYrkesKategori(Base):
+    """Visningsnamn för yrkesbaserade prestationskategorier (dynamiska och inbyggda)."""
+    __tablename__ = "achievement_yrkes_kategori"
+
+    achievement_key: Mapped[str] = mapped_column(primary_key=True)
+    namn: Mapped[str] = mapped_column()
+
+
+class ToastFormulering(Base):
+    """Redigerbara texter för gamification-toasts (achievements, nya yrken, nästan-framme m.m.).
+
+    Platshållare i 'text':
+      {emoji}  – medalj-emoji (🥇/🥈/🥉)
+      {niva}   – "guld", "silver" eller "brons"
+      {label}  – prestationens namn (visas fetat i frontend)
+      {antal}  – användarens nuvarande värde t.ex. "500 st"
+      {kvar}   – antal kvar till nästa nivå t.ex. "47 st"
+      {nasta}  – nästa nivå-namn t.ex. "silver"
+      {yrke}   – yrkestiteln (visas fetat i frontend)
+    """
+    __tablename__ = "toast_formulering"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    typ: Mapped[str] = mapped_column()       # achievement | nytt_yrke | nastan_framme
+    sortering: Mapped[int] = mapped_column(default=0)
+    text: Mapped[str] = mapped_column()
+
+
 engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
@@ -420,6 +448,18 @@ def init_db():
                     ("yrke_jord_och_gard", "bronze", 5, "5 jord/gårds-yrken"),
                     ("yrke_jord_och_gard", "silver", 10, "10 jord/gårds-yrken"),
                     ("yrke_jord_och_gard", "gold", 20, "20 jord/gårds-yrken"),
+                    # Nattugglan – registreringar gjorda 22:00–05:59 UTC
+                    ("nattugglan", "bronze", 5, "5 nattregistreringar"),
+                    ("nattugglan", "silver", 20, "20 nattregistreringar"),
+                    ("nattugglan", "gold", 50, "50 nattregistreringar"),
+                    # Tidig fågel – registreringar gjorda 05:00–07:59 UTC
+                    ("tidig_fagel", "bronze", 5, "5 morgonregistreringar"),
+                    ("tidig_fagel", "silver", 20, "20 morgonregistreringar"),
+                    ("tidig_fagel", "gold", 50, "50 morgonregistreringar"),
+                    # Helgarbetare – registreringar gjorda på lördag eller söndag
+                    ("helgarbetare", "bronze", 10, "10 helgregistreringar"),
+                    ("helgarbetare", "silver", 50, "50 helgregistreringar"),
+                    ("helgarbetare", "gold", 150, "150 helgregistreringar"),
                 ]
                 for key, level, threshold, label in defaults:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
@@ -575,6 +615,40 @@ def init_db():
                 for key, yrken in yrkes_defaults.items():
                     for yrke in yrken:
                         db.add(AchievementYrkesGrupp(achievement_key=key, yrke=yrke))
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # Seed toast-formuleringar om tabellen är tom (gäller även befintliga databaser
+    # eftersom tabellen är ny – create_all skapar den tom och count() blir 0)
+    with SessionLocal() as db:
+        try:
+            if db.query(ToastFormulering).count() == 0:
+                toast_defaults = [
+                    # Achievement-toasts – platshållare: {emoji} {niva} {label} {antal}
+                    ("achievement", 0, "{emoji} Du har nått {niva} i {label} – {antal}!"),
+                    ("achievement", 1, "{emoji} Ny utmärkelse i {label}: {niva} ({antal} totalt)!"),
+                    ("achievement", 2, "{emoji} Bra jobbat – du har precis klättrat till {niva}-nivå i {label} genom att nå {antal}!"),
+                    # Nytt yrke-toasts – platshållare: {yrke}
+                    ("nytt_yrke", 0, "Nytt yrke upptäckt: {yrke}!"),
+                    ("nytt_yrke", 1, "Du upptäckte yrket {yrke}!"),
+                    ("nytt_yrke", 2, "Ett yrke vi inte sett förut: {yrke}!"),
+                    ("nytt_yrke", 3, "Upptäckt! {yrke} fanns inte i registret tidigare."),
+                    ("nytt_yrke", 4, "Pling! Yrket {yrke} har vi inte sett förut!"),
+                    ("nytt_yrke", 5, "Första gången vi ser {yrke} i arkivet!"),
+                    ("nytt_yrke", 6, "Snyggt – du hittade yrket {yrke}!"),
+                    ("nytt_yrke", 7, "Yrket {yrke} dyker upp för första gången."),
+                    ("nytt_yrke", 8, "Ny upptäckt i registret: {yrke}."),
+                    ("nytt_yrke", 9, "Oj, {yrke} – det hade vi inte sett tidigare!"),
+                    ("nytt_yrke", 10, "Kanon – ett nytt yrke upptäckt: {yrke}."),
+                    ("nytt_yrke", 11, "Rätt coolt – {yrke} syns nu i systemet för första gången!"),
+                    # Nästan framme-toasts – platshållare: {label} {kvar} {nasta}
+                    ("nastan_framme", 0, "⏳ Nästan framme i {label}! Bara {kvar} kvar till {nasta}."),
+                    ("nastan_framme", 1, "🔜 Du är nära {nasta} i {label} – {kvar} kvar!"),
+                    ("nastan_framme", 2, "💪 Kämpa på! Bara {kvar} till {nasta} i {label}."),
+                ]
+                for typ, sortering, toast_text in toast_defaults:
+                    db.add(ToastFormulering(typ=typ, sortering=sortering, text=toast_text))
                 db.commit()
         except Exception:
             db.rollback()
@@ -791,6 +865,68 @@ def init_db():
                     if key not in existing_keys:
                         db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
                 db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: seed AchievementYrkesKategori med inbyggda kategorier om de saknas
+    with SessionLocal() as db:
+        try:
+            builtin_kategorier = {
+                "yrke_kyrkans_man": "Kyrkans man",
+                "yrke_havets_man": "Havets män",
+                "yrke_handelns_furste": "Handelns furste",
+                "yrke_fabrikens_herre": "Fabrikens herre",
+                "yrke_hantverkets_mastare": "Hantverkets mästare",
+                "yrke_lardomens_vaktare": "Lärdomens väktare",
+                "yrke_lag_och_ordning": "Lag & ordning",
+                "yrke_fruar_mamseller": "Fruar & mamseller",
+                "yrke_jord_och_gard": "Jord och gård",
+            }
+            existing_kategori_keys = {
+                r.achievement_key for r in db.query(AchievementYrkesKategori.achievement_key).all()
+            }
+            for key, namn in builtin_kategorier.items():
+                if key not in existing_kategori_keys:
+                    db.add(AchievementYrkesKategori(achievement_key=key, namn=namn))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: lägg till Nattugglan-achievement om det saknas (befintliga databaser)
+    with SessionLocal() as db:
+        try:
+            has_nattugglan = db.query(AchievementNiva).filter(AchievementNiva.achievement_key == "nattugglan").first() is not None
+            if not has_nattugglan:
+                for key, level, threshold, label in [
+                    ("nattugglan", "bronze", 5, "5 nattregistreringar"),
+                    ("nattugglan", "silver", 20, "20 nattregistreringar"),
+                    ("nattugglan", "gold", 50, "50 nattregistreringar"),
+                ]:
+                    db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: lägg till Tidig fågel + Helgarbetare om de saknas (befintliga databaser)
+    with SessionLocal() as db:
+        try:
+            for key, nivåer in [
+                ("tidig_fagel", [
+                    ("bronze", 5, "5 morgonregistreringar"),
+                    ("silver", 20, "20 morgonregistreringar"),
+                    ("gold", 50, "50 morgonregistreringar"),
+                ]),
+                ("helgarbetare", [
+                    ("bronze", 10, "10 helgregistreringar"),
+                    ("silver", 50, "50 helgregistreringar"),
+                    ("gold", 150, "150 helgregistreringar"),
+                ]),
+            ]:
+                exists = db.query(AchievementNiva).filter(AchievementNiva.achievement_key == key).first() is not None
+                if not exists:
+                    for level, threshold, label in nivåer:
+                        db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+            db.commit()
         except Exception:
             db.rollback()
 

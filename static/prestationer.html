@@ -6,9 +6,11 @@
   <title>Mina prestationer – Gravregister</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
-    .prestationer-main { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
-    .prestationer-main h2 { margin: 1.5rem 0 0.75rem; font-size: 1.1rem; color: var(--accent, #2c5f4a); }
+    .prestationer-main { max-width: 44rem; margin: 2rem auto; padding: 0 1rem 3rem; }
+    .prestationer-main h2 { margin: 1.75rem 0 0.75rem; font-size: 1.1rem; color: var(--accent, #2c5f4a); }
     .prestationer-main h2:first-of-type { margin-top: 0; }
+
+    /* Statistik-kort */
     .prestationer-kort {
       background: var(--card, #fff);
       border: 1px solid var(--border, #e2e8f0);
@@ -19,42 +21,99 @@
     .prestationer-rad { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.95rem; }
     .prestationer-rad:last-child { margin-bottom: 0; }
     .prestationer-varde { font-weight: 600; color: var(--accent, #2563eb); }
-    .prestationer-nivaer { margin-top: 1rem; }
+
+    /* Medaljgrid */
     .prestationer-medalj-grid {
       display: grid;
-      gap: 0.9rem;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.85rem;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
     }
-    .prestationer-medalj-kort {
+
+    /* Bas-kort */
+    .prest-kort {
       background: var(--card, #fff);
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1.5px solid var(--border, #e2e8f0);
       border-radius: 10px;
-      padding: 0.9rem 0.75rem;
+      padding: 0.9rem 0.75rem 0.8rem;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 0.2rem;
+      gap: 0.15rem;
+      transition: box-shadow 0.15s;
     }
-    .prestationer-medalj-namn {
-      font-weight: 600;
+
+    /* Intjänade nivåer – distinkta färger */
+    .prest-kort.niva-guld {
+      border-color: #f59e0b;
+      background: linear-gradient(150deg, #fffbeb 0%, #fef3c7 100%);
+      box-shadow: 0 2px 8px rgba(245,158,11,0.15);
+    }
+    .prest-kort.niva-silver {
+      border-color: #94a3b8;
+      background: linear-gradient(150deg, #f8fafc 0%, #e9eef5 100%);
+      box-shadow: 0 2px 8px rgba(148,163,184,0.15);
+    }
+    .prest-kort.niva-brons {
+      border-color: #c2855b;
+      background: linear-gradient(150deg, #fef9f5 0%, #fde8d8 100%);
+      box-shadow: 0 2px 8px rgba(194,133,91,0.15);
+    }
+    /* Ej intjänat */
+    .prest-kort.niva-ingen {
+      background: #f9fafb;
+      opacity: 0.82;
+    }
+
+    .prest-emoji { font-size: 1.8rem; line-height: 1.2; margin-bottom: 0.1rem; }
+    .prest-namn { font-weight: 600; font-size: 0.88rem; line-height: 1.3; }
+    .prest-varde { font-variant-numeric: tabular-nums; font-size: 0.85rem; color: #334155; margin-top: 0.1rem; }
+
+    /* Progress bar */
+    .prest-progress {
+      width: 100%;
+      height: 5px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 0.45rem;
+    }
+    .prest-progress-bar {
+      height: 100%;
+      border-radius: 3px;
+      background: #94a3b8;
+      transition: width 0.6s ease;
+    }
+    .niva-guld .prest-progress-bar   { background: #f59e0b; }
+    .niva-silver .prest-progress-bar  { background: #94a3b8; }
+    .niva-brons .prest-progress-bar   { background: #c2855b; }
+    .niva-ingen .prest-progress-bar   { background: #64748b; }
+
+    .prest-nastan {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.25rem;
+      line-height: 1.3;
+    }
+    .niva-guld .prest-nastan   { color: #92400e; }
+    .niva-silver .prest-nastan { color: #475569; }
+    .niva-brons .prest-nastan  { color: #7c3d1a; }
+
+    /* Tomt tillstånd */
+    .prestationer-tomt {
+      padding: 1.5rem;
+      text-align: center;
+      color: #64748b;
       font-size: 0.95rem;
+      border: 1px dashed var(--border, #e2e8f0);
+      border-radius: 8px;
     }
-    .prestationer-medalj-emoji {
-      font-size: 1.6rem;
-      line-height: 1.2;
-    }
-    .prestationer-medalj-varde {
-      font-variant-numeric: tabular-nums;
-      font-size: 0.9rem;
-      color: #334155;
-    }
+
     .prestationer-laddar { color: #64748b; }
     .prestationer-fel { color: #b91c1c; }
     .prestationer-yrken-btn {
       display: inline-block;
-      margin-top: 1.5rem;
+      margin-top: 1.75rem;
       padding: 0.6rem 1.25rem;
       font-size: 0.97rem;
       font-family: inherit;
@@ -68,6 +127,16 @@
       transition: background 0.12s, color 0.12s;
     }
     .prestationer-yrken-btn:hover { background: var(--accent, #2563eb); color: #fff; }
+
+    /* Rubrik med antal */
+    .prest-sektion-rubrik {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      margin: 1.25rem 0 0.5rem;
+    }
+    .prest-sektion-rubrik h3 { font-size: 1rem; margin: 0; }
+    .prest-sektion-antal { font-size: 0.82rem; color: #64748b; }
   </style>
 </head>
 <body>
@@ -78,8 +147,9 @@
 
   <main class="prestationer-main">
     <section id="prestationer-sektion" aria-label="Prestationer">
-      <h2>Prestationer</h2>
+      <h2>Statistik</h2>
       <p id="prestationer-status" class="prestationer-laddar" aria-live="polite">Laddar …</p>
+
       <div id="prestationer-kort" class="prestationer-kort" hidden>
         <div class="prestationer-rad"><span>Antal sparade registreringar</span><span id="prest-antal-reg" class="prestationer-varde">–</span></div>
         <div class="prestationer-rad"><span>Gravplatser du markerat som färdigtranskriberade</span><span id="prest-antal-fardiga" class="prestationer-varde">–</span></div>
@@ -91,12 +161,25 @@
         <div class="prestationer-rad"><span>Första registreringen</span><span id="prest-forsta" class="prestationer-varde">–</span></div>
         <div class="prestationer-rad"><span>Senaste registreringen</span><span id="prest-senaste" class="prestationer-varde">–</span></div>
       </div>
-      <section id="prestationer-nivaer-sektion" class="prestationer-nivaer" hidden aria-label="Utmärkelser">
-        <h3 style="margin: 1rem 0 0.5rem; font-size: 1rem;">Utmärkelser</h3>
-        <h4 style="margin: 0.25rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-reg-rubrik">Registreringar</h4>
-        <div id="prestationer-nivaer-lista-reg" class="prestationer-medalj-grid"></div>
-        <h4 style="margin: 0.75rem 0 0.35rem; font-size: 0.95rem;" id="prestationer-nivaer-yrke-rubrik">Yrken</h4>
-        <div id="prestationer-nivaer-lista-yrke" class="prestationer-medalj-grid"></div>
+
+      <section id="prestationer-nivaer-sektion" hidden aria-label="Utmärkelser">
+        <h2>Utmärkelser</h2>
+
+        <div id="prestationer-nivaer-reg-wrap">
+          <div class="prest-sektion-rubrik">
+            <h3>Registreringar</h3>
+            <span class="prest-sektion-antal" id="prest-reg-antal"></span>
+          </div>
+          <div id="prestationer-nivaer-lista-reg" class="prestationer-medalj-grid"></div>
+        </div>
+
+        <div id="prestationer-nivaer-yrke-wrap">
+          <div class="prest-sektion-rubrik">
+            <h3>Yrken</h3>
+            <span class="prest-sektion-antal" id="prest-yrke-antal"></span>
+          </div>
+          <div id="prestationer-nivaer-lista-yrke" class="prestationer-medalj-grid"></div>
+        </div>
       </section>
     </section>
 
@@ -128,6 +211,90 @@
     }
   }
 
+  /** Bestämmer nästa tröskel att sträva mot baserat på intjänad nivå. */
+  function nastaNiva(n) {
+    if (!n.earned_level && n.bronze) return { level: 'bronze', threshold: n.bronze.threshold };
+    if (n.earned_level === 'bronze' && n.silver) return { level: 'silver', threshold: n.silver.threshold };
+    if (n.earned_level === 'silver' && n.gold) return { level: 'gold', threshold: n.gold.threshold };
+    return null;
+  }
+
+  /** Procentandel framsteg mot nästa tröskel (0–1). */
+  function progressPct(n) {
+    var nasta = nastaNiva(n);
+    if (!nasta || nasta.threshold <= 0) return 0;
+    return Math.min(1, (n.current_value || 0) / nasta.threshold);
+  }
+
+  /** Sorterar: intjänade (guld → silver → brons) först, sedan ej intjänade sorterade på % framsteg. */
+  function sorteraAchievements(nivaer) {
+    var levelRank = { gold: 3, silver: 2, bronze: 1 };
+    return nivaer.slice().sort(function (a, b) {
+      var ra = levelRank[a.earned_level] || 0;
+      var rb = levelRank[b.earned_level] || 0;
+      if (ra !== rb) return rb - ra;
+      return progressPct(b) - progressPct(a);
+    });
+  }
+
+  /** Bygger ett medaljkort-element. */
+  function renderKort(n) {
+    var v = n.current_value != null ? n.current_value : 0;
+    var level = n.earned_level;
+    var emoji = level === 'gold' ? '🥇' : level === 'silver' ? '🥈' : level === 'bronze' ? '🥉' : '🔒';
+    var nivaCss = level === 'gold' ? 'niva-guld' : level === 'silver' ? 'niva-silver' : level === 'bronze' ? 'niva-brons' : 'niva-ingen';
+    var namn = n.label || n.achievement_key;
+    var nasta = nastaNiva(n);
+
+    var progressHtml = '';
+    if (nasta && nasta.threshold > 0) {
+      var pct = Math.round(progressPct(n) * 100);
+      var kvar = nasta.threshold - v;
+      var nastaLabel = nasta.level === 'gold' ? 'guld' : nasta.level === 'silver' ? 'silver' : 'brons';
+      progressHtml =
+        '<div class="prest-progress"><div class="prest-progress-bar" style="width:' + pct + '%"></div></div>' +
+        '<div class="prest-nastan">' + kvar + ' kvar till ' + nastaLabel + '</div>';
+    }
+
+    var el = document.createElement('div');
+    el.className = 'prest-kort ' + nivaCss;
+    el.innerHTML =
+      '<div class="prest-emoji">' + emoji + '</div>' +
+      '<div class="prest-namn">' + namn + '</div>' +
+      '<div class="prest-varde">' + v + ' st</div>' +
+      progressHtml;
+    return el;
+  }
+
+  /** Renderar en lista av achievements i ett grid-element (bara intjänade). */
+  function renderGrid(listaEl, nivaer) {
+    listaEl.innerHTML = '';
+    var intjanade = (nivaer || []).filter(function (n) { return !!n.earned_level; });
+    if (intjanade.length === 0) {
+      listaEl.innerHTML = '<p class="prestationer-tomt">Inga utmärkelser hittills – fortsätt registrera!</p>';
+      return;
+    }
+    var sorterade = sorteraAchievements(intjanade);
+    sorterade.forEach(function (n) {
+      listaEl.appendChild(renderKort(n));
+    });
+  }
+
+  /** Räknar intjänade medaljer och returnerar en läsbar sammanfattning. */
+  function intjanadeSammanfattning(nivaer) {
+    var guld = 0, silver = 0, brons = 0;
+    (nivaer || []).forEach(function (n) {
+      if (n.earned_level === 'gold') guld++;
+      else if (n.earned_level === 'silver') silver++;
+      else if (n.earned_level === 'bronze') brons++;
+    });
+    var delar = [];
+    if (guld > 0) delar.push(guld + ' 🥇');
+    if (silver > 0) delar.push(silver + ' 🥈');
+    if (brons > 0) delar.push(brons + ' 🥉');
+    return delar.length > 0 ? delar.join('  ') : 'inga medaljer än';
+  }
+
   const statusEl = document.getElementById('prestationer-status');
   const kortEl = document.getElementById('prestationer-kort');
 
@@ -153,54 +320,26 @@
       var nivaerSektion = document.getElementById('prestationer-nivaer-sektion');
       var regLista = document.getElementById('prestationer-nivaer-lista-reg');
       var yrkeLista = document.getElementById('prestationer-nivaer-lista-yrke');
-      var regRubrik = document.getElementById('prestationer-nivaer-reg-rubrik');
-      var yrkeRubrik = document.getElementById('prestationer-nivaer-yrke-rubrik');
-      if (regLista && yrkeLista) {
-        var earnedOnly = (nivaer || []).filter(function (n) { return !!n.earned_level; });
-        var earnedReg = earnedOnly.filter(function (n) {
-          var key = String(n.achievement_key || '');
-          return key && !key.startsWith('yrke_');
+      var regAntalEl = document.getElementById('prest-reg-antal');
+      var yrkeAntalEl = document.getElementById('prest-yrke-antal');
+
+      if (nivaer.length > 0) {
+        nivaerSektion.removeAttribute('hidden');
+
+        var regNivaer = nivaer.filter(function (n) {
+          return !String(n.achievement_key || '').startsWith('yrke_');
         });
-        var earnedYrke = earnedOnly.filter(function (n) {
-          var key = String(n.achievement_key || '');
-          return key && key.startsWith('yrke_');
+        var yrkeNivaer = nivaer.filter(function (n) {
+          return String(n.achievement_key || '').startsWith('yrke_');
         });
 
-        function renderKort(listaEl, items) {
-          listaEl.innerHTML = items.map(function (n) {
-            var v = n.current_value != null ? n.current_value : 0;
-            var level = n.earned_level;
-            var emoji = level === 'gold' ? '🥇' : (level === 'silver' ? '🥈' : '🥉');
-            var namn = n.label || n.achievement_key;
-            return '<div class="prestationer-medalj-kort">' +
-              '<div class="prestationer-medalj-namn">' + namn + '</div>' +
-              '<div class="prestationer-medalj-emoji">' + emoji + '</div>' +
-              '<div class="prestationer-medalj-varde">' + v + ' st</div>' +
-              '</div>';
-          }).join('');
-        }
+        renderGrid(regLista, regNivaer);
+        renderGrid(yrkeLista, yrkeNivaer);
 
-        if (earnedReg.length > 0) {
-          renderKort(regLista, earnedReg);
-          if (regRubrik) regRubrik.hidden = false;
-        } else {
-          regLista.innerHTML = '';
-          if (regRubrik) regRubrik.hidden = true;
-        }
-
-        if (earnedYrke.length > 0) {
-          renderKort(yrkeLista, earnedYrke);
-          if (yrkeRubrik) yrkeRubrik.hidden = false;
-        } else {
-          yrkeLista.innerHTML = '';
-          if (yrkeRubrik) yrkeRubrik.hidden = true;
-        }
-
-        if (earnedReg.length > 0 || earnedYrke.length > 0) {
-          nivaerSektion.removeAttribute('hidden');
-        } else {
-          nivaerSektion.setAttribute('hidden', 'hidden');
-        }
+        if (regAntalEl) regAntalEl.textContent = intjanadeSammanfattning(regNivaer);
+        if (yrkeAntalEl) yrkeAntalEl.textContent = intjanadeSammanfattning(yrkeNivaer);
+      } else {
+        nivaerSektion.setAttribute('hidden', 'hidden');
       }
     })
     .catch(function (err) {
