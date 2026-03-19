@@ -639,8 +639,8 @@ def init_db():
                     ("nastan_framme", 1, "🔜 Du är nära {nasta} i {label} – {kvar} kvar!"),
                     ("nastan_framme", 2, "💪 Kämpa på! Bara {kvar} till {nasta} i {label}."),
                 ]
-                for typ, sortering, text in toast_defaults:
-                    db.add(ToastFormulering(typ=typ, sortering=sortering, text=text))
+                for typ, sortering, toast_text in toast_defaults:
+                    db.add(ToastFormulering(typ=typ, sortering=sortering, text=toast_text))
                 db.commit()
         except Exception:
             db.rollback()
