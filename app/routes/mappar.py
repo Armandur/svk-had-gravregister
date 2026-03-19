@@ -114,7 +114,7 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         + _yrke_list(db.query(GravplatsNarmastAnhorig.yrke))
         + _yrke_list(db.query(Gravsatt.yrke))
     )
-    antal_unika_yrken = len(set(alla_yrken))
+    antal_unika_yrken = len({y.lower() for y in alla_yrken})
     total_gravplatser = db.query(Gravplats).count()
 
     transkriberings_rows = (
