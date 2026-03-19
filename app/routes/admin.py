@@ -14,6 +14,7 @@ from app.config import API_KEYS_PATH, BACKUP_DIR, DATABASE_PATH
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
+    AchievementYrkesKategori,
     ToastFormulering,
     Gravplats,
     GravplatsRedigeringslogg,
@@ -24,6 +25,7 @@ from app.database import (
 from app.schemas import (
     AchievementNivaUpdateBody,
     AchievementYrkesGruppBody,
+    NyYrkesKategoriBody,
     ToastFormuleringCreateBody,
     ToastFormuleringUpdateBody,
     ApiKeysBody,
@@ -526,9 +528,16 @@ async def list_achievement_yrkesgrupp(
         if not key or not yrke:
             continue
         grupper.setdefault(key, []).append(yrke)
+
+    # Inkludera alla kända kategorier (även tomma)
+    kategori_rows = db.query(AchievementYrkesKategori).all()
+    namn_by_key: dict[str, str] = {r.achievement_key: r.namn for r in kategori_rows}
+    for key in namn_by_key:
+        grupper.setdefault(key, [])
+
     return {
         "grupper": [
-            {"achievement_key": key, "yrken": yrken}
+            {"achievement_key": key, "namn": namn_by_key.get(key, key), "yrken": yrken}
             for key, yrken in sorted(grupper.items(), key=lambda kv: kv[0])
         ]
     }
@@ -559,6 +568,52 @@ async def update_achievement_yrkesgrupp(
         db.add(AchievementYrkesGrupp(achievement_key=key, yrke=y))
     db.commit()
     return {"ok": True, "achievement_key": key, "antal_yrken": len(seen)}
+
+
+@router.post("/api/admin/achievement-yrkesgrupp-kategori", status_code=201)
+async def create_achievement_yrkesgrupp_kategori(
+    body: NyYrkesKategoriBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Skapa en ny yrkesbaserad prestationskategori – endast admin."""
+    key = (body.achievement_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="achievement_key krävs")
+    if not key.startswith("yrke_"):
+        raise HTTPException(status_code=400, detail="achievement_key måste börja med 'yrke_'")
+    namn = (body.namn or "").strip()
+    if not namn:
+        raise HTTPException(status_code=400, detail="namn krävs")
+    if db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).first():
+        raise HTTPException(status_code=409, detail="Kategorin finns redan")
+
+    db.add(AchievementYrkesKategori(achievement_key=key, namn=namn))
+    for level, threshold, label in [
+        ("bronze", body.bronze_threshold, f"{body.bronze_threshold} yrken"),
+        ("silver", body.silver_threshold, f"{body.silver_threshold} yrken"),
+        ("gold", body.gold_threshold, f"{body.gold_threshold} yrken"),
+    ]:
+        db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+    db.commit()
+    return {"ok": True, "achievement_key": key, "namn": namn}
+
+
+@router.delete("/api/admin/achievement-yrkesgrupp-kategori/{key}")
+async def delete_achievement_yrkesgrupp_kategori(
+    key: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort en yrkesbaserad prestationskategori och alla dess data – endast admin."""
+    key = key.strip()
+    if not db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).first():
+        raise HTTPException(status_code=404, detail="Kategorin hittades inte")
+    db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).delete()
+    db.query(AchievementNiva).filter(AchievementNiva.achievement_key == key).delete()
+    db.query(AchievementYrkesGrupp).filter(AchievementYrkesGrupp.achievement_key == key).delete()
+    db.commit()
+    return {"ok": True, "achievement_key": key}
 
 
 # ---------- Toast-formuleringar (admin) ----------

@@ -164,7 +164,41 @@
         <p class="pa-sektion-beskr">
           Styr vilka yrkestitlar som räknas in i respektive yrkesbaserad prestation.
           Varje grupp sparas separat – expandera en grupp för att redigera.
+          Du kan också lägga till nya kategorier eller ta bort befintliga.
         </p>
+
+        <!-- Ny kategori-formulär -->
+        <div id="pa-ny-kategori-omrade" style="margin-bottom:1rem;">
+          <button type="button" id="pa-ny-kategori-btn" class="pa-btn">+ Ny kategori</button>
+          <form id="pa-ny-kategori-form" hidden style="margin-top:0.75rem;padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;display:flex;flex-direction:column;gap:0.6rem;max-width:480px;">
+            <strong style="font-size:0.95rem;">Ny yrkeskategori</strong>
+            <label style="font-size:0.88rem;">
+              Namn (visas för användare)
+              <input type="text" id="pa-nk-namn" placeholder="t.ex. Militärens män" style="width:100%;margin-top:2px;padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:4px;font-size:0.9rem;" required>
+            </label>
+            <label style="font-size:0.88rem;">
+              Nyckel (unik, börjar med yrke_)
+              <input type="text" id="pa-nk-key" placeholder="yrke_militarens_man" pattern="yrke_[a-z0-9_]+" style="width:100%;margin-top:2px;padding:0.3rem 0.5rem;border:1px solid #cbd5e1;border-radius:4px;font-size:0.9rem;font-family:monospace;" required>
+            </label>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <label style="font-size:0.88rem;">Brons-tröskel
+                <input type="number" id="pa-nk-bronze" min="1" value="5" style="width:70px;margin-top:2px;padding:0.3rem 0.4rem;border:1px solid #cbd5e1;border-radius:4px;">
+              </label>
+              <label style="font-size:0.88rem;">Silver-tröskel
+                <input type="number" id="pa-nk-silver" min="1" value="10" style="width:70px;margin-top:2px;padding:0.3rem 0.4rem;border:1px solid #cbd5e1;border-radius:4px;">
+              </label>
+              <label style="font-size:0.88rem;">Guld-tröskel
+                <input type="number" id="pa-nk-gold" min="1" value="20" style="width:70px;margin-top:2px;padding:0.3rem 0.4rem;border:1px solid #cbd5e1;border-radius:4px;">
+              </label>
+            </div>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+              <button type="submit" class="pa-btn">Skapa kategori</button>
+              <button type="button" id="pa-ny-kategori-avbryt" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:0.88rem;">Avbryt</button>
+              <span id="pa-nk-fel" style="color:#b91c1c;font-size:0.85rem;" hidden></span>
+            </div>
+          </form>
+        </div>
+
         <div id="pa-yrke-lista" class="pa-yrke-lista"></div>
       </section>
 
@@ -236,15 +270,6 @@
     nattugglan: 'Nattugglan 🦉',
     tidig_fagel: 'Tidig fågel ☀️',
     helgarbetare: 'Helgarbetare 📅',
-    yrke_kyrkans_man: 'Kyrkans man',
-    yrke_havets_man: 'Havets män',
-    yrke_handelns_furste: 'Handelns furste',
-    yrke_fabrikens_herre: 'Fabrikens herre',
-    yrke_hantverkets_mastare: 'Hantverkets mästare',
-    yrke_lardomens_vaktare: 'Lärdomens väktare',
-    yrke_lag_och_ordning: 'Lag & ordning',
-    yrke_fruar_mamseller: 'Fruar & mamseller',
-    yrke_jord_och_gard: 'Jord och gård',
   };
 
   function nivaKlass(l) {
@@ -395,6 +420,22 @@
         '<span class="pa-yrke-namn">' + labelText + '</span>' +
         '<span class="pa-yrke-badge" data-badge="' + key + '">' + yrken.length + ' yrken</span>' +
         '<span class="pa-yrke-chevron">▶</span>';
+
+      var taBortBtn = document.createElement('button');
+      taBortBtn.type = 'button';
+      taBortBtn.textContent = 'Ta bort kategori';
+      taBortBtn.style.cssText = 'margin-left:auto;padding:0.2rem 0.6rem;font-size:0.8rem;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#b91c1c;cursor:pointer;flex-shrink:0;';
+      taBortBtn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        if (!confirm('Ta bort kategorin "' + labelText + '" och alla dess yrken och gränsvärden? Det går inte att ångra.')) return;
+        taBortBtn.disabled = true;
+        fetch(API + '/admin/achievement-yrkesgrupp-kategori/' + encodeURIComponent(key), {
+          method: 'DELETE', credentials: 'include',
+        })
+        .then(function (r) { if (!r.ok) throw new Error(); location.reload(); })
+        .catch(function () { alert('Fel vid borttagning av kategori.'); taBortBtn.disabled = false; });
+      });
+      summary.appendChild(taBortBtn);
       kort.appendChild(summary);
 
       var body = document.createElement('div');
@@ -611,10 +652,53 @@
       .finally(function () { btn.disabled = false; });
     });
 
-    /* Yrkesgrupper */
+    /* Yrkesgrupper – bygg upp labelByKey dynamiskt från API */
     if (yrkeData && yrkeData.grupper) {
+      yrkeData.grupper.forEach(function (g) {
+        if (g.namn) labelByKey[g.achievement_key] = g.namn;
+      });
       byggYrkesGrupp(document.getElementById('pa-yrke-lista'), yrkeData.grupper);
     }
+
+    /* Ny kategori-formulär */
+    var nyKatBtn = document.getElementById('pa-ny-kategori-btn');
+    var nyKatForm = document.getElementById('pa-ny-kategori-form');
+    var nyKatAvbryt = document.getElementById('pa-ny-kategori-avbryt');
+    var nyKatFel = document.getElementById('pa-nk-fel');
+
+    nyKatBtn.addEventListener('click', function () {
+      nyKatForm.hidden = false;
+      nyKatBtn.hidden = true;
+      document.getElementById('pa-nk-namn').focus();
+    });
+    nyKatAvbryt.addEventListener('click', function () {
+      nyKatForm.hidden = true;
+      nyKatBtn.hidden = false;
+      nyKatFel.hidden = true;
+    });
+    nyKatForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var namn = document.getElementById('pa-nk-namn').value.trim();
+      var key = document.getElementById('pa-nk-key').value.trim();
+      var bronze = parseInt(document.getElementById('pa-nk-bronze').value, 10) || 5;
+      var silver = parseInt(document.getElementById('pa-nk-silver').value, 10) || 10;
+      var gold = parseInt(document.getElementById('pa-nk-gold').value, 10) || 20;
+      nyKatFel.hidden = true;
+      var submitBtn = nyKatForm.querySelector('button[type=submit]');
+      submitBtn.disabled = true;
+      fetch(API + '/admin/achievement-yrkesgrupp-kategori', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ achievement_key: key, namn: namn, bronze_threshold: bronze, silver_threshold: silver, gold_threshold: gold }),
+      })
+      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { nyKatFel.textContent = res.data.detail || 'Fel vid skapande.'; nyKatFel.hidden = false; return; }
+        location.reload();
+      })
+      .catch(function () { nyKatFel.textContent = 'Nätverksfel.'; nyKatFel.hidden = false; })
+      .finally(function () { submitBtn.disabled = false; });
+    });
 
     /* Toast-texter */
     if (toastData && toastData.formuleringar) {

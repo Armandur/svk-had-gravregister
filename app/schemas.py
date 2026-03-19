@@ -62,6 +62,14 @@ class AchievementYrkesGruppBody(BaseModel):
     yrken: list[str]
 
 
+class NyYrkesKategoriBody(BaseModel):
+    achievement_key: str   # måste börja med "yrke_"
+    namn: str              # visningsnamn, t.ex. "Militärens män"
+    bronze_threshold: int = 5
+    silver_threshold: int = 10
+    gold_threshold: int = 20
+
+
 class ToastFormuleringUpdateBody(BaseModel):
     text: str
 

@@ -104,6 +104,15 @@ Tryck **Spara gränsvärden** när du är klar. Ändringarna gäller direkt för
 
 Varje yrkesbaserad prestation (t.ex. "Kyrkans man" eller "Havets män") har ett eget expanderbart kort som visar vilka yrkestitlar som räknas in. Expandera ett kort för att lägga till, redigera eller ta bort yrken, och tryck sedan **Spara gruppen** (sparas separat per grupp).
 
+**Lägga till ny kategori:** Klicka på **+ Ny kategori** ovanför listan. Fyll i:
+- *Namn* – visningsnamn för användare, t.ex. "Militärens män"
+- *Nyckel* – unik intern identifierare, måste börja med `yrke_` och bara innehålla gemener, siffror och understreck (t.ex. `yrke_militarens_man`)
+- *Brons/Silver/Guld-trösklar* – minsta antal yrkes-registreringar för respektive nivå
+
+Kategori skapas med tomma yrkesgrupp – lägg sedan till yrken via det expanderbara kortet.
+
+**Ta bort kategori:** Klicka på **Ta bort kategori** i rubrikraden för ett kort. Bekräfta i dialogen. Alla tillhörande gränsvärden och yrkestitlar tas bort permanent. Användarnas redan intjänade poäng i kategorin påverkas inte retroaktivt men achievement-nyckeln visas inte längre.
+
 ### Toast-texter
 
 Styr vilka meddelanden som dyker upp i det lilla popup-fönstret (toasten) när en användare:

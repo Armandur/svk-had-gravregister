@@ -335,6 +335,14 @@ class AchievementYrkesGrupp(Base):
     yrke: Mapped[str] = mapped_column(index=True)
 
 
+class AchievementYrkesKategori(Base):
+    """Visningsnamn för yrkesbaserade prestationskategorier (dynamiska och inbyggda)."""
+    __tablename__ = "achievement_yrkes_kategori"
+
+    achievement_key: Mapped[str] = mapped_column(primary_key=True)
+    namn: Mapped[str] = mapped_column()
+
+
 class ToastFormulering(Base):
     """Redigerbara texter för gamification-toasts (achievements, nya yrken, nästan-framme m.m.).
 
@@ -857,6 +865,30 @@ def init_db():
                     if key not in existing_keys:
                         db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
                 db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: seed AchievementYrkesKategori med inbyggda kategorier om de saknas
+    with SessionLocal() as db:
+        try:
+            builtin_kategorier = {
+                "yrke_kyrkans_man": "Kyrkans man",
+                "yrke_havets_man": "Havets män",
+                "yrke_handelns_furste": "Handelns furste",
+                "yrke_fabrikens_herre": "Fabrikens herre",
+                "yrke_hantverkets_mastare": "Hantverkets mästare",
+                "yrke_lardomens_vaktare": "Lärdomens väktare",
+                "yrke_lag_och_ordning": "Lag & ordning",
+                "yrke_fruar_mamseller": "Fruar & mamseller",
+                "yrke_jord_och_gard": "Jord och gård",
+            }
+            existing_kategori_keys = {
+                r.achievement_key for r in db.query(AchievementYrkesKategori.achievement_key).all()
+            }
+            for key, namn in builtin_kategorier.items():
+                if key not in existing_kategori_keys:
+                    db.add(AchievementYrkesKategori(achievement_key=key, namn=namn))
+            db.commit()
         except Exception:
             db.rollback()
 

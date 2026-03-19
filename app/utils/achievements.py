@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
+    AchievementYrkesKategori,
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
     GravplatsRedigeringslogg,
@@ -151,19 +152,13 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "skisser": "Skisser",
         "unika_yrken": "Unika yrken",
         "storgravar": "Storgravar (>3 gravsatta)",
-        "yrke_kyrkans_man": "Kyrkans man",
-        "yrke_havets_man": "Havets män",
-        "yrke_handelns_furste": "Handelns furste",
-        "yrke_fabrikens_herre": "Fabrikens herre",
-        "yrke_hantverkets_mastare": "Hantverkets mästare",
-        "yrke_lardomens_vaktare": "Lärdomens väktare",
-        "yrke_lag_och_ordning": "Lag & ordning",
-        "yrke_fruar_mamseller": "Fruar & mamseller",
-        "yrke_jord_och_gard": "Jord och gård",
         "nattugglan": "Nattugglan 🦉",
         "tidig_fagel": "Tidig fågel ☀️",
         "helgarbetare": "Helgarbetare 📅",
     }
+    # Lägg till yrkeskategoriers visningsnamn från databasen
+    for r in db.query(AchievementYrkesKategori).all():
+        achievement_labels_sv[r.achievement_key] = r.namn
     nivaer = []
     for key, thresholds in key_to_thresholds.items():
         value = value_by_key.get(key, 0)
