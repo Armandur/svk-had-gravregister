@@ -1,5 +1,5 @@
 """Beräkning av achievement-nivåer (används av auth- och admin-routes)."""
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.database import (
@@ -83,6 +83,18 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
     )
     antal_storgravar = sum(1 for _, cnt in gravsatta_per_gravplats if (cnt or 0) > 3)
 
+    # Antal registreringar gjorda nattetid (22:00–05:59 UTC) – "Nattugglan"-achievement
+    natt_result = db.execute(
+        text(
+            "SELECT COUNT(*) FROM gravplats_redigeringslogg"
+            " WHERE user_id = :uid"
+            " AND (CAST(strftime('%H', edited_at) AS INTEGER) >= 22"
+            "      OR CAST(strftime('%H', edited_at) AS INTEGER) < 6)"
+        ),
+        {"uid": user_id},
+    ).scalar()
+    antal_nattugglan = int(natt_result or 0)
+
     niva_rows = db.query(AchievementNiva).order_by(AchievementNiva.achievement_key, AchievementNiva.threshold).all()
     key_to_thresholds = {}
     for n in niva_rows:
@@ -100,6 +112,7 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "skisser": antal_skisser,
         "unika_yrken": antal_unika_yrken,
         "storgravar": antal_storgravar,
+        "nattugglan": antal_nattugglan,
     }
     # Lägg till alla dynamiska yrkesgrupper i value_by_key
     for key, count in yrkes_grupp_counts.items():
@@ -122,6 +135,7 @@ def _compute_achievements_niva(db: Session, user_id: int) -> list[dict]:
         "yrke_lag_och_ordning": "Lag & ordning",
         "yrke_fruar_mamseller": "Fruar & mamseller",
         "yrke_jord_och_gard": "Jord och gård",
+        "nattugglan": "Nattugglan 🦉",
     }
     nivaer = []
     for key, thresholds in key_to_thresholds.items():

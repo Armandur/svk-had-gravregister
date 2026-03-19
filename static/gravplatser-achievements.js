@@ -38,46 +38,83 @@ function gpNewlyEarnedAchievements(beforeNivaer, afterNivaer) {
   return result;
 }
 
+/**
+ * Returnerar achievements där användaren just passerat 80%-tröskeln mot nästa nivå
+ * (men inte precis nått den – det hanteras av gpNewlyEarnedAchievements).
+ */
+function gpNastanFrammeAchievements(beforeNivaer, afterNivaer) {
+  const beforeByKey = {};
+  (beforeNivaer || []).forEach(function (n) { beforeByKey[n.achievement_key] = n; });
+  const result = [];
+  (afterNivaer || []).forEach(function (n) {
+    if (n.earned_level === 'gold') return;
+    var nextLevel = null, nextThreshold = null;
+    if (!n.earned_level && n.bronze) { nextLevel = 'bronze'; nextThreshold = n.bronze.threshold; }
+    else if (n.earned_level === 'bronze' && n.silver) { nextLevel = 'silver'; nextThreshold = n.silver.threshold; }
+    else if (n.earned_level === 'silver' && n.gold) { nextLevel = 'gold'; nextThreshold = n.gold.threshold; }
+    if (!nextThreshold || nextThreshold <= 0) return;
+    var afterVal = n.current_value || 0;
+    var afterPct = afterVal / nextThreshold;
+    // Vi vill nudga om vi är i 80–99%-spannet
+    if (afterPct < 0.8 || afterVal >= nextThreshold) return;
+    var beforeN = beforeByKey[n.achievement_key];
+    var beforeVal = (beforeN && typeof beforeN.current_value === 'number') ? beforeN.current_value : 0;
+    var beforePct = beforeVal / nextThreshold;
+    // Bara visa om vi precis korsade 80%-gränsen denna sparning
+    if (beforePct >= 0.8) return;
+    result.push({ key: n.achievement_key, label: n.label, nextLevel, afterVal, nextThreshold });
+  });
+  return result;
+}
+
 /** Visar achievement- och yrkes-toasts efter sparning. Anropas från sparaInmatning och fardigtranskriberad-knappen. */
 function visaSparToasts(achievementsBefore, data) {
   if (!data) return;
-  if (data.new_unique_yrken && data.new_unique_yrken.length > 0) {
-    fetch(`${API}/me`, { credentials: 'include' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((me) => {
-        const p = (me && me.preferences) || {};
-        if (p.fun_enabled !== false) {
-          if (p.toast_on_new_yrke !== false) {
-            (data.new_unique_yrken || []).forEach((yrke) => {
-              gpShowToast(gpToastTextFörNyttYrke([yrke]));
-            });
-          }
-          if (p.sound_on_new_yrke !== false) {
-            gpPlayPling();
-          }
+  const hasYrke = data.new_unique_yrken && data.new_unique_yrken.length > 0;
+  const hasAch = data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0;
+  if (!hasYrke && !hasAch) return;
+
+  // Enda fetch för att slippa dubbla anrop till /api/me
+  fetch(`${API}/me`, { credentials: 'include' })
+    .then((r) => r.ok ? r.json() : null)
+    .then((me) => {
+      const p = (me && me.preferences) || {};
+      if (p.fun_enabled === false) return;
+
+      // Yrke-toasts
+      if (hasYrke && p.toast_on_new_yrke !== false) {
+        (data.new_unique_yrken || []).forEach((yrke) => {
+          gpShowToast(gpToastTextFörNyttYrke([yrke]));
+        });
+      }
+
+      // Achievement-toasts
+      if (hasAch) {
+        const beforeNivaer = achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [];
+        const afterNivaer = data.achievements_snapshot;
+
+        const newlyEarned = gpNewlyEarnedAchievements(beforeNivaer, afterNivaer);
+        newlyEarned.forEach((item) => {
+          gpShowToast(gpToastTextFörAchievement(item.level, item.label, item.threshold, item.current));
+        });
+
+        // "Nästan framme"-nudge om inga medaljer precis intjänades (för att inte störa)
+        if (newlyEarned.length === 0 && p.toast_on_new_yrke !== false) {
+          const nastanLista = gpNastanFrammeAchievements(beforeNivaer, afterNivaer);
+          nastanLista.forEach((item) => {
+            gpShowToast(gpToastTextFörNastan(item.label, item.nextLevel, item.afterVal, item.nextThreshold));
+          });
         }
-      })
-      .catch(() => {});
-  }
-  if (data.achievements_snapshot && Array.isArray(data.achievements_snapshot) && data.achievements_snapshot.length > 0) {
-    const newlyEarned = gpNewlyEarnedAchievements(achievementsBefore && achievementsBefore.nivaer ? achievementsBefore.nivaer : [], data.achievements_snapshot);
-    if (newlyEarned.length > 0) {
-      fetch(`${API}/me`, { credentials: 'include' })
-        .then((r) => r.ok ? r.json() : null)
-        .then((me) => {
-          const p = (me && me.preferences) || {};
-          if (p.fun_enabled !== false) {
-            newlyEarned.forEach((item) => {
-              gpShowToast(gpToastTextFörAchievement(item.level, item.label, item.threshold, item.current));
-            });
-            if (p.sound_on_new_yrke !== false) {
-              gpPlayPling();
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }
+      }
+
+      // Ljud: spela om vi visade yrke- eller achievement-toasts
+      if (p.sound_on_new_yrke !== false) {
+        if (hasYrke || (hasAch && data.achievements_snapshot)) {
+          gpPlayPling();
+        }
+      }
+    })
+    .catch(() => {});
 }
 
 function gpToastTextFörAchievement(level, label, threshold, current) {
@@ -88,14 +125,27 @@ function gpToastTextFörAchievement(level, label, threshold, current) {
   const thresholdText = typeof threshold === 'number' ? `${threshold} st` : null;
   const formuleringar = [
     thresholdText && countText
-      ? `${emoji} Du har nått ${nivåNamn} i ${labelHtml} – ${countText}!.`
+      ? `${emoji} Du har nått ${nivåNamn} i ${labelHtml} – ${countText}!`
       : `${emoji} Du har nått ${nivåNamn} i ${labelHtml}!`,
     thresholdText && countText
-      ? `${emoji} Ny utmärkelse i ${labelHtml}: ${nivåNamn} (${countText} totalt!`
+      ? `${emoji} Ny utmärkelse i ${labelHtml}: ${nivåNamn} (${countText} totalt)!`
       : `${emoji} Ny utmärkelse i ${labelHtml}: nivån ${nivåNamn}.`,
     thresholdText && countText
       ? `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml} genom att nå ${countText}!`
       : `${emoji} Bra jobbat – du har precis klättrat till ${nivåNamn}-nivå i ${labelHtml}.`,
+  ];
+  return formuleringar[Math.floor(Math.random() * formuleringar.length)];
+}
+
+/** Slumpad uppmuntrande text när användaren är nära nästa nivå (80–99%). */
+function gpToastTextFörNastan(label, nextLevel, afterVal, threshold) {
+  const kvar = threshold - afterVal;
+  const nextLevelLabel = nextLevel === 'gold' ? 'guld' : nextLevel === 'silver' ? 'silver' : 'brons';
+  const labelHtml = label ? `<strong>${esc(label)}</strong>` : '';
+  const formuleringar = [
+    `⏳ Nästan framme i ${labelHtml}! Bara ${kvar} st kvar till ${nextLevelLabel}.`,
+    `🔜 Du är nära ${nextLevelLabel} i ${labelHtml} – ${kvar} st kvar!`,
+    `💪 Kämpa på! Bara ${kvar} st till ${nextLevelLabel} i ${labelHtml}.`,
   ];
   return formuleringar[Math.floor(Math.random() * formuleringar.length)];
 }

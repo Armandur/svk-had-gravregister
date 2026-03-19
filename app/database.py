@@ -420,6 +420,10 @@ def init_db():
                     ("yrke_jord_och_gard", "bronze", 5, "5 jord/gårds-yrken"),
                     ("yrke_jord_och_gard", "silver", 10, "10 jord/gårds-yrken"),
                     ("yrke_jord_och_gard", "gold", 20, "20 jord/gårds-yrken"),
+                    # Nattugglan – registreringar gjorda 22:00–05:59 UTC
+                    ("nattugglan", "bronze", 5, "5 nattregistreringar"),
+                    ("nattugglan", "silver", 20, "20 nattregistreringar"),
+                    ("nattugglan", "gold", 50, "50 nattregistreringar"),
                 ]
                 for key, level, threshold, label in defaults:
                     db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
@@ -790,6 +794,21 @@ def init_db():
                 for key, level, threshold, label in defaults_extra:
                     if key not in existing_keys:
                         db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+                db.commit()
+        except Exception:
+            db.rollback()
+
+    # Migration: lägg till Nattugglan-achievement om det saknas (befintliga databaser)
+    with SessionLocal() as db:
+        try:
+            has_nattugglan = db.query(AchievementNiva).filter(AchievementNiva.achievement_key == "nattugglan").first() is not None
+            if not has_nattugglan:
+                for key, level, threshold, label in [
+                    ("nattugglan", "bronze", 5, "5 nattregistreringar"),
+                    ("nattugglan", "silver", 20, "20 nattregistreringar"),
+                    ("nattugglan", "gold", 50, "50 nattregistreringar"),
+                ]:
+                    db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
                 db.commit()
         except Exception:
             db.rollback()
