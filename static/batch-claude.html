@@ -81,6 +81,13 @@
     .batch-typ-info-realtid { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
     .batch-typ-info-batch { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
     .batch-typ-info-icon { font-size: 1.1rem; line-height: 1.4; flex-shrink: 0; }
+    /* Kostnadsuppskattning */
+    .batch-kostnad-panel { background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:0.7rem 1rem; font-size:0.88rem; margin:0.75rem 0; color:#14532d; }
+    .batch-kostnad-panel table { border-collapse:collapse; margin:0.35rem 0 0; width:100%; }
+    .batch-kostnad-panel td { padding:0.1rem 0.4rem 0.1rem 0; }
+    .batch-kostnad-panel td:last-child { text-align:right; font-variant-numeric:tabular-nums; padding-right:0; }
+    .batch-kostnad-panel .batch-kostnad-sep td { border-top:1px solid #86efac; padding-top:0.3rem; }
+    .batch-kostnad-panel .batch-kostnad-rek td { font-weight:600; }
 
     /* Info-sektion om API-typerna */
     .batch-forklaring { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; font-size: 0.88rem; color: #334155; }
@@ -210,6 +217,11 @@
         <span id="batch-typ-info-text"></span>
       </div>
 
+      <!-- Kostnadsuppskattning -->
+      <div id="batch-kostnad-wrap" hidden>
+        <div id="batch-kostnad-panel" class="batch-kostnad-panel"></div>
+      </div>
+
       <div id="batch-statistik-wrap" class="batch-stapel-wrap" hidden></div>
 
       <div class="batch-rad" style="margin-top:0.75rem">
@@ -238,6 +250,7 @@
       <ul class="batch-jobb-lista" id="batch-jobb-lista"></ul>
     </div>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
 (function() {
@@ -255,6 +268,7 @@
     laddaTrad();
     laddaStatistik();
     laddaJobb();
+    uppdateraKostnad();
   });
 
   /* ── Träddata (kyrkogård / kvarter) ─────────────────────────── */
@@ -402,7 +416,87 @@
   }
 
   document.getElementById('batch-antal').addEventListener('input', uppdateraTypInfo);
-  document.getElementById('batch-tvinga-batch').addEventListener('change', uppdateraTypInfo);
+  document.getElementById('batch-tvinga-batch').addEventListener('change', function() { uppdateraTypInfo(); uppdateraKostnad(); });
+
+  /* ── Kostnadsuppskattning ────────────────────────────────────── */
+  const KOSTNAD_ALLM = 0.033;
+  const KOSTNAD_OVRIGA = 0.020;
+  const KOSTNAD_MARGINAL = 1.20;
+  let _kostnadTimer = null;
+
+  function uppdateraKostnad() {
+    clearTimeout(_kostnadTimer);
+    _kostnadTimer = setTimeout(_hamtaKostnad, 400);
+  }
+
+  async function _hamtaKostnad() {
+    const wrap = document.getElementById('batch-kostnad-wrap');
+    const panel = document.getElementById('batch-kostnad-panel');
+    const kyrkogard = document.getElementById('batch-kyrkogard').value;
+    const kvarter = document.getElementById('batch-kvarter').value;
+    const antalVal = document.getElementById('batch-antal').value;
+    const antal = antalVal ? parseInt(antalVal) : null;
+    const ejTranskriberade = document.getElementById('batch-filter-ej-transkriberade').checked;
+    const ejKorda = document.getElementById('batch-filter-ej-korda').checked;
+
+    const params = new URLSearchParams({ ej_transkriberade: ejTranskriberade, ej_claude_korda: ejKorda });
+    if (kyrkogard) params.set('kyrkogard', kyrkogard);
+    if (kvarter) params.set('kvarter', kvarter);
+    if (antal !== null && !isNaN(antal) && antal > 0) params.set('antal', antal);
+
+    try {
+      const res = await fetch(API + '/batch-claude/uppskattning?' + params, { credentials: 'include' });
+      if (!res.ok) { wrap.hidden = true; return; }
+      const d = await res.json();
+      const tvingas = document.getElementById('batch-tvinga-batch').checked;
+      if (d.totalt === 0) { wrap.hidden = true; return; }
+
+      const anvandBatch = tvingas || d.totalt >= BATCH_GRANS;
+      // Batch API: 50 % rabatt → schablonpriser direkt; Messages API: dubbelt pris
+      const prisAllm = anvandBatch ? KOSTNAD_ALLM : KOSTNAD_ALLM * 2;
+      const prisOvriga = anvandBatch ? KOSTNAD_OVRIGA : KOSTNAD_OVRIGA * 2;
+
+      const allm = d.allm || 0;
+      const ovriga = d.ovriga || 0;
+      const kostnadAllm = allm * prisAllm;
+      const kostnadOvriga = ovriga * prisOvriga;
+      const delsumma = kostnadAllm + kostnadOvriga;
+      const rek = delsumma * KOSTNAD_MARGINAL;
+
+      const fmt = (v) => v < 0.01 ? '<$0.01' : '$' + v.toFixed(2);
+      const fmtRek = (v) => '$' + Math.ceil(v);
+
+      let rader = '';
+      if (allm > 0 && ovriga > 0) {
+        rader += '<tr><td>Allm-kvarteren (' + allm + ' kort)</td><td>~' + fmt(kostnadAllm) + '</td></tr>';
+        rader += '<tr><td>Övriga kvarteren (' + ovriga + ' kort)</td><td>~' + fmt(kostnadOvriga) + '</td></tr>';
+        rader += '<tr class="batch-kostnad-sep"><td>Delsumma</td><td>~' + fmt(delsumma) + '</td></tr>';
+      } else if (allm > 0) {
+        rader += '<tr><td>Allm-kvarteren (' + allm + ' kort)</td><td>~' + fmt(kostnadAllm) + '</td></tr>';
+      } else {
+        rader += '<tr><td>Övriga kvarteren (' + ovriga + ' kort)</td><td>~' + fmt(kostnadOvriga) + '</td></tr>';
+      }
+      rader += '<tr class="batch-kostnad-rek' + (allm === 0 || ovriga === 0 ? ' batch-kostnad-sep' : '') + '"><td>Rekommenderad kreditbuffert (inkl. 20\u202f% marginal)</td><td>~' + fmtRek(rek) + '</td></tr>';
+
+      const apiLabel = anvandBatch ? 'Batch API (50\u2009% rabatt)' : 'Messages API (realtid)';
+      panel.innerHTML = '<strong>Uppskattad kostnad</strong> &ndash; ' + d.totalt + ' gravplatser via ' + apiLabel
+        + '<table>' + rader + '</table>'
+        + '<div style="margin-top:0.4rem;font-size:0.82rem;opacity:0.8">Uppskattning baserad på empiriska mätvärden. Faktisk kostnad beror på textmängd och antal bilder.</div>';
+      wrap.hidden = false;
+    } catch(e) {
+      wrap.hidden = true;
+    }
+  }
+
+  ['batch-kyrkogard', 'batch-kvarter'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', uppdateraKostnad);
+  });
+  ['batch-antal'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('input', uppdateraKostnad);
+  });
+  ['batch-filter-ej-transkriberade', 'batch-filter-ej-korda'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', uppdateraKostnad);
+  });
 
   /* ── Jobblistning ────────────────────────────────────────────── */
   async function laddaJobb() {
@@ -503,7 +597,7 @@
     });
     lista.querySelectorAll('.batch-stoppa-lista-btn').forEach(function(btn) {
       btn.addEventListener('click', async function() {
-        if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+        if (!await showConfirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
         try {
           await fetch(API + '/batch-claude/jobb/' + btn.dataset.id + '/avbryt', { method: 'POST', credentials: 'include' });
           laddaJobb();
@@ -554,7 +648,7 @@
     });
     lista.querySelectorAll('.batch-ta-bort-btn').forEach(function(btn) {
       btn.addEventListener('click', async function() {
-        if (!confirm('Ta bort jobbet?')) return;
+        if (!await showConfirm('Ta bort jobbet?')) return;
         try {
           const r = await fetch(API + '/batch-claude/jobb/' + btn.dataset.id, { method: 'DELETE', credentials: 'include' });
           if (r.ok) laddaJobb();
@@ -626,13 +720,13 @@
   async function oppnaGranskning(jobbId) {
     try {
       const res = await fetch(API + '/batch-claude/jobb/' + jobbId, { credentials: 'include' });
-      if (!res.ok) { alert('Kunde inte hämta jobbet.'); return; }
+      if (!res.ok) { showToast('Kunde inte hämta jobbet.', 'fel'); return; }
       const data = await res.json();
       const forsta = (data.poster || []).find(function(p) { return p.status === 'klar'; });
-      if (!forsta) { alert('Inga körda gravplatser i detta jobb ännu.'); return; }
+      if (!forsta) { showToast('Inga körda gravplatser i detta jobb ännu.', 'info'); return; }
       const slug = encodeURIComponent([forsta.kyrkogard, forsta.kvarter, forsta.gravplatsnummer].filter(Boolean).join(' '));
       window.location.href = '/gravplatser/' + slug + '?batch_jobb_id=' + jobbId;
-    } catch(e) { alert('Fel: ' + (e.message || 'okänt')); }
+    } catch(e) { showToast('Fel: ' + (e.message || 'okänt'), 'fel'); }
   }
 
   /* ── Realtidskörning ─────────────────────────────────────────── */
@@ -671,7 +765,7 @@
         laddaStatistik();
         return;
       }
-      if (!res.ok) { alert('Fel vid k\u00f6rning.'); laddaJobb(); return; }
+      if (!res.ok) { showToast('Fel vid körning.', 'fel'); laddaJobb(); return; }
       const data = await res.json();
       const klara = data.klara || 0;
       const totalt = aktivtJobbTotalt || data.totalt || 1;
@@ -693,7 +787,7 @@
         return;
       }
       setTimeout(korNasta, 800);
-    } catch(e) { alert('N\u00e4tverksfel: ' + (e.message || '')); laddaJobb(); }
+    } catch(e) { showToast('Nätverksfel: ' + (e.message || ''), 'fel'); laddaJobb(); }
   }
 
   document.getElementById('batch-pausa-btn').addEventListener('click', async function() {
@@ -707,7 +801,7 @@
 
   document.getElementById('batch-stoppa-btn').addEventListener('click', async function() {
     if (!aktivtJobbId) return;
-    if (!confirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
+    if (!await showConfirm('Stoppa jobbet permanent? Väntande gravplatser hoppas över.')) return;
     aktivtJobbPausad = true;
     try { await fetch(API + '/batch-claude/jobb/' + aktivtJobbId + '/avbryt', { method: 'POST', credentials: 'include' }); } catch(e) {}
     document.getElementById('batch-aktiv-wrap').hidden = true;

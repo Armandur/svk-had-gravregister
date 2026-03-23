@@ -44,6 +44,7 @@
       <ul id="kg-lista" class="kg-lista"></ul>
     </section>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
 (function() {
@@ -84,9 +85,9 @@
           listEl.appendChild(li);
         });
         listEl.querySelectorAll('.kg-ta-bort:not([disabled])').forEach(function(btn) {
-          btn.addEventListener('click', function() {
+          btn.addEventListener('click', async function() {
             const kod = (btn.dataset.kod || '').trim();
-            if (!kod || !confirm('Ta bort kyrkogården "' + kod + '"?')) return;
+            if (!kod || !await showConfirm('Ta bort kyrkogården "' + kod + '"?')) return;
             fetch('/api/admin/kyrkogardar/' + encodeURIComponent(kod), {
               method: 'DELETE',
               credentials: 'include'
@@ -94,7 +95,7 @@
               if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Kunde inte ta bort'); });
               visaKyrkogardar();
             }).catch(function(e) {
-              alert('Fel: ' + (e.message || 'nätverksfel'));
+              showToast('Fel: ' + (e.message || 'nätverksfel'), 'fel');
             });
           });
         });

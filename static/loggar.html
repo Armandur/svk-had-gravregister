@@ -11,7 +11,7 @@
     .loggar-sida a { color: var(--accent, #2563eb); text-decoration: none; }
     .loggar-sida a:hover { text-decoration: underline; }
     .loggar-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; }
+    .loggar-filter label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.95rem; flex-wrap: wrap; }
     .loggar-filter input { padding: 0.4rem 0.6rem; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; width: 12rem; box-sizing: border-box; }
     .loggar-filter input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
     .loggar-filter button { padding: 0.4rem 0.75rem; font-size: 0.95rem; cursor: pointer; background: var(--accent, #2563eb); color: #fff; border: none; border-radius: 6px; }
@@ -30,24 +30,38 @@
     .loggar-paginering button:disabled { opacity: 0.5; cursor: not-allowed; }
     .loggar-ingen { color: #64748b; font-style: italic; margin-top: 1rem; }
     .loggar-fel { color: #b91c1c; margin-top: 0.5rem; }
+    .loggar-rad-expanderbar { cursor: pointer; }
+    .loggar-rad-expanderbar:hover td { background: #f1f5f9; }
+    .loggar-rad-expanderbar[aria-expanded="true"] td { background: #f8fafc; }
+    .loggar-chevron { font-size: 0.7rem; color: #94a3b8; margin-left: 0.3rem; }
+    .loggar-sammanfattning { font-size: 0.85rem; color: #475569; }
+    .loggar-detalj-rad td { padding: 0.5rem 0.75rem 0.75rem 2.5rem; background: #f8fafc; border-bottom: 1px solid var(--border, #e2e8f0); }
+    .loggar-andring-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .loggar-chip { display: inline-block; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.8rem; line-height: 1.4; }
+    .loggar-chip-andring { background: #dbeafe; color: #1e40af; }
+    .loggar-chip-tillagg { background: #dcfce7; color: #15803d; }
+    .loggar-chip-borttagning { background: #fee2e2; color: #b91c1c; }
+    .loggar-chip-ingen { font-size: 0.82rem; color: #94a3b8; font-style: italic; }
+    .loggar-forsta { font-size: 0.82rem; color: #94a3b8; font-style: italic; }
   </style>
 </head>
 <body>
   <main class="loggar-sida">
     <h1>Loggar – gravplatsredigeringar</h1>
-    <p><a href="/">← Tillbaka till menyn</a></p>
+    <p><a href="/installningar">← Tillbaka till Inställningar</a></p>
     <p id="loggar-ingen">Endast administratörer kan se loggar.</p>
     <section id="loggar-innehall" hidden>
       <p class="loggar-info" id="loggar-info">Här visas sparade ändringar av gravplatser, senaste först. Klicka på en gravplats för att öppna den.</p>
       <div class="loggar-filter">
         <label>Filtrera på användare <input type="text" id="loggar-filter-anvandare" placeholder="t.ex. användarnamn" /></label>
+        <label>Filtrera på gravplats <input type="text" id="loggar-filter-gravplats" placeholder="t.ex. HKG A 12" /></label>
         <button type="button" id="loggar-filter-btn">Filtrera</button>
         <button type="button" id="loggar-rensa-btn">Rensa filter</button>
       </div>
       <div class="loggar-tabell-wrap">
         <table class="loggar-tabell" id="loggar-tabell" role="grid">
           <thead>
-            <tr>
+            <tr id="loggar-thead-rad">
               <th scope="col">Datum och tid</th>
               <th scope="col">Gravplats</th>
               <th scope="col">Mapp</th>
@@ -73,18 +87,21 @@
       let currentOffset = 0;
       let totalCount = 0;
       let filterAnvandare = '';
+      let filterGravplatsId = null;
+      let filterGravplats = '';
 
       const innehall = document.getElementById('loggar-innehall');
       const ingen = document.getElementById('loggar-ingen');
       const tbody = document.getElementById('loggar-tbody');
       const tomEl = document.getElementById('loggar-tom');
-      const pagineringEl = document.getElementById('loggar-paginering');
       const pagineringText = document.getElementById('loggar-paginering-text');
       const prevBtn = document.getElementById('loggar-prev');
       const nextBtn = document.getElementById('loggar-next');
       const filterInput = document.getElementById('loggar-filter-anvandare');
+      const filterGravplatsInput = document.getElementById('loggar-filter-gravplats');
       const filterBtn = document.getElementById('loggar-filter-btn');
       const rensaBtn = document.getElementById('loggar-rensa-btn');
+      const theadRad = document.getElementById('loggar-thead-rad');
 
       function formatDatum(s) {
         if (!s) return '–';
@@ -100,6 +117,229 @@
         return t ? encodeURIComponent(t) : '';
       }
 
+      // --- Diff-logik (speglar _historikDiffData i gravplatser.js) ---
+      function diffData(ny, gammal) {
+        if (!ny || !gammal) return null;
+        var items = [];
+        var SKALARER = {
+          storlek: 'Storlek', underhall_text: 'Underhållstext',
+          gravrattstid: 'Gravrattstid', monument: 'Monument',
+          gravens_utformning: 'Gravens utformning', karta_nr: 'Kartnr',
+          gravbrev_nr: 'Gravbrevnr', utfordat_den: 'Utfärdat den', kommentar: 'Kommentar',
+        };
+        Object.keys(SKALARER).forEach(function(key) {
+          var etikett = SKALARER[key];
+          var a = (gammal[key] != null ? gammal[key] : '').toString().trim();
+          var b = (ny[key] != null ? ny[key] : '').toString().trim();
+          if (a !== b) {
+            if (!a) items.push({ typ: 'tillagg', text: etikett + ': ' + b });
+            else if (!b) items.push({ typ: 'borttagning', text: etikett + ' borttagen' });
+            else items.push({ typ: 'andring', text: etikett + ': ' + a + ' → ' + b });
+          }
+        });
+        if (!!ny.fardigtranskriberad !== !!gammal.fardigtranskriberad) {
+          if (ny.fardigtranskriberad) items.push({ typ: 'tillagg', text: 'Markerad som färdigtranskriberad' });
+          else items.push({ typ: 'borttagning', text: 'Avmarkerad som färdigtranskriberad' });
+        }
+        if (!!ny.underhall_overstruket !== !!gammal.underhall_overstruket) {
+          if (ny.underhall_overstruket) items.push({ typ: 'andring', text: 'Underhåll markerat som överstruket' });
+          else items.push({ typ: 'andring', text: 'Underhåll – överstruket avmarkerat' });
+        }
+        function namnKey(x) { return ((x.fornamn || '') + ' ' + (x.efternamn || '')).trim() || '?'; }
+        function diffLista(nylista, gamlista, namnFn, etikett, extraFalt) {
+          var gaMap = {}; (gamlista || []).forEach(function(x) { gaMap[namnFn(x)] = x; });
+          var naMap = {}; (nylista || []).forEach(function(x) { naMap[namnFn(x)] = x; });
+          Object.keys(naMap).forEach(function(n) { if (!gaMap[n]) items.push({ typ: 'tillagg', text: etikett + ' tillagd: ' + n }); });
+          Object.keys(gaMap).forEach(function(n) { if (!naMap[n]) items.push({ typ: 'borttagning', text: etikett + ' borttagen: ' + n }); });
+          Object.keys(naMap).forEach(function(n) {
+            if (!gaMap[n]) return;
+            Object.keys(extraFalt).forEach(function(falt) {
+              var faltEtikett = extraFalt[falt];
+              var a = (gaMap[n][falt] != null ? gaMap[n][falt] : '').toString().trim();
+              var b = (naMap[n][falt] != null ? naMap[n][falt] : '').toString().trim();
+              if (a !== b) {
+                if (!a) items.push({ typ: 'tillagg', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + b });
+                else if (!b) items.push({ typ: 'borttagning', text: etikett + ' ' + n + ' – ' + faltEtikett + ' borttagen' });
+                else items.push({ typ: 'andring', text: etikett + ' ' + n + ' – ' + faltEtikett + ': ' + a + ' → ' + b });
+              }
+            });
+          });
+        }
+        diffLista(ny.innehavare, gammal.innehavare, namnKey, 'Innehavare',
+          { yrke: 'yrke', gatuadress: 'adress', postnummer: 'postnr', postort: 'postort', kommentar: 'kommentar' });
+        diffLista(ny.narmast_anhoriga, gammal.narmast_anhoriga, namnKey, 'Anhörig',
+          { yrke: 'yrke', adress: 'adress', kommentar: 'kommentar' });
+        function namnGravsatt(x) {
+          var n = namnKey(x);
+          var ar = [x.fodelse_ar, x.dods_ar].filter(Boolean).join('–');
+          return ar ? n + ' (' + ar + ')' : n;
+        }
+        diffLista(ny.gravsatta, gammal.gravsatta, namnGravsatt, 'Gravsatt',
+          { yrke: 'yrke', kommentar: 'kommentar' });
+        var nA = items.filter(function(x) { return x.typ === 'andring'; }).length;
+        var nT = items.filter(function(x) { return x.typ === 'tillagg'; }).length;
+        var nB = items.filter(function(x) { return x.typ === 'borttagning'; }).length;
+        var delar = [];
+        if (nA) delar.push(nA + (nA === 1 ? ' ändring' : ' ändringar'));
+        if (nT) delar.push(nT + (nT === 1 ? ' tillägg' : ' tillägg'));
+        if (nB) delar.push(nB + (nB === 1 ? ' borttagning' : ' borttagningar'));
+        return { items: items, sammanfattning: delar.length ? delar.join(', ') : 'Inga ändringar' };
+      }
+
+      function byggChipDetaljer(d, colSpan) {
+        var td = document.createElement('td');
+        td.colSpan = colSpan;
+        if (d && d.items.length > 0) {
+          var ul = document.createElement('ul');
+          ul.className = 'loggar-andring-lista';
+          d.items.forEach(function(item) {
+            var li = document.createElement('li');
+            var chip = document.createElement('span');
+            chip.className = 'loggar-chip loggar-chip-' + item.typ;
+            chip.textContent = item.text;
+            li.appendChild(chip);
+            ul.appendChild(li);
+          });
+          td.appendChild(ul);
+        } else {
+          var span = document.createElement('span');
+          span.className = 'loggar-chip-ingen';
+          span.textContent = 'Inga detaljerade ändringar registrerades';
+          td.appendChild(span);
+        }
+        return td;
+      }
+
+      var expandCounter = 0;
+      function byggRader(loggar, harSnapshots, colSpan) {
+        // Bygg map: gravplats_id -> [indices i loggar, senaste först]
+        var gpEntries = {};
+        loggar.forEach(function(r, i) {
+          var gid = r.gravplats_id;
+          if (!gpEntries[gid]) gpEntries[gid] = [];
+          gpEntries[gid].push(i);
+        });
+
+        // Hitta nästa reguljära snapshot för samma gravplats (längre bak i listan = äldre)
+        function finnNastaRegular(idx) {
+          var gid = loggar[idx].gravplats_id;
+          var entries = gpEntries[gid] || [];
+          var pos = entries.indexOf(idx);
+          for (var k = pos + 1; k < entries.length; k++) {
+            var snap = loggar[entries[k]].inmatning_snapshot;
+            if (snap && !snap._skiss_event) return entries[k];
+          }
+          return -1;
+        }
+
+        loggar.forEach(function(r) {
+          var slug = slugFromFullstandigt(r.fullstandigt);
+          var tr = document.createElement('tr');
+
+          var tdDatum = document.createElement('td');
+          tdDatum.className = 'loggar-datum';
+          tdDatum.textContent = formatDatum(r.edited_at);
+
+          var tdGrav = document.createElement('td');
+          tdGrav.className = 'loggar-grav';
+          if (slug) {
+            var a = document.createElement('a');
+            a.href = '/gravplatser/' + slug;
+            a.textContent = r.fullstandigt || '–';
+            tdGrav.appendChild(a);
+          } else {
+            tdGrav.textContent = r.fullstandigt || '–';
+          }
+
+          var tdMapp = document.createElement('td');
+          tdMapp.textContent = r.mapp_namn || '–';
+
+          var tdAnv = document.createElement('td');
+          tdAnv.textContent = r.username || '–';
+
+          tr.appendChild(tdDatum);
+          tr.appendChild(tdGrav);
+          tr.appendChild(tdMapp);
+          tr.appendChild(tdAnv);
+
+          if (!harSnapshots) {
+            tbody.appendChild(tr);
+            return;
+          }
+
+          var andringarTd = document.createElement('td');
+          var skissEvent = r.inmatning_snapshot && r.inmatning_snapshot._skiss_event;
+          if (skissEvent) {
+            var chip = document.createElement('span');
+            chip.className = 'loggar-chip ' + (skissEvent === 'tillagd' ? 'loggar-chip-tillagg' : 'loggar-chip-borttagning');
+            chip.textContent = skissEvent === 'tillagd' ? 'Skiss tillagd' : 'Skiss borttagen';
+            andringarTd.appendChild(chip);
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            return;
+          }
+
+          var idx = loggar.indexOf(r);
+          var nastaIdx = r.inmatning_snapshot ? finnNastaRegular(idx) : -1;
+          var d = (nastaIdx !== -1 && r.inmatning_snapshot) ? diffData(r.inmatning_snapshot, loggar[nastaIdx].inmatning_snapshot) : null;
+
+          // Färdigtranskriberad-händelse – enkel chip-rad, ej expanderbar
+          if (d && d.items.length === 1 &&
+              (d.items[0].text === 'Markerad som färdigtranskriberad' || d.items[0].text === 'Avmarkerad som färdigtranskriberad')) {
+            var chip = document.createElement('span');
+            chip.className = 'loggar-chip loggar-chip-' + d.items[0].typ;
+            chip.textContent = d.items[0].text;
+            andringarTd.appendChild(chip);
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            return;
+          }
+
+          if (nastaIdx !== -1) {
+            var detaljId = 'loggar-detalj-' + (expandCounter++);
+            tr.classList.add('loggar-rad-expanderbar');
+            tr.setAttribute('aria-expanded', 'false');
+            tr.setAttribute('role', 'button');
+            tr.setAttribute('tabindex', '0');
+            tr.setAttribute('aria-controls', detaljId);
+            var chevron = document.createElement('span');
+            chevron.className = 'loggar-chevron';
+            chevron.textContent = ' ▶';
+            var samm = document.createElement('span');
+            samm.className = 'loggar-sammanfattning';
+            samm.textContent = d ? d.sammanfattning : 'Inga ändringar';
+            andringarTd.appendChild(samm);
+            andringarTd.appendChild(chevron);
+            var detaljTr = document.createElement('tr');
+            detaljTr.id = detaljId;
+            detaljTr.className = 'loggar-detalj-rad';
+            detaljTr.hidden = true;
+            detaljTr.appendChild(byggChipDetaljer(d, colSpan));
+            (function(trRef, detaljTrRef, chevronRef) {
+              function toggle() {
+                var exp = trRef.getAttribute('aria-expanded') === 'true';
+                trRef.setAttribute('aria-expanded', exp ? 'false' : 'true');
+                detaljTrRef.hidden = exp;
+                chevronRef.textContent = exp ? ' ▶' : ' ▼';
+              }
+              trRef.addEventListener('click', toggle);
+              trRef.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+            })(tr, detaljTr, chevron);
+            tr.appendChild(andringarTd);
+            tbody.appendChild(tr);
+            tbody.appendChild(detaljTr);
+            return;
+          } else if (r.inmatning_snapshot) {
+            andringarTd.className = 'loggar-forsta';
+            andringarTd.textContent = '(första sparande på denna sida)';
+          } else {
+            andringarTd.textContent = '–';
+          }
+          tr.appendChild(andringarTd);
+          tbody.appendChild(tr);
+        });
+      }
+
       function laddaLoggar() {
         tbody.innerHTML = '';
         tomEl.hidden = true;
@@ -107,6 +347,8 @@
         params.set('limit', String(PAGE_SIZE));
         params.set('offset', String(currentOffset));
         if (filterAnvandare) params.set('anvandare', filterAnvandare);
+        if (filterGravplatsId != null) params.set('gravplats_id', String(filterGravplatsId));
+        else if (filterGravplats) params.set('gravplats', filterGravplats);
 
         fetch(API + '/loggar/gravplatser?' + params.toString(), { credentials: 'include' })
           .then(function(res) {
@@ -131,16 +373,13 @@
             if (loggar.length === 0 && currentOffset === 0) {
               tomEl.hidden = false;
             }
-            loggar.forEach(function(r) {
-              var tr = document.createElement('tr');
-              var slug = slugFromFullstandigt(r.fullstandigt);
-              var gravLink = slug ? '<a href="/gravplatser/' + slug + '">' + (r.fullstandigt || '–') + '</a>' : (r.fullstandigt || '–');
-              tr.innerHTML = '<td class="loggar-datum">' + formatDatum(r.edited_at) + '</td>' +
-                '<td class="loggar-grav">' + gravLink + '</td>' +
-                '<td>' + (r.mapp_namn || '–') + '</td>' +
-                '<td>' + (r.username || '–') + '</td>';
-              tbody.appendChild(tr);
-            });
+            var harSnapshots = loggar.some(function(r) { return r.inmatning_snapshot != null; });
+            var colSpan = harSnapshots ? 5 : 4;
+            if (theadRad) {
+              theadRad.innerHTML = '<th scope="col">Datum och tid</th><th scope="col">Gravplats</th><th scope="col">Mapp</th><th scope="col">Användare</th>' +
+                (harSnapshots ? '<th scope="col">Ändringar</th>' : '');
+            }
+            byggRader(loggar, harSnapshots, colSpan);
             pagineringText.textContent = 'Visar ' + (currentOffset + 1) + '–' + (currentOffset + loggar.length) + ' av ' + totalCount;
             prevBtn.disabled = currentOffset === 0;
             nextBtn.disabled = currentOffset + loggar.length >= totalCount;
@@ -154,12 +393,17 @@
 
       if (filterBtn) filterBtn.addEventListener('click', function() {
         filterAnvandare = (filterInput && filterInput.value) ? filterInput.value.trim() : '';
+        filterGravplatsId = null;
+        filterGravplats = (filterGravplatsInput && filterGravplatsInput.value) ? filterGravplatsInput.value.trim() : '';
         currentOffset = 0;
         laddaLoggar();
       });
       if (rensaBtn) rensaBtn.addEventListener('click', function() {
         filterAnvandare = '';
+        filterGravplatsId = null;
+        filterGravplats = '';
         if (filterInput) filterInput.value = '';
+        if (filterGravplatsInput) filterGravplatsInput.value = '';
         currentOffset = 0;
         laddaLoggar();
       });
@@ -175,6 +419,11 @@
       });
 
       (window.gpEnsureAuthPromise || gpEnsureAuth()).then(function() {
+        var urlParams = new URLSearchParams(window.location.search);
+        var gpIdParam = urlParams.get('gravplats_id');
+        if (gpIdParam && !isNaN(parseInt(gpIdParam, 10))) {
+          filterGravplatsId = parseInt(gpIdParam, 10);
+        }
         laddaLoggar();
       });
     })();

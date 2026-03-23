@@ -1,21 +1,24 @@
 """Auth-routes: login, logout, /api/me, preferenser, achievements."""
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, verify_password
+from app.auth import get_current_user, hash_password, verify_password
 from app.database import (
     GravplatsRedigeringslogg,
+    ToastFormulering,
     User,
     get_db,
 )
-from app.schemas import LoginBody, MePreferencesBody
+from app.schemas import LoginBody, MePasswordBody, MePreferencesBody
 from app.utils.achievements import _compute_achievements_niva
 from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/api/login")
@@ -35,6 +38,23 @@ async def logout(request: Request):
     return {"ok": True}
 
 
+@router.put("/api/me/password")
+async def change_my_password(
+    body: MePasswordBody,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Byt eget lösenord – kräver att nuvarande lösenord anges."""
+    if not verify_password(body.current_password or "", current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Felaktigt nuvarande lösenord")
+    new_pw = (body.new_password or "").strip()
+    if len(new_pw) < 4:
+        raise HTTPException(status_code=400, detail="Det nya lösenordet är för kort (minst 4 tecken)")
+    current_user.password_hash = hash_password(new_pw)
+    db.commit()
+    return {"ok": True}
+
+
 @router.patch("/api/me/preferences")
 async def patch_me_preferences(
     body: MePreferencesBody,
@@ -46,8 +66,8 @@ async def patch_me_preferences(
     if getattr(current_user, "preferences", None) and (current_user.preferences or "").strip():
         try:
             prefs = json.loads(current_user.preferences)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("Ogiltigt JSON i preferences för user_id=%s: %s", current_user.id, e)
     if body.fun_enabled is not None:
         prefs["fun_enabled"] = body.fun_enabled
     if body.toast_on_new_yrke is not None:
@@ -76,8 +96,8 @@ async def me(current_user: User = Depends(get_current_user)):
     if getattr(current_user, "preferences", None) and current_user.preferences.strip():
         try:
             prefs = json.loads(current_user.preferences)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("Ogiltigt JSON i preferences för user_id=%s: %s", current_user.id, e)
     default_sections = ["innehavare", "narmast_anhoriga", "gravplatsen", "skiss", "gravsatta"]
     sections_pref = prefs.get("inmatning_sections_order") or default_sections
     # Normalisera ordning (filtrerad + kompletterad)
@@ -149,4 +169,16 @@ async def me_achievements(
         "forsta_registrering": first_at,
         "senaste_registrering": last_at,
         "nivaer": nivaer,
+    }
+
+
+@router.get("/api/toast-formuleringar")
+async def get_toast_formuleringar(db: Session = Depends(get_db)):
+    """Hämta redigerbara toast-texter. Ingen inloggning krävs (texterna är inte känsliga)."""
+    rows = db.query(ToastFormulering).order_by(ToastFormulering.typ, ToastFormulering.sortering).all()
+    return {
+        "formuleringar": [
+            {"id": r.id, "typ": r.typ, "sortering": r.sortering, "text": r.text}
+            for r in rows
+        ]
     }

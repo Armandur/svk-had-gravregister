@@ -45,6 +45,7 @@
     </div>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
 (function () {
   const API = '/api';
@@ -55,7 +56,6 @@
   const tbody = document.getElementById('dbuh-tbody');
   const tomEl = document.getElementById('dbuh-tom');
   const felEl = document.getElementById('dbuh-fel');
-  function escapeHtml(s) { var div = document.createElement('div'); div.textContent = s == null ? '' : String(s); return div.innerHTML; }
   function slugFromFullstandigt(fullstandigt) { var s = (fullstandigt || '').trim(); return s ? encodeURIComponent(s) : ''; }
   function formateraSenastAndrad(isoDatetime) {
     if (!isoDatetime) return '–';
@@ -107,7 +107,7 @@
   document.getElementById('dbuh-kor').addEventListener('click', function () {
     var btn = this;
     var falt = getValdaFalt();
-    if (!falt) { alert('Välj minst ett fält.'); return; }
+    if (!falt) { showToast('Välj minst ett fält.', 'info'); return; }
     var typ = (document.querySelector('input[name="dbuh-typ"]:checked') || {}).value || 'bada';
     var url = API + '/admin/databasunderhall/datakvalitet-generell-siffror-komma?falt=' + encodeURIComponent(falt) + '&typ=' + encodeURIComponent(typ);
     btn.disabled = true;

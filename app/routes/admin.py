@@ -14,6 +14,8 @@ from app.config import API_KEYS_PATH, BACKUP_DIR, DATABASE_PATH
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
+    AchievementYrkesKategori,
+    ToastFormulering,
     Gravplats,
     GravplatsRedigeringslogg,
     Kyrkogard,
@@ -23,6 +25,9 @@ from app.database import (
 from app.schemas import (
     AchievementNivaUpdateBody,
     AchievementYrkesGruppBody,
+    NyYrkesKategoriBody,
+    ToastFormuleringCreateBody,
+    ToastFormuleringUpdateBody,
     ApiKeysBody,
     ClaudeAktivBody,
     ClaudeBatchAktivBody,
@@ -34,7 +39,7 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv
+from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_claude_model, _get_spara_redigeringslogg_snapshot, _invalidate_cache, _load_api_keys
 from app.utils.git_version import GIT_VERSION
 from app.utils.text import _sanitize_backup_filename_part
 
@@ -109,6 +114,9 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "anthropic_api_key_from_env": from_env,
         "claude_aktiv_instans": _get_claude_instans_aktiv(),
         "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
+        "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
+        "claude_model": _get_claude_model(),
+        "claude_model_from_env": bool(os.environ.get("CLAUDE_MODEL")),
     }
 
 
@@ -116,12 +124,7 @@ async def get_api_keys(admin: User = Depends(require_admin)):
 async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
     """Spara API-nycklar och instansinställningar till api_keys.json. Endast admin."""
     try:
-        existing: dict = {}
-        if API_KEYS_PATH.is_file():
-            try:
-                existing = json.loads(API_KEYS_PATH.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                existing = {}
+        existing = dict(_load_api_keys())
         if body.anthropic_api_key is not None:
             key = body.anthropic_api_key.strip()
             if key:
@@ -132,7 +135,16 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
             existing["claude_aktiv_instans"] = body.claude_aktiv_instans
         if body.claude_batch_block_enskild is not None:
             existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
+        if body.spara_redigeringslogg_snapshot is not None:
+            existing["spara_redigeringslogg_snapshot"] = body.spara_redigeringslogg_snapshot
+        if body.claude_model is not None:
+            model = body.claude_model.strip()
+            if model:
+                existing["claude_model"] = model
+            else:
+                existing.pop("claude_model", None)
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        _invalidate_cache()
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
     return {"ok": True}
@@ -516,9 +528,16 @@ async def list_achievement_yrkesgrupp(
         if not key or not yrke:
             continue
         grupper.setdefault(key, []).append(yrke)
+
+    # Inkludera alla kända kategorier (även tomma)
+    kategori_rows = db.query(AchievementYrkesKategori).all()
+    namn_by_key: dict[str, str] = {r.achievement_key: r.namn for r in kategori_rows}
+    for key in namn_by_key:
+        grupper.setdefault(key, [])
+
     return {
         "grupper": [
-            {"achievement_key": key, "yrken": yrken}
+            {"achievement_key": key, "namn": namn_by_key.get(key, key), "yrken": yrken}
             for key, yrken in sorted(grupper.items(), key=lambda kv: kv[0])
         ]
     }
@@ -549,3 +568,115 @@ async def update_achievement_yrkesgrupp(
         db.add(AchievementYrkesGrupp(achievement_key=key, yrke=y))
     db.commit()
     return {"ok": True, "achievement_key": key, "antal_yrken": len(seen)}
+
+
+@router.post("/api/admin/achievement-yrkesgrupp-kategori", status_code=201)
+async def create_achievement_yrkesgrupp_kategori(
+    body: NyYrkesKategoriBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Skapa en ny yrkesbaserad prestationskategori – endast admin."""
+    key = (body.achievement_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="achievement_key krävs")
+    if not key.startswith("yrke_"):
+        raise HTTPException(status_code=400, detail="achievement_key måste börja med 'yrke_'")
+    namn = (body.namn or "").strip()
+    if not namn:
+        raise HTTPException(status_code=400, detail="namn krävs")
+    if db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).first():
+        raise HTTPException(status_code=409, detail="Kategorin finns redan")
+
+    db.add(AchievementYrkesKategori(achievement_key=key, namn=namn))
+    for level, threshold, label in [
+        ("bronze", body.bronze_threshold, f"{body.bronze_threshold} yrken"),
+        ("silver", body.silver_threshold, f"{body.silver_threshold} yrken"),
+        ("gold", body.gold_threshold, f"{body.gold_threshold} yrken"),
+    ]:
+        db.add(AchievementNiva(achievement_key=key, level=level, threshold=threshold, label=label))
+    db.commit()
+    return {"ok": True, "achievement_key": key, "namn": namn}
+
+
+@router.delete("/api/admin/achievement-yrkesgrupp-kategori/{key}")
+async def delete_achievement_yrkesgrupp_kategori(
+    key: str,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort en yrkesbaserad prestationskategori och alla dess data – endast admin."""
+    key = key.strip()
+    if not db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).first():
+        raise HTTPException(status_code=404, detail="Kategorin hittades inte")
+    db.query(AchievementYrkesKategori).filter(AchievementYrkesKategori.achievement_key == key).delete()
+    db.query(AchievementNiva).filter(AchievementNiva.achievement_key == key).delete()
+    db.query(AchievementYrkesGrupp).filter(AchievementYrkesGrupp.achievement_key == key).delete()
+    db.commit()
+    return {"ok": True, "achievement_key": key}
+
+
+# ---------- Toast-formuleringar (admin) ----------
+
+@router.get("/api/admin/toast-formuleringar")
+async def list_toast_formuleringar_admin(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Lista alla redigerbara toast-texter – endast admin."""
+    rows = db.query(ToastFormulering).order_by(ToastFormulering.typ, ToastFormulering.sortering).all()
+    return {
+        "formuleringar": [
+            {"id": r.id, "typ": r.typ, "sortering": r.sortering, "text": r.text}
+            for r in rows
+        ]
+    }
+
+
+@router.patch("/api/admin/toast-formulering/{formulering_id:int}")
+async def update_toast_formulering(
+    formulering_id: int,
+    body: ToastFormuleringUpdateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Uppdatera texten för en toast-formulering – endast admin."""
+    row = db.query(ToastFormulering).filter(ToastFormulering.id == formulering_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Formulering hittades inte")
+    row.text = (body.text or "").strip()
+    db.commit()
+    return {"ok": True, "id": row.id, "typ": row.typ, "text": row.text}
+
+
+@router.post("/api/admin/toast-formulering")
+async def create_toast_formulering(
+    body: ToastFormuleringCreateBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Skapa en ny toast-formulering – endast admin."""
+    from sqlalchemy import func as sqlfunc
+    typ = (body.typ or "").strip()
+    text = (body.text or "").strip()
+    if not typ or not text:
+        raise HTTPException(status_code=400, detail="typ och text krävs")
+    max_sort = db.query(sqlfunc.max(ToastFormulering.sortering)).filter(ToastFormulering.typ == typ).scalar() or 0
+    row = ToastFormulering(typ=typ, sortering=max_sort + 1, text=text)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"ok": True, "id": row.id, "typ": row.typ, "sortering": row.sortering, "text": row.text}
+
+
+@router.delete("/api/admin/toast-formulering/{formulering_id:int}")
+async def delete_toast_formulering(
+    formulering_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Ta bort en toast-formulering – endast admin."""
+    row = db.query(ToastFormulering).filter(ToastFormulering.id == formulering_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Formulering hittades inte")
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": formulering_id}
+

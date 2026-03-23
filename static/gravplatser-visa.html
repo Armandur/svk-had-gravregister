@@ -25,6 +25,7 @@
         <button type="button" id="gp-btn-toggle-hela" class="gravplatser-btn-toggle-hela">Visa hela sidan</button>
         <button type="button" id="gp-btn-vy" class="gravplatser-btn-vy" title="Växla mellan horisontell och vertikal vy">Horisontell vy</button>
         <button type="button" id="gp-btn-rapport" class="gravplatser-btn-rapport" title="Skapa rapportutskrift med transkriberad info och bilder">Rapportutskrift</button>
+        <button type="button" id="gp-btn-kortkommandon" class="gravplatser-btn-kortkommandon" title="Visa kortkommandon (?)">⌨</button>
       </div>
       <p id="gp-granska-anvandare-info" class="gp-granska-anvandare-info" hidden aria-live="polite"></p>
       <div id="gp-innehall-body" class="gp-innehall-body">
@@ -52,11 +53,17 @@
         <div class="gp-inmatning-header">
           <button type="button" id="gp-btn-fardigtranskriberad" class="gp-inmatning-btn-fardigtranskriberad gp-fardigtranskriberad-nej" disabled title="Markera om all information från bilderna har förts över">Ej färdigtranskriberad</button>
           <button type="button" id="gp-btn-redigera" class="gp-inmatning-btn-redigera">Redigera gravplatsen</button>
+          <button type="button" id="gp-btn-historik" class="gp-inmatning-btn-historik" hidden title="Visa redigeringshistorik för denna gravplats">Historik</button>
           <div class="gp-inmatning-spara-wrap gp-inmatning-spara-wrap-edit" id="gp-inmatning-spara-wrap" hidden>
             <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
             <button type="button" id="gp-claude-ocr-btn" class="gp-claude-ocr-btn">Hämta från Claude</button>
             <button type="button" id="gp-claude-avbryt-btn" class="gp-claude-avbryt-btn" hidden>Avbryt</button>
             <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
+          </div>
+          <div id="gp-avbryt-bekraftelse" class="gp-avbryt-bekraftelse" role="alertdialog" aria-label="Osparade ändringar" hidden>
+            <span class="gp-avbryt-bekraftelse-text">Du har osparade ändringar.</span>
+            <button type="button" id="gp-avbryt-bekraftelse-ja" class="gp-avbryt-bekraftelse-ja">Avbryt ändå</button>
+            <button type="button" id="gp-avbryt-bekraftelse-nej" class="gp-avbryt-bekraftelse-nej">Fortsätt redigera</button>
           </div>
           <div id="gp-ocr-kommentar-banner" class="gp-ocr-kommentar-banner" hidden aria-live="polite"></div>
           <div id="gp-batch-pagar-banner" class="gp-batch-pagar-banner" hidden aria-live="polite"></div>
@@ -71,6 +78,29 @@
             <div class="gp-claude-diff-knappar">
               <button type="button" id="gp-claude-diff-applicera">Applicera</button>
               <button type="button" id="gp-claude-diff-avbryt">Avbryt</button>
+            </div>
+          </dialog>
+          <dialog id="gp-historik-modal" class="gp-historik-modal" aria-label="Redigeringshistorik">
+            <div class="gp-historik-modal-header">
+              <h3 class="gp-historik-modal-rubrik" id="gp-historik-modal-rubrik">Redigeringshistorik</h3>
+              <button type="button" id="gp-historik-modal-stang" class="gp-historik-modal-stang" aria-label="Stäng">✕</button>
+            </div>
+            <div id="gp-historik-modal-innehall" class="gp-historik-modal-innehall">
+              <p class="gp-historik-laddar" id="gp-historik-laddar">Laddar…</p>
+              <table class="gp-historik-tabell" id="gp-historik-tabell" hidden>
+                <thead>
+                  <tr>
+                    <th scope="col">Datum och tid</th>
+                    <th scope="col">Användare</th>
+                  </tr>
+                </thead>
+                <tbody id="gp-historik-tbody"></tbody>
+              </table>
+              <p class="gp-historik-tom" id="gp-historik-tom" hidden>Inga redigeringar registrerade.</p>
+              <p class="gp-historik-fel" id="gp-historik-fel" hidden></p>
+            </div>
+            <div class="gp-historik-modal-footer">
+              <a id="gp-historik-logg-lank" href="/loggar" class="gp-historik-logg-lank">Visa alla i loggvyn →</a>
             </div>
           </dialog>
         </div>
@@ -140,7 +170,36 @@
     </div>
   </div>
 
-  <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-label="Extraherad text">
+  <dialog id="gp-kortkommandon-dialog" class="gp-kortkommandon-dialog" aria-label="Kortkommandon">
+    <div class="gp-kortkommandon-inner">
+      <div class="gp-kortkommandon-header">
+        <h3 class="gp-kortkommandon-rubrik">Kortkommandon</h3>
+        <button type="button" id="gp-kortkommandon-stang" class="gp-kortkommandon-stang" aria-label="Stäng">✕</button>
+      </div>
+      <table class="gp-kortkommandon-tabell">
+        <tbody>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>←</kbd> / <kbd>→</kbd></td><td>Föregående / nästa gravplats</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>E</kbd></td><td>Redigera / visa gravplatsen</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>F</kbd></td><td>Växla färdigtranskriberad</td></tr>
+          <tr id="gp-kortk-rad-hela-sidan"><td class="gp-kortkommandon-tangent"><kbd>H</kbd></td><td>Visa / dölj hela sidan</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>V</kbd></td><td>Växla horisontell / vertikal vy</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>R</kbd></td><td>Öppna rapportutskrift</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>S</kbd></td><td>Lägg till skiss</td></tr>
+          <tr id="gp-kortk-rad-claude"><td class="gp-kortkommandon-tangent"><kbd>C</kbd></td><td>Hämta från Claude</td></tr>
+          <tr id="gp-kortk-rad-historik"><td class="gp-kortkommandon-tangent"><kbd>I</kbd></td><td>Öppna redigeringshistorik</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Spara inmatning</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>?</kbd></td><td>Visa kortkommandon</td></tr>
+          <tr class="gp-kortkommandon-separator"><td colspan="2"><em>I bildförstoring</em></td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>←</kbd> / <kbd>→</kbd></td><td>Föregående / nästa bild</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>+</kbd> / <kbd>−</kbd></td><td>Zooma in / ut</td></tr>
+          <tr><td class="gp-kortkommandon-tangent"><kbd>Esc</kbd></td><td>Stäng</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </dialog>
+
+  <div id="gp-ocr-status" aria-live="assertive" class="visually-hidden"></div>
+  <div class="gp-ocr-modal" id="gp-ocr-modal" hidden role="dialog" aria-modal="true" aria-labelledby="gp-ocr-modal-rubrik">
     <div class="gp-ocr-modal-inner">
       <h3 class="gp-ocr-modal-rubrik" id="gp-ocr-modal-rubrik">Extraherad text</h3>
       <p class="gp-ocr-modal-hint" id="gp-ocr-modal-hint">Redigera vid behov. Enter för att infoga.</p>
@@ -179,6 +238,12 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <script src="/static/auth.js"></script>
   <script>gpEnsureAuth();</script>
+  <script src="/static/utils.js"></script>
+  <script src="/static/gravplatser-achievements.js"></script>
+  <script src="/static/gravplatser-lightbox.js"></script>
+  <script src="/static/gravplatser-ocr.js"></script>
+  <script src="/static/gravplatser-rapport.js"></script>
+  <script src="/static/gravplatser-historik.js"></script>
   <script src="/static/gravplatser.js"></script>
 </body>
 </html>

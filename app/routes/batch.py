@@ -10,7 +10,8 @@ from fastapi.responses import Response
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.constants import _CLAUDE_PRIS, ANTHROPIC_BATCH_GRANS
+from app.constants import ANTHROPIC_BATCH_GRANS
+from app.utils.api_keys import _get_claude_pris
 from app.database import (
     get_db,
     User,
@@ -94,6 +95,39 @@ async def skapa_batch_jobb(
     db.commit()
     db.refresh(jobb)
     return {"id": jobb.id, "namn": jobb.namn, "totalt": jobb.totalt, "jobb_typ": jobb_typ}
+
+
+@router.get("/api/batch-claude/uppskattning")
+async def uppskattning_batch_jobb(
+    kyrkogard: str | None = Query(default=None),
+    kvarter: str | None = Query(default=None),
+    antal: int | None = Query(default=None),
+    ej_transkriberade: bool = Query(default=True),
+    ej_claude_korda: bool = Query(default=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Räkna gravplatser per kvartertyp utan att skapa ett jobb – för kostnadsuppskattning."""
+    _require_claude_batch(current_user)
+    q = db.query(Gravplats)
+    if kyrkogard:
+        q = q.filter(Gravplats.kyrkogard == kyrkogard)
+    if kvarter:
+        q = q.filter(Gravplats.kvarter == kvarter)
+    if ej_transkriberade:
+        fardigtranskriberade_ids = [r[0] for r in db.query(GravplatsInmatning.gravplats_id).filter(GravplatsInmatning.fardigtranskriberad == True).all()]
+        if fardigtranskriberade_ids:
+            q = q.filter(~Gravplats.id.in_(fardigtranskriberade_ids))
+    if ej_claude_korda:
+        korda_ids = [r[0] for r in db.query(ClaudeOcrSvar.gravplats_id).all()]
+        if korda_ids:
+            q = q.filter(~Gravplats.id.in_(korda_ids))
+    gravplatser = q.with_entities(Gravplats.kvarter).all()
+    if antal is not None and antal > 0:
+        gravplatser = gravplatser[:antal]
+    allm = sum(1 for (kv,) in gravplatser if kv and "allm" in kv.lower())
+    ovriga = len(gravplatser) - allm
+    return {"allm": allm, "ovriga": ovriga, "totalt": len(gravplatser)}
 
 
 @router.get("/api/batch-claude/gravplats/{gravplats_id:int}/pagar")
@@ -385,9 +419,10 @@ async def batch_poll_anthropic(
         out = usage.get("output_tokens", 0)
         cache_create = usage.get("cache_creation_input_tokens", 0)
         cache_read = usage.get("cache_read_input_tokens", 0)
+        pris = _get_claude_pris()
         kostnad = (
-            inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"]
-            + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]
+            inp * pris["input"] + out * pris["output"]
+            + cache_create * pris["cache_creation"] + cache_read * pris["cache_read"]
         ) / 1_000_000
         kostnad *= 0.5
         db.add(ClaudeAnropslogg(
@@ -481,7 +516,8 @@ async def batch_kor_nasta(
                 out = usage.get("output_tokens", 0)
                 cache_create = usage.get("cache_creation_input_tokens", 0)
                 cache_read = usage.get("cache_read_input_tokens", 0)
-                kostnad = (inp * _CLAUDE_PRIS["input"] + out * _CLAUDE_PRIS["output"] + cache_create * _CLAUDE_PRIS["cache_creation"] + cache_read * _CLAUDE_PRIS["cache_read"]) / 1_000_000
+                pris = _get_claude_pris()
+                kostnad = (inp * pris["input"] + out * pris["output"] + cache_create * pris["cache_creation"] + cache_read * pris["cache_read"]) / 1_000_000
                 db.add(ClaudeAnropslogg(
                     user_id=current_user.id,
                     gravplats_id=gravplats_id,

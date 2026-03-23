@@ -14,7 +14,14 @@ from app.config import BACKUP_DIR, DATABASE_PATH, API_KEYS_PATH
 from app.database import User
 from app.auth import require_admin
 from app.utils.git_version import GIT_VERSION
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv, _get_claude_batch_block_enskild
+from app.utils.api_keys import (
+    _get_anthropic_api_key,
+    _get_claude_instans_aktiv,
+    _get_claude_batch_block_enskild,
+    _get_spara_redigeringslogg_snapshot,
+    _get_claude_pris,
+    _get_claude_pris_from_env,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
 
@@ -27,6 +34,12 @@ router = APIRouter()
 async def root():
     """Startsida – meny till programmets delar."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@router.get("/profil")
+async def profil():
+    """Profilsida för inloggad användare – byt lösenord och preferenser."""
+    return FileResponse(STATIC_DIR / "profil.html")
 
 
 @router.get("/api/version")
@@ -97,6 +110,11 @@ class ApiKeysBody(BaseModel):
     anthropic_api_key: str | None = None
     claude_aktiv_instans: bool | None = None
     claude_batch_block_enskild: bool | None = None
+    spara_redigeringslogg_snapshot: bool | None = None
+    claude_pris_input: float | None = None
+    claude_pris_output: float | None = None
+    claude_pris_cache_creation: float | None = None
+    claude_pris_cache_read: float | None = None
 
 
 @router.get("/api/settings/api-keys")
@@ -115,6 +133,9 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "anthropic_api_key_from_env": from_env,
         "claude_aktiv_instans": _get_claude_instans_aktiv(),
         "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
+        "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
+        "claude_pris": _get_claude_pris(),
+        "claude_pris_from_env": _get_claude_pris_from_env(),
     }
 
 
@@ -138,6 +159,12 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
             existing["claude_aktiv_instans"] = body.claude_aktiv_instans
         if body.claude_batch_block_enskild is not None:
             existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
+        if body.spara_redigeringslogg_snapshot is not None:
+            existing["spara_redigeringslogg_snapshot"] = body.spara_redigeringslogg_snapshot
+        for key in ("input", "output", "cache_creation", "cache_read"):
+            val = getattr(body, f"claude_pris_{key}")
+            if val is not None and val > 0:
+                existing[f"claude_pris_{key}"] = val
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")

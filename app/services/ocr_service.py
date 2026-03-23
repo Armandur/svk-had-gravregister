@@ -5,9 +5,10 @@ from pathlib import Path
 
 import httpx
 
+from app.utils.api_keys import _get_claude_model
+
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_BATCH_URL = "https://api.anthropic.com/v1/messages/batches"
-MODEL = "claude-sonnet-4-6"
 
 _SPEC_PATH = Path(__file__).resolve().parent.parent / "prompts" / "gravregister_spec.md"
 
@@ -48,7 +49,7 @@ async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> tu
     })
 
     payload = {
-        "model": MODEL,
+        "model": _get_claude_model(),
         "max_tokens": 8192,
         "system": [
             {
@@ -121,7 +122,7 @@ def bygg_batch_request(custom_id: str, png_images: list[bytes]) -> dict:
     return {
         "custom_id": custom_id,
         "params": {
-            "model": MODEL,
+            "model": _get_claude_model(),
             "max_tokens": 8192,
             "system": [{"type": "text", "text": spec, "cache_control": {"type": "ephemeral"}}],
             "messages": [{"role": "user", "content": content}],

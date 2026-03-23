@@ -66,6 +66,7 @@
     </div>
   </main>
   <script src="/static/auth.js"></script>
+  <script src="/static/utils.js"></script>
   <script>
 (function() {
   const API = '/api';
@@ -121,11 +122,6 @@
       });
   }
 
-  function escapeHtml(s) {
-    var div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-  }
 
   skapaBtn.addEventListener('click', function() {
     skapaBtn.disabled = true;

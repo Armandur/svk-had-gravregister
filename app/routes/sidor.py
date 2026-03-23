@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, RedirectResponse, Response
 
 from app.database import User
 from app.auth import get_current_user, require_admin
@@ -116,19 +116,35 @@ async def batch_claude_page():
 
 # ---------- Admin-sidor ----------
 
+@router.get("/installningar/anvandare")
+async def installningar_anvandare_sida():
+    return FileResponse(STATIC_DIR / "installningar-anvandare.html")
+
+
+@router.get("/installningar/prestationsgranser")
+async def installningar_prestationsgranser_sida():
+    return FileResponse(STATIC_DIR / "installningar-prestationsgranser.html")
+
+
+@router.get("/installningar/anvandare/{user_id:int}/prestationer")
+async def installningar_anvandare_prestationer_sida(user_id: int, admin: User = Depends(require_admin)):
+    return FileResponse(STATIC_DIR / "installningar-anvandare-prestationer.html")
+
+
+# 301-redirects från gamla URLer
 @router.get("/admin")
-async def admin_sida():
-    return FileResponse(STATIC_DIR / "admin.html")
+async def redirect_admin():
+    return RedirectResponse("/installningar/anvandare", status_code=301)
 
 
 @router.get("/admin/achievement-niva")
-async def admin_achievement_niva_sida():
-    return FileResponse(STATIC_DIR / "admin-achievement-niva.html")
+async def redirect_admin_achievement_niva():
+    return RedirectResponse("/installningar/prestationsgranser", status_code=301)
 
 
 @router.get("/admin/users/{user_id:int}/prestationer")
-async def admin_user_prestationer_sida(user_id: int, admin: User = Depends(require_admin)):
-    return FileResponse(STATIC_DIR / "admin-user-prestationer.html")
+async def redirect_admin_user_prestationer(user_id: int):
+    return RedirectResponse(f"/installningar/anvandare/{user_id}/prestationer", status_code=301)
 
 
 # ---------- Loggar ----------

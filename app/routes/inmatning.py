@@ -1,5 +1,6 @@
 """Rutter för inmatning (gravrätt, gravsatta, närmast anhöriga) och skisser."""
 import base64
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,13 +24,14 @@ from app.database import (
 from app.auth import get_current_user
 from app.schemas import InmatningSchema, SkissCreateBody, SkissOrdningBody
 from app.utils.achievements import _compute_achievements_niva
+from app.utils.api_keys import _get_spara_redigeringslogg_snapshot
 from app.utils.gravplats_utils import _inmatning_response
 
 router = APIRouter()
 
 
 def _unika_yrken_set(db: Session) -> set[str]:
-    """Returnera mängd av alla unika yrken i databasen."""
+    """Returnera mängd av alla unika yrken (gemener) i databasen."""
     def yrke_values(q):
         return [str(r[0]).strip() for r in q.all() if r[0] is not None and str(r[0]).strip()]
     alla = (
@@ -37,7 +39,7 @@ def _unika_yrken_set(db: Session) -> set[str]:
         + yrke_values(db.query(GravplatsNarmastAnhorig.yrke))
         + yrke_values(db.query(Gravsatt.yrke))
     )
-    return set(alla)
+    return {y.lower() for y in alla}
 
 
 @router.get("/api/gravplats/{gravplats_id:int}/inmatning")
@@ -163,28 +165,31 @@ async def put_inmatning(gravplats_id: int, body: InmatningSchema, db: Session = 
     row.last_edited_by_user_id = current_user.id
     row.last_edited_at = datetime.now(timezone.utc).isoformat()
     row.version = getattr(row, "version", 0) + 1
+    snapshot_json = None
+    if _get_spara_redigeringslogg_snapshot():
+        snapshot_json = body.model_dump_json(exclude={"version"})
     db.add(GravplatsRedigeringslogg(
         gravplats_id=gravplats_id,
         user_id=current_user.id,
         edited_at=row.last_edited_at,
+        inmatning_snapshot=snapshot_json,
     ))
     db.commit()
     yrken_efter = _unika_yrken_set(db)
     nya_yrken_i_systemet = yrken_efter - yrken_före
-    yrken_i_bodyn = set()
-    for inv in body.innehavare or []:
-        y = (inv.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    for na in body.narmast_anhoriga or []:
-        y = (na.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    for gs in body.gravsatta or []:
-        y = (gs.yrke or "").strip()
-        if y:
-            yrken_i_bodyn.add(y)
-    new_unique_yrken = sorted(nya_yrken_i_systemet & yrken_i_bodyn)
+    # Bygg lowercase-set för snittberäkning samt original-map för visning i toast
+    yrken_i_bodyn: set[str] = set()
+    yrken_original: dict[str, str] = {}  # lowercase → originalform (för toast)
+    for sources in [body.innehavare, body.narmast_anhoriga, body.gravsatta]:
+        for item in (sources or []):
+            y_raw = (getattr(item, "yrke", None) or "").strip()
+            if y_raw:
+                y_low = y_raw.lower()
+                yrken_i_bodyn.add(y_low)
+                yrken_original.setdefault(y_low, y_raw)
+    new_unique_yrken = sorted(
+        yrken_original.get(y, y) for y in (nya_yrken_i_systemet & yrken_i_bodyn)
+    )
     resp = _inmatning_response(gravplats_id, db)
     resp["new_unique_yrken"] = new_unique_yrken
     resp["achievements_snapshot"] = _compute_achievements_niva(db, current_user.id)
@@ -233,7 +238,14 @@ async def post_skiss(gravplats_id: int, body: SkissCreateBody, db: Session = Dep
         height=max(0, min(1, body.height)),
         sort_order=sort_order,
     )
+    now_iso = datetime.now(timezone.utc).isoformat()
     db.add(s)
+    db.add(GravplatsRedigeringslogg(
+        gravplats_id=gravplats_id,
+        user_id=current_user.id,
+        edited_at=now_iso,
+        inmatning_snapshot=json.dumps({"_skiss_event": "tillagd"}),
+    ))
     db.commit()
     db.refresh(s)
     return {
@@ -277,6 +289,13 @@ async def delete_skiss(gravplats_id: int, skiss_id: int, db: Session = Depends(g
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Skissen hittades inte")
+    now_iso = datetime.now(timezone.utc).isoformat()
     db.delete(row)
+    db.add(GravplatsRedigeringslogg(
+        gravplats_id=gravplats_id,
+        user_id=current_user.id,
+        edited_at=now_iso,
+        inmatning_snapshot=json.dumps({"_skiss_event": "bortagen"}),
+    ))
     db.commit()
     return {"ok": True}

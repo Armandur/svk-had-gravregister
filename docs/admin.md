@@ -49,6 +49,17 @@ Under **Inställningar → Claude OCR** finns en kryssruta **Aktivera Claude-fun
 
 Kryssrutan **Blockera enskild Claude-körning för gravar i pågående batch-jobb** förhindrar att en användare skickar ett enskilt anrop för en gravplats som redan bearbetas av ett batch-jobb. Rekommenderas för att undvika dubbla kostnader.
 
+### Claude-modell
+
+Under **Inställningar → Claude OCR** kan du ange vilken Claude-modell som ska användas för OCR-körningar (enskilda och batch). Lämna fältet tomt för att använda standardmodellen `claude-sonnet-4-6`.
+
+Prioritetsordning:
+1. Miljövariabeln `CLAUDE_MODEL` (om satt låses fältet i UI:t)
+2. Inställningen i admin-UI:t
+3. Standardvärde: `claude-sonnet-4-6`
+
+Exempel på modell-ID: `claude-haiku-4-5-20251001` (snabbare/billigare), `claude-opus-4-6` (mer kapabel/dyrare).
+
 ### Anropslogg
 
 Under **Inställningar → Claude OCR → Anropslogg** ser du alla Claude-anrop med token-förbrukning och beräknad kostnad i USD och SEK (valutakursen hämtas automatiskt). Filtrera per användare och se totalkostnaden.
@@ -75,9 +86,54 @@ Under **Inställningar → Databasunderhåll** finns verktyg för att:
 
 Använd verktygen enligt instruktionerna i gränssnittet. Gör alltid en säkerhetskopia innan du kör underhållsåtgärder.
 
-## Prestationsgränser
+## Prestationsadministration
 
-Under **Inställningar → Justera prestationsgränser** kan du:
+Under **Inställningar → Prestationsadministration** finns tre sektioner:
 
-- Ändra vilka tröskelvärden (antal registreringar, antal yrken m.m.) som krävs för brons-, silver- och guldutmärkelser.
-- Konfigurera **yrkesgrupper för yrkesbaserade prestationer** – dvs. vilka yrken som räknas in i en viss yrkeskategori-prestation. Ändringar gäller för alla användare.
+### Prestationsgränser
+
+Tabellerna visar alla prestationskategorier uppdelade i **Registreringar & övrigt** och **Yrkes-prestationer**. För varje rad kan du:
+
+- Ändra **gränsvärdet** (minsta antal för respektive medal­j­nivå – brons, silver, guld).
+- Ändra **etiketten** – en kort text som visas i presationsgränssnittet, t.ex. "500 st".
+- Klicka **▶ Testa** för att förhandsgranska hur toast-meddelandet kommer se ut för den nivån.
+
+Tryck **Spara gränsvärden** när du är klar. Ändringarna gäller direkt för alla användare.
+
+### Yrkesgrupper
+
+Varje yrkesbaserad prestation (t.ex. "Kyrkans man" eller "Havets män") har ett eget expanderbart kort som visar vilka yrkestitlar som räknas in. Expandera ett kort för att lägga till, redigera eller ta bort yrken, och tryck sedan **Spara gruppen** (sparas separat per grupp).
+
+**Lägga till ny kategori:** Klicka på **+ Ny kategori** ovanför listan. Fyll i:
+- *Namn* – visningsnamn för användare, t.ex. "Militärens män"
+- *Nyckel* – unik intern identifierare, måste börja med `yrke_` och bara innehålla gemener, siffror och understreck (t.ex. `yrke_militarens_man`)
+- *Brons/Silver/Guld-trösklar* – minsta antal yrkes-registreringar för respektive nivå
+
+Kategori skapas med tomma yrkesgrupp – lägg sedan till yrken via det expanderbara kortet.
+
+**Ta bort kategori:** Klicka på **Ta bort kategori** i rubrikraden för ett kort. Bekräfta i dialogen. Alla tillhörande gränsvärden och yrkestitlar tas bort permanent. Användarnas redan intjänade poäng i kategorin påverkas inte retroaktivt men achievement-nyckeln visas inte längre.
+
+### Toast-texter
+
+Styr vilka meddelanden som dyker upp i det lilla popup-fönstret (toasten) när en användare:
+
+- Uppnår en ny achievement-nivå (brons/silver/guld)
+- Registrerar ett yrke som inte setts förut
+- Är nära att nå nästa nivå (80–99 % av tröskeln)
+
+Varje typ har en lista med varianter – systemet väljer slumpmässigt bland dem varje gång. Du kan:
+
+- Redigera befintliga texter direkt i textfälten.
+- Lägga till nya varianter med **+ Ny variant**.
+- Ta bort varianter med **✕**-knappen.
+- Förhandsgranska enskilda texter med **▶**-knappen bredvid varje textfält.
+
+**Tillgängliga platshållare per typ:**
+
+| Typ | Platshållare |
+|-----|-------------|
+| Achievement | `{emoji}` `{niva}` `{label}` `{antal}` |
+| Nytt yrke | `{yrke}` |
+| Nästan framme | `{label}` `{kvar}` `{nasta}` |
+
+Tryck **Spara** för respektive typ när du är klar.

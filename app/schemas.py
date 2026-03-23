@@ -16,6 +16,11 @@ class MePreferencesBody(BaseModel):
     inmatning_sections_order: list[str] | None = None
 
 
+class MePasswordBody(BaseModel):
+    current_password: str = ""
+    new_password: str = ""
+
+
 # ---------- Admin: användare ----------
 
 class CreateUserBody(BaseModel):
@@ -57,6 +62,23 @@ class AchievementYrkesGruppBody(BaseModel):
     yrken: list[str]
 
 
+class NyYrkesKategoriBody(BaseModel):
+    achievement_key: str   # måste börja med "yrke_"
+    namn: str              # visningsnamn, t.ex. "Militärens män"
+    bronze_threshold: int = 5
+    silver_threshold: int = 10
+    gold_threshold: int = 20
+
+
+class ToastFormuleringUpdateBody(BaseModel):
+    text: str
+
+
+class ToastFormuleringCreateBody(BaseModel):
+    typ: str   # achievement | nytt_yrke | nastan_framme
+    text: str
+
+
 # ---------- Admin: kyrkogårdar ----------
 
 class KyrkogardCreateBody(BaseModel):
@@ -69,6 +91,8 @@ class ApiKeysBody(BaseModel):
     anthropic_api_key: str | None = None  # None = ej skickad (rör ej nyckeln), "" = ta bort
     claude_aktiv_instans: bool | None = None
     claude_batch_block_enskild: bool | None = None
+    spara_redigeringslogg_snapshot: bool | None = None
+    claude_model: str | None = None  # None = ej skickad, "" = återställ till default
 
 
 # ---------- Mappkonfiguration och extramaterial ----------

@@ -118,11 +118,6 @@ function slugFromFullstandigt(fullstandigt) {
   return s ? encodeURIComponent(s) : '';
 }
 
-function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s;
-  return div.innerHTML;
-}
 
 function visaForslag(lista) {
   sokForslag = lista || [];
@@ -177,6 +172,7 @@ async function hamtaForslag(q) {
   }
   try {
     const res = await fetch(API + '/gravplatser/sok?q=' + encodeURIComponent(t) + '&limit=25', { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     visaForslag(data.gravplatser || []);
   } catch (e) {
@@ -321,7 +317,7 @@ async function koraAvanceradSok(e) {
 
   const harNagonFiltret = Array.from(params.keys()).some((k) => k !== 'limit');
   if (!harNagonFiltret) {
-    alert('Ange minst ett sökvillkor (t.ex. kyrkogård, kvarter, namn eller ett datumintervall) innan du söker.');
+    showToast('Ange minst ett sökvillkor (t.ex. kyrkogård, kvarter, namn eller ett datumintervall) innan du söker.', 'info');
     return;
   }
 
@@ -334,6 +330,7 @@ async function koraAvanceradSok(e) {
 
   try {
     const res = await fetch(API + '/gravplatser/avancerad-sok?' + params.toString(), { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const typ = data.resultat_typ || 'gravplatser';
     sokResultatTyp = typ;
@@ -730,6 +727,7 @@ function sokForslagStangVidKlickUtanfor(e) {
 if (kyrkogardInputEl && kyrkogardListEl) {
   setupForslagFalt(kyrkogardInputEl, kyrkogardListEl, async (q) => {
     const res = await fetch(API + '/gravplatser/forslag/kyrkogardar?q=' + encodeURIComponent(q) + '&limit=30', { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     return data.forslag || [];
   });
@@ -740,6 +738,7 @@ if (kvarterInputEl && kvarterListEl) {
     const params = new URLSearchParams({ q, limit: '30' });
     if (extra && extra.kyrkogard) params.set('kyrkogard', extra.kyrkogard);
     const res = await fetch(API + '/gravplatser/forslag/kvarter?' + params.toString(), { credentials: 'include' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     return data.forslag || [];
   }, () => ({ kyrkogard: kyrkogardInputEl ? kyrkogardInputEl.value.trim() : '' }));
@@ -794,3 +793,13 @@ function arFranDatumstr(s) {
   const m = t.match(/^(\d{4})/);
   return m ? parseInt(m[1], 10) : null;
 }
+
+// Pre-fyll sökinput från URL-param ?q=
+(function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const q = urlParams.get('q');
+  if (q && inputEl) {
+    inputEl.value = q;
+    hamtaForslag(q);
+  }
+})();

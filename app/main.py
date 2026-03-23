@@ -1,4 +1,5 @@
 """FastAPI-app för gravregister – digitalisering av skannade gravregister (HKG/HKN)."""
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -25,15 +26,9 @@ from app.routes import (
     system,
 )
 
-app = FastAPI(
-    title="Gravregister – digitalisering",
-    description="Applikation för att digitalisera skannade gravregister (HKG/HKN).",
-)
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
-
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     _read_git_version()
     init_db()
     db = SessionLocal()
@@ -41,6 +36,15 @@ def startup():
         ensure_first_admin(db)
     finally:
         db.close()
+    yield
+
+
+app = FastAPI(
+    title="Gravregister – digitalisering",
+    description="Applikation för att digitalisera skannade gravregister (HKG/HKN).",
+    lifespan=lifespan,
+)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET_KEY)
 
 
 # Inkludera alla routers
