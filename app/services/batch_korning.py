@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 
 from sqlalchemy import update
 
-from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeBatchJobbPost, SessionLocal
+from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeBatchJobbPost, LokalOcrSvar, SessionLocal
+from app.utils.api_keys import _get_lokal_ocr_modell
 from app.services.ocr_service import LokalOcrFel, ocr_gravplats_lokal
 from app.utils.ocr_utils import _collect_png_images_for_gravplats, _spara_ocr_svar
 
@@ -94,6 +95,21 @@ async def kor_ett_steg() -> bool:
         jobb = db.get(ClaudeBatchJobb, post.jobb_id)
         jobb_id, gravplats_id, user_id = jobb.id, post.gravplats_id, jobb.user_id
         lagesbesked[jobb_id] = "Kör"
+
+        # Två köade jobb kan innehålla samma grav. Har ett tidigare jobb redan läst
+        # den med samma modell räknas den som klar i stället för att läsas igen.
+        redan = (
+            db.query(LokalOcrSvar.id)
+            .filter(LokalOcrSvar.gravplats_id == gravplats_id, LokalOcrSvar.modell == _get_lokal_ocr_modell(),
+                    LokalOcrSvar.skapad_den >= jobb.skapad_den)
+            .first()
+        )
+        if redan:
+            post.status = "klar"
+            post.fel_meddelande = None
+            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
+            db.commit()
+            return True
 
         try:
             bilder = await asyncio.to_thread(_bilder, gravplats_id)
@@ -176,3 +192,79 @@ async def korningsslinga() -> None:
             continue
         if not gjorde_nagot:
             await asyncio.sleep(VILA_TOMT_S)
+
+
+MAX_INTERVALL_S = 600  # längre mellanrum mellan två gravar är en paus, inte takt
+TAKT_FONSTER = 20      # antal senaste anrop som takten räknas på
+
+
+def takt(db, jobb: ClaudeBatchJobb) -> dict | None:
+    """Snitthastighet och beräknad sluttid för ett jobb som kör.
+
+    Hastigheten är medianen av tiden mellan jobbets senaste anrop i anropsloggen.
+    Medianen tål enstaka långsamma gravar, och mellanrum över tio minuter
+    (pauser, omstarter) räknas inte. None tills minst tre gravar är klara.
+    """
+    from datetime import timedelta
+    from statistics import median
+
+    gravar = [gid for (gid,) in db.query(ClaudeBatchJobbPost.gravplats_id).filter(ClaudeBatchJobbPost.jobb_id == jobb.id)]
+    if not gravar:
+        return None
+    tider = [
+        datetime.fromisoformat(t)
+        for (t,) in db.query(ClaudeAnropslogg.anropad_den)
+        .filter(ClaudeAnropslogg.gravplats_id.in_(gravar), ClaudeAnropslogg.anropad_den >= jobb.skapad_den)
+        .order_by(ClaudeAnropslogg.anropad_den.desc())
+        .limit(TAKT_FONSTER + 1)
+    ]
+    intervall = [(a - b).total_seconds() for a, b in zip(tider, tider[1:])]
+    intervall = [s for s in intervall if 0 < s <= MAX_INTERVALL_S]
+    if len(intervall) < 2:
+        return None
+    sek_per_grav = median(intervall)
+    kvar = (
+        db.query(ClaudeBatchJobbPost)
+        .filter(ClaudeBatchJobbPost.jobb_id == jobb.id, ClaudeBatchJobbPost.status.in_(["väntar", "kör"]))
+        .count()
+    )
+    klart = datetime.now(timezone.utc) + timedelta(seconds=sek_per_grav * kvar)
+    return {"sek_per_grav": round(sek_per_grav, 1), "kvar": kvar, "klart_ca": klart.isoformat()}
+
+
+def _kvar(db, jobb_id: int) -> int:
+    return (
+        db.query(ClaudeBatchJobbPost)
+        .filter(ClaudeBatchJobbPost.jobb_id == jobb_id, ClaudeBatchJobbPost.status.in_(["väntar", "kör"]))
+        .count()
+    )
+
+
+def ko(db, jobb: ClaudeBatchJobb) -> dict | None:
+    """Var ett lokalt jobb står i kön. None om det inte kör eller är först.
+
+    Lokala jobb körs ett i taget, äldst först. Sluttiden för ett köat jobb räknar
+    med gravarna i jobben före, i det aktiva jobbets takt.
+    """
+    from datetime import timedelta
+
+    if jobb.jobb_typ != "lokal" or jobb.status != "kör":
+        return None
+    fore = (
+        db.query(ClaudeBatchJobb)
+        .filter(ClaudeBatchJobb.jobb_typ == "lokal", ClaudeBatchJobb.status == "kör", ClaudeBatchJobb.id < jobb.id)
+        .order_by(ClaudeBatchJobb.id)
+        .all()
+    )
+    fore = [(j, _kvar(db, j.id)) for j in fore]
+    fore = [(j, n) for j, n in fore if n > 0]
+    if not fore:
+        return None
+    gravar_fore = sum(n for _, n in fore)
+    ut = {"plats": len(fore) + 1, "aktivt_jobb": fore[0][0].namn, "gravar_fore": gravar_fore}
+    aktiv_takt = takt(db, fore[0][0])
+    if aktiv_takt:
+        sek = aktiv_takt["sek_per_grav"]
+        ut["klart_ca"] = (datetime.now(timezone.utc) + timedelta(seconds=sek * (gravar_fore + _kvar(db, jobb.id)))).isoformat()
+        ut["sek_per_grav"] = sek
+    return ut

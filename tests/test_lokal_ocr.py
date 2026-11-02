@@ -234,3 +234,61 @@ def test_osakra_siffror_sparas_och_raknas_som_varningar(logga_in, grav, lokal_in
     sparat = c.get(f"/api/ocr/gravplats/{grav}/svar-alla").json()["svar"]
     assert sparat[-1]["osakra"] == {"gravsatta.0.dods_ar": {"sakerhet": 0.64, "kanske": "1975"}}
     assert c.get(f"/api/gravplats/{grav}/inmatning").json()["ai_varningar"] == 1
+
+
+def test_takt_raknar_median_och_hoppar_over_pauser(logga_in, db, lokal_installd):
+    from datetime import datetime, timedelta, timezone
+    from app.database import ClaudeBatchJobbPost
+    logga_in("taktare", lokal_ocr_aktiv=True)
+    uid = db.query(User.id).filter(User.username == "taktare").scalar()
+    m = db.query(MappConfig).filter(MappConfig.namn == "provmapp").first() or MappConfig(namn="provmapp", kyrkogard="HKG")
+    db.add(m)
+    db.flush()
+    start = datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc)
+    jobb = ClaudeBatchJobb(user_id=uid, namn="takt", skapad_den=start.isoformat(), status="kör", totalt=8,
+                           klara=5, fel=0, jobb_typ="lokal")
+    db.add(jobb)
+    db.flush()
+    bas = (db.query(Gravplats.start_sida).order_by(Gravplats.start_sida.desc()).limit(1).scalar() or 0) + 3
+    # Fem klara gravar: 10 s mellan de fyra första, sedan en paus på 30 minuter. Tre väntar.
+    tider = [start + timedelta(seconds=s) for s in (0, 10, 20, 30, 1830)]
+    for i in range(8):
+        g = Gravplats(mapp_id=m.id, kvarter="takt", gravplatsnummer=str(i), start_sida=bas + 3 * i, kyrkogard="HKG")
+        db.add(g)
+        db.flush()
+        db.add(ClaudeBatchJobbPost(jobb_id=jobb.id, gravplats_id=g.id, ordning=i, status="klar" if i < 5 else "väntar"))
+        if i < 5:
+            db.add(ClaudeAnropslogg(user_id=uid, gravplats_id=g.id, anropad_den=tider[i].isoformat(), modell="m"))
+    db.commit()
+    t = batch_korning.takt(db, jobb)
+    assert (t["sek_per_grav"], t["kvar"]) == (10.0, 3)
+    c = logga_in("taktare")
+    assert c.get(f"/api/batch-claude/jobb/{jobb.id}").json()["takt"]["sek_per_grav"] == 10.0
+    jobb.status = "avbruten"
+    db.commit()
+
+
+def test_koade_jobb_kors_i_ordning_och_laser_inte_samma_grav_tva_ganger(logga_in, grav, lokal_installd, db, monkeypatch):
+    anrop = []
+
+    async def raknande(bilder):
+        anrop.append(1)
+        return dict(SVAR), {"input_tokens": 1, "output_tokens": 1, "modell": "provmodell"}
+
+    monkeypatch.setattr(batch_korning, "ocr_gravplats_lokal", raknande)
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    kv = db.get(Gravplats, grav).kvarter
+    forsta = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": kv, "ej_transkriberade": False,
+                                                    "ej_claude_korda": False, "namn": "första"}).json()["id"]
+    andra = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": kv, "ej_transkriberade": False,
+                                                   "ej_claude_korda": False, "namn": "andra"}).json()["id"]
+    ko = c.get(f"/api/batch-claude/jobb/{andra}").json()["ko"]
+    assert (ko["plats"], ko["aktivt_jobb"], ko["gravar_fore"]) == (2, "första", 1)
+    assert c.get(f"/api/batch-claude/jobb/{forsta}").json()["ko"] is None
+
+    assert asyncio.run(batch_korning.kor_ett_steg()) is True   # första jobbet läser graven
+    assert asyncio.run(batch_korning.kor_ett_steg()) is True   # andra jobbet: redan läst, ingen ny läsning
+    assert len(anrop) == 1
+    assert c.get(f"/api/batch-claude/jobb/{andra}").json()["klara"] == 1
+    asyncio.run(batch_korning.kor_ett_steg())  # båda jobben markeras klara
+    assert {c.get(f"/api/batch-claude/jobb/{j}").json()["status"] for j in (forsta, andra)} == {"klar"}

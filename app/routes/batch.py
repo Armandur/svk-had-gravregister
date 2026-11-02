@@ -185,7 +185,9 @@ async def lista_batch_jobb(
     """Lista användarens batch-jobb."""
     _require_batch_atkomst(current_user)
     jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.user_id == current_user.id).order_by(ClaudeBatchJobb.skapad_den.desc()).all()
-    return {"jobb": [{"id": j.id, "namn": j.namn, "skapad_den": j.skapad_den, "status": j.status, "totalt": j.totalt, "klara": j.klara, "fel": j.fel, "jobb_typ": j.jobb_typ} for j in jobb]}
+    return {"jobb": [{"id": j.id, "namn": j.namn, "skapad_den": j.skapad_den, "status": j.status, "totalt": j.totalt, "klara": j.klara, "fel": j.fel, "jobb_typ": j.jobb_typ,
+                      "takt": batch_korning.takt(db, j) if j.status == "kör" else None,
+                      "ko": batch_korning.ko(db, j)} for j in jobb]}
 
 
 @router.get("/api/batch-claude/jobb/{jobb_id:int}")
@@ -228,6 +230,8 @@ async def hamta_batch_jobb(
         "status": jobb.status, "totalt": jobb.totalt, "klara": jobb.klara, "fel": jobb.fel,
         "jobb_typ": jobb.jobb_typ,
         "lagesbesked": batch_korning.lagesbesked.get(jobb.id) if jobb.status == "kör" else None,
+        "takt": batch_korning.takt(db, jobb) if jobb.status == "kör" else None,
+        "ko": batch_korning.ko(db, jobb),
         "poster": poster_data,
     }
 
@@ -585,7 +589,8 @@ async def batch_kor_nasta(
         .first()
     )
     senaste_fel = senaste_fel_post.fel_meddelande if senaste_fel_post else None
-    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar, "fel": jobb.fel, "senaste_fel": senaste_fel}
+    return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar, "fel": jobb.fel, "senaste_fel": senaste_fel,
+            "takt": batch_korning.takt(db, jobb)}
 
 
 @router.post("/api/batch-claude/jobb/{jobb_id:int}/starta")

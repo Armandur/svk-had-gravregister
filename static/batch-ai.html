@@ -591,10 +591,10 @@
         'avbruten': 'avbruten', 'väntar_svar': 'vantar-svar',
       }[j.status] || 'klar';
 
-      const statusEtikett = {
+      const statusEtikett = j.ko ? 'i kö' : ({
         'klar': 'klar', 'pausad': 'pausad', 'kör': 'kör',
         'avbruten': 'avbruten', 'väntar_svar': 'väntar svar',
-      }[j.status] || j.status;
+      }[j.status] || j.status);
 
       const pct = j.totalt > 0 ? Math.round((j.klara / j.totalt) * 100) : 0;
       const harKlara = j.klara > 0;
@@ -632,7 +632,8 @@
 
       li.innerHTML =
         '<span class="batch-jobb-namn">' + escHtml(j.namn || ('Jobb ' + j.id)) + typBadge + '</span>' +
-        '<span class="batch-jobb-info">' + datum + ' &nbsp;&middot;&nbsp; ' + j.klara + '/' + j.totalt + ' klara (' + pct + '%)' + (j.fel > 0 ? ' &nbsp;&middot;&nbsp; ' + j.fel + ' fel' : '') + '</span>' +
+        '<span class="batch-jobb-info">' + datum + ' &nbsp;&middot;&nbsp; ' + j.klara + '/' + j.totalt + ' klara (' + pct + '%)' + (j.fel > 0 ? ' &nbsp;&middot;&nbsp; ' + j.fel + ' fel' : '') +
+          (j.ko ? ' &nbsp;&middot;&nbsp; ' + escHtml(koText(j.ko)) : taktText(j.takt) ? ' &nbsp;&middot;&nbsp; ' + escHtml(taktText(j.takt)) : '') + '</span>' +
         '<span class="batch-jobb-status batch-jobb-status-' + statusKlass + '">' + escHtml(statusEtikett) + '</span>' +
         '<span class="batch-knappar">' +
         statusKnapp +
@@ -803,6 +804,25 @@
   }
 
   /* ── Realtidskörning ─────────────────────────────────────────── */
+  /** "8,2 s per grav · klart ca 23:40" ur jobbets takt, eller tom sträng innan takten är känd. */
+  function taktText(t) {
+    if (!t || !t.sek_per_grav) return '';
+    const klart = new Date(t.klart_ca);
+    const idag = new Date().toDateString() === klart.toDateString();
+    const tid = klart.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+    const nar = idag ? tid : klart.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + tid;
+    const sek = t.sek_per_grav.toLocaleString('sv-SE', { maximumFractionDigits: 1 });
+    return sek + ' s per grav \u00b7 klart ca ' + nar;
+  }
+
+  /** "i kö (plats 2) efter Kvarter N, 120 gravar före · klart ca 23:40" */
+  function koText(k) {
+    if (!k) return '';
+    let t = 'i kö (plats ' + k.plats + ') efter ' + k.aktivt_jobb + ', ' + k.gravar_fore + ' gravar före';
+    if (k.klart_ca) t += ' \u00b7 ' + taktText({ sek_per_grav: k.sek_per_grav, klart_ca: k.klart_ca }).split(' \u00b7 ')[1];
+    return t;
+  }
+
   /* ── Lokala jobb: servern kör, sidan följer bara förloppet ───── */
   let lokalTimer = null;
 
@@ -848,7 +868,8 @@
       if (d.status === 'klar') text += ' \u2013 Klart!';
       else if (d.status === 'pausad') text += ' \u2013 pausad';
       else if (d.lagesbesked && d.lagesbesked !== 'Kör') text += ' \u2013 ' + d.lagesbesked;
-      else text += ' \u2013 körs på servern, du kan stänga sidan';
+      else if (d.ko) text += ' \u2013 ' + koText(d.ko);
+      else text += ' \u2013 ' + (taktText(d.takt) || 'körs på servern, du kan stänga sidan');
       document.getElementById('batch-progress-text').textContent = text;
       const harKlara = d.klara > 0;
       document.getElementById('batch-granska-aktiv-btn').hidden = !harKlara;
@@ -910,7 +931,8 @@
       const totalt = aktivtJobbTotalt || data.totalt || 1;
       const pct = Math.round((klara / totalt) * 100);
       document.getElementById('batch-progress-fill').style.width = pct + '%';
-      document.getElementById('batch-progress-text').textContent = klara + ' av ' + totalt + ' klara' + (data.fel > 0 ? ' \u00b7 ' + data.fel + ' fel' : '') + (data.kvar === 0 ? ' \u2013 Klart!' : '');
+      document.getElementById('batch-progress-text').textContent = klara + ' av ' + totalt + ' klara' + (data.fel > 0 ? ' \u00b7 ' + data.fel + ' fel' : '') +
+        (data.kvar === 0 ? ' \u2013 Klart!' : (taktText(data.takt) ? ' \u2013 ' + taktText(data.takt) : ''));
       const felEl = document.getElementById('batch-progress-fel');
       if (data.senaste_fel && felEl) {
         felEl.textContent = 'Senaste fel: ' + data.senaste_fel;
