@@ -1,5 +1,15 @@
 # Backlog Export
 
+## [P3][todo] [gravregister] Gravvyn vid mobilbredd: högerspalten klipps i vänsterkanten
+
+Vid 390 px ligger gravvyn kvar i två spalter. Högerspalten (statusknapp, banners, formulär) klipps i vänsterkanten och rubriken överlappar 'Senast redigerad'. Fanns före lokal OCR-arbetet, sett 2026-11-02 i shot av HKG U 25.
+
+- ID: `01M6F0JAR9CR02J4CQT5EFHJ6J`
+- Type: bug
+- Actor: ai:claude-code
+
+---
+
 ## [P3][todo] [gravregister] Datakvalitet: 11 granskade gravar bryter mot rimlighetsreglerna
 
 Mätning 2026-11-02 på prod-kopian: gravplats 120, 387, 420 (död före födsel), 223, 404 (över 110 år), 536, 2235 (ogiltigt dödsdatum), 3884, 485, 3980, 3997 (gravsatt före död). Antingen fel på korten eller vid granskning. Visa dem på datakvalitetssidan med samma regler som OCR-varningarna.
