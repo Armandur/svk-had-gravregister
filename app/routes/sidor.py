@@ -109,9 +109,9 @@ async def prestationer_sida():
 
 # ---------- Batch Claude ----------
 
-@router.get("/batch-claude", response_class=HTMLResponse)
-async def batch_claude_page():
-    return FileResponse("static/batch-claude.html")
+@router.get("/batch-ai", response_class=HTMLResponse)
+async def batch_ai_page():
+    return FileResponse("static/batch-ai.html")
 
 
 # ---------- Admin-sidor ----------
@@ -154,9 +154,9 @@ async def loggar_sida():
     return FileResponse(STATIC_DIR / "loggar.html")
 
 
-@router.get("/loggar/claude")
-async def loggar_claude_sida():
-    return FileResponse(STATIC_DIR / "loggar-claude.html")
+@router.get("/loggar/ai")
+async def loggar_ai_sida():
+    return FileResponse(STATIC_DIR / "loggar-ai.html")
 
 
 # ---------- Databasunderhåll ----------

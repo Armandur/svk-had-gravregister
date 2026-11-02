@@ -1,11 +1,13 @@
 """Prov för OCR mot lokal modell: behörighet, svar och loggning via routerna."""
 import pytest
 
+import asyncio
 import json
 
 from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeOcrSvar, Gravplats, LokalOcrSvar, MappConfig, User
-from app.routes import batch as batch_routes
+from app.services import batch_korning
 from app.routes import ocr as ocr_routes
+from app.services.ocr_service import LokalOcrFel
 from app.utils import api_keys
 
 SVAR = {"innehavare": [], "gravsatta": [], "storlek": "4 kvm", "ocr_kommentar": ""}
@@ -35,9 +37,9 @@ def lokal_installd(monkeypatch):
         return dict(SVAR), {"input_tokens": 9000, "output_tokens": 400, "modell": "provmodell"}
 
     monkeypatch.setattr(ocr_routes, "ocr_gravplats_lokal", fejk_ocr)
-    monkeypatch.setattr(batch_routes, "ocr_gravplats_lokal", fejk_ocr)
+    monkeypatch.setattr(batch_korning, "ocr_gravplats_lokal", fejk_ocr)
     monkeypatch.setattr(ocr_routes, "_collect_png_images_for_gravplats", lambda gid, db: [b"png"])
-    monkeypatch.setattr(batch_routes, "_collect_png_images_for_gravplats", lambda gid, db: [b"png"])
+    monkeypatch.setattr(batch_korning, "_bilder", lambda gid: [b"png"])
 
 
 def test_utan_flagga_nekas(logga_in, grav, lokal_installd):
@@ -77,23 +79,73 @@ def test_enskild_grav_sparar_svar_och_logg(logga_in, grav, lokal_installd, db):
     assert [(s["kalla"], s["svar_json"]["storlek"]) for s in alla] == [("claude", "claude-varde"), ("lokal", "4 kvm")]
 
 
-def test_batch_med_lokal_motor(logga_in, grav, lokal_installd, db):
+def test_batch_med_lokal_motor_kors_i_bakgrunden(logga_in, grav, lokal_installd, db):
     c = logga_in("med", lokal_ocr_aktiv=True, claude_batch_aktiv=False)
-    r = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": db.get(Gravplats, grav).kvarter, "ej_transkriberade": False,
+    kvarter = db.get(Gravplats, grav).kvarter
+    r = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": kvarter, "ej_transkriberade": False,
                                                "ej_claude_korda": True, "antal": 1})
     assert r.status_code == 200, r.text
     assert r.json()["jobb_typ"] == "lokal"
     jobb_id = r.json()["id"]
-    assert any(j["id"] == jobb_id for j in c.get("/api/batch-claude/jobb").json()["jobb"])
-    r = c.post(f"/api/batch-claude/jobb/{jobb_id}/nasta?antal=5")
-    assert r.status_code == 200, r.text
-    assert r.json()["klara"] == 1
-    db.expire_all()
-    assert db.get(ClaudeBatchJobb, jobb_id).klara == 1
+    assert c.get(f"/api/batch-claude/jobb/{jobb_id}").json()["status"] == "kör"
+    # Webbläsarens slinga avvisas, servern kör själv
+    assert c.post(f"/api/batch-claude/jobb/{jobb_id}/nasta").status_code == 409
+    assert asyncio.run(batch_korning.kor_ett_steg()) is True
+    assert asyncio.run(batch_korning.kor_ett_steg()) is False  # kön tom, jobbet markeras klart
+    jobb = c.get(f"/api/batch-claude/jobb/{jobb_id}").json()
+    assert (jobb["status"], jobb["klara"]) == ("klar", 1)
+    assert db.query(LokalOcrSvar).filter(LokalOcrSvar.gravplats_id == grav).count() == 1
     # Graven har nu ett lokalt svar från samma modell och hoppas över i nästa lokala jobb
-    r = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": db.get(Gravplats, grav).kvarter,
+    r = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": kvarter,
                                                "ej_transkriberade": False, "ej_claude_korda": True})
     assert r.status_code == 404
+
+
+def test_paus_och_starta(logga_in, grav, lokal_installd, db):
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    jobb_id = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": db.get(Gravplats, grav).kvarter,
+                                                     "ej_transkriberade": False}).json()["id"]
+    assert c.post(f"/api/batch-claude/jobb/{jobb_id}/pausa").json()["status"] == "pausad"
+    assert asyncio.run(batch_korning.kor_ett_steg()) is False  # pausat jobb rörs inte
+    assert c.post(f"/api/batch-claude/jobb/{jobb_id}/starta").json()["status"] == "kör"
+    assert asyncio.run(batch_korning.kor_ett_steg()) is True
+
+
+def test_upptagen_server_lagger_tillbaka_graven(logga_in, grav, lokal_installd, db, monkeypatch):
+    async def upptagen(bilder):
+        raise LokalOcrFel("Modellservern är upptagen av en annan körning.")
+    monkeypatch.setattr(batch_korning, "ocr_gravplats_lokal", upptagen)
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    jobb_id = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": db.get(Gravplats, grav).kvarter,
+                                                     "ej_transkriberade": False}).json()["id"]
+    with pytest.raises(batch_korning.ServernOtillganglig):
+        asyncio.run(batch_korning.kor_ett_steg())
+    jobb = c.get(f"/api/batch-claude/jobb/{jobb_id}").json()
+    assert (jobb["status"], jobb["fel"], jobb["poster"][0]["status"]) == ("kör", 0, "väntar")
+    assert "upptagen" in jobb["lagesbesked"]
+    c.post(f"/api/batch-claude/jobb/{jobb_id}/avbryt")
+
+
+def test_omstart_aterstaller_fastnade_gravar(logga_in, grav, db):
+    from app.database import ClaudeBatchJobbPost
+    logga_in("med")
+    uid = db.query(User.id).filter(User.username == "med").scalar()
+    jobb = {}
+    for typ in ("realtid", "lokal"):
+        j = ClaudeBatchJobb(user_id=uid, namn=typ, skapad_den="x", status="kör", totalt=1, klara=0, fel=0, jobb_typ=typ)
+        db.add(j)
+        db.flush()
+        db.add(ClaudeBatchJobbPost(jobb_id=j.id, gravplats_id=grav, ordning=0, status="kör"))
+        jobb[typ] = j.id
+    db.commit()
+    batch_korning.aterstall_efter_omstart()
+    db.expire_all()
+    assert db.get(ClaudeBatchJobb, jobb["realtid"]).status == "pausad"  # ingen flik driver det längre
+    assert db.get(ClaudeBatchJobb, jobb["lokal"]).status == "kör"       # fortsätter i bakgrunden
+    for j in jobb.values():
+        assert db.query(ClaudeBatchJobbPost).filter(ClaudeBatchJobbPost.jobb_id == j).one().status == "väntar"
+        db.get(ClaudeBatchJobb, j).status = "avbruten"
+    db.commit()
 
 
 def test_claude_batch_kraver_fortfarande_claudeflagga(logga_in, grav, lokal_installd):
@@ -152,3 +204,4 @@ def test_ansprak_i_vaxeln(monkeypatch, status, ska_falla):
             asyncio.run(kor())
     else:
         assert asyncio.run(kor()) == "http://dator:11434"
+

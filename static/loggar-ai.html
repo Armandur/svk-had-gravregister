@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Claude-anropslogg – Gravregister</title>
+  <title>AI-anropslogg – Gravregister</title>
   <link rel="stylesheet" href="/static/style.css" />
   <style>
     .loggar-sida { max-width: 64rem; margin: 2rem auto; padding: 2rem; }
@@ -34,13 +34,13 @@
 </head>
 <body>
   <main class="loggar-sida">
-    <h1>Claude OCR – anropslogg</h1>
+    <h1>AI-anropslogg</h1>
     <p><a href="/installningar">← Tillbaka till inställningar</a></p>
     <p id="loggar-ingen">Endast administratörer kan se loggar.</p>
     <section id="loggar-innehall" hidden>
-      <p class="loggar-info">Varje rad är ett anrop till Claude OCR. Kostnad beräknas utifrån konfigurerade tokenpriser (USD per miljon tokens).</p>
+      <p class="loggar-info">Varje rad är ett anrop till Claude eller en lokal modell. Claudes kostnad räknas fram ur tokenpriserna nedan (USD per miljon tokens). Lokala modeller kostar ingenting.</p>
       <details id="loggar-pris-detaljer" style="margin-bottom:1rem;">
-        <summary style="cursor:pointer;font-size:0.95rem;font-weight:600;color:#475569;padding:0.4rem 0;user-select:none;">Prismodell (USD per miljon tokens)</summary>
+        <summary style="cursor:pointer;font-size:0.95rem;font-weight:600;color:#475569;padding:0.4rem 0;user-select:none;">Claudes priser (USD per miljon tokens)</summary>
         <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
           <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Indata<input type="number" id="pris-input" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
           <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.9rem;">Utdata<input type="number" id="pris-output" step="0.01" min="0" style="width:6rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:5px;" /></label>
@@ -181,7 +181,7 @@
         fetch(API + '/loggar/claude?' + params.toString(), { credentials: 'include' })
           .then(function(res) {
             if (res.status === 403) { ingen.hidden = false; innehall.hidden = true; return null; }
-            if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent('/loggar/claude'); return null; }
+            if (res.status === 401) { window.location.href = '/login?redirect=' + encodeURIComponent('/loggar/ai'); return null; }
             if (!res.ok) throw new Error('Kunde inte hämta loggar');
             return res.json();
           })

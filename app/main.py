@@ -1,4 +1,5 @@
 """FastAPI-app för gravregister – digitalisering av skannade gravregister (HKG/HKN)."""
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import SESSION_SECRET_KEY
 from app.database import SessionLocal, init_db
 from app.auth import ensure_first_admin
+from app.services import batch_korning
 from app.utils.git_version import _read_git_version
 
 from app.routes import (
@@ -36,7 +38,10 @@ async def lifespan(app: FastAPI):
         ensure_first_admin(db)
     finally:
         db.close()
+    batch_korning.aterstall_efter_omstart()
+    bakgrund = asyncio.create_task(batch_korning.korningsslinga())
     yield
+    bakgrund.cancel()
 
 
 app = FastAPI(

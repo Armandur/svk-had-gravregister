@@ -128,7 +128,7 @@ Genererad av kodbasanalys. Uppdateras löpande.
 | 200 | alert | `'Fel: ' + (e.message \|\| 'nätverksfel')` | Toast fel |
 | 253 | alert | `'Fel: ' + (e.message \|\| 'nätverksfel')` | Toast fel |
 
-### static/batch-claude.html
+### static/batch-ai.html
 
 | Rad | Typ | Nuvarande meddelande | Åtgärd |
 |-----|-----|----------------------|--------|

@@ -35,7 +35,7 @@ from app.services.ocr_service import (
 )
 from app.utils.api_keys import _get_anthropic_api_key
 from app.utils.api_keys import _get_claude_model, _get_lokal_ocr_modell
-from app.services.ocr_service import LokalOcrFel, ocr_gravplats_lokal
+from app.services import batch_korning
 from app.utils.ocr_utils import (
     _collect_png_images_for_gravplats,
     _collect_all_batch_images_sync,
@@ -98,7 +98,7 @@ async def skapa_batch_jobb(
         user_id=current_user.id,
         namn=namn,
         skapad_den=datetime.now(timezone.utc).isoformat(),
-        status="klar",
+        status="kör" if jobb_typ == "lokal" else "klar",  # lokala jobb körs direkt av bakgrundsuppgiften
         totalt=len(gravplatser),
         klara=0,
         fel=0,
@@ -227,6 +227,7 @@ async def hamta_batch_jobb(
         "id": jobb.id, "namn": jobb.namn, "skapad_den": jobb.skapad_den,
         "status": jobb.status, "totalt": jobb.totalt, "klara": jobb.klara, "fel": jobb.fel,
         "jobb_typ": jobb.jobb_typ,
+        "lagesbesked": batch_korning.lagesbesked.get(jobb.id) if jobb.status == "kör" else None,
         "poster": poster_data,
     }
 
@@ -493,10 +494,9 @@ async def batch_kor_nasta(
     jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
     if not jobb:
         raise HTTPException(status_code=404, detail="Jobbet hittades inte")
-    ar_lokal = jobb.jobb_typ == "lokal"
-    _require_batch_motor(current_user, "lokal" if ar_lokal else "claude")
-    if ar_lokal:
-        antal = 1
+    if jobb.jobb_typ == "lokal":
+        raise HTTPException(status_code=409, detail="Jobbet körs i bakgrunden på servern.")
+    _require_claude_batch(current_user)
     if jobb.status == "avbruten":
         raise HTTPException(status_code=400, detail="Jobbet är avbrutet")
     poster = (
@@ -514,33 +514,7 @@ async def batch_kor_nasta(
         p.status = "kör"
     jobb.status = "kör"
     db.commit()
-    api_key = None if ar_lokal else _get_anthropic_api_key()
-
-    async def _kor_lokal_post(post: ClaudeBatchJobbPost, png_images: list[bytes]) -> None:
-        _t0 = time.monotonic()
-        try:
-            result, usage = await ocr_gravplats_lokal(png_images)
-        except LokalOcrFel as exc:
-            post.status = "fel"
-            post.fel_meddelande = str(exc)
-            db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
-            db.commit()
-            return
-        db.add(ClaudeAnropslogg(
-            user_id=current_user.id,
-            gravplats_id=post.gravplats_id,
-            anropad_den=datetime.now(timezone.utc).isoformat(),
-            input_tokens=usage["input_tokens"],
-            output_tokens=usage["output_tokens"],
-            kostnad_usd=0.0,
-            svarstid_ms=int((time.monotonic() - _t0) * 1000),
-            modell=usage["modell"],
-        ))
-        _spara_ocr_svar(db, current_user.id, post.gravplats_id, result, usage["modell"], lokal=True)
-        post.status = "klar"
-        post.fel_meddelande = None
-        db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
-        db.commit()
+    api_key = _get_anthropic_api_key()
 
     async def kör_en(post: ClaudeBatchJobbPost) -> None:
         gravplats_id = post.gravplats_id
@@ -553,9 +527,6 @@ async def batch_kor_nasta(
             post.fel_meddelande = "Inga bilder hittades för gravplatsen"
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
-            return
-        if ar_lokal:
-            await _kor_lokal_post(post, png_images)
             return
         max_forsok = 3
         for forsok in range(max_forsok):
@@ -615,6 +586,26 @@ async def batch_kor_nasta(
     )
     senaste_fel = senaste_fel_post.fel_meddelande if senaste_fel_post else None
     return {"klara": jobb.klara, "totalt": jobb.totalt, "kvar": kvar, "fel": jobb.fel, "senaste_fel": senaste_fel}
+
+
+@router.post("/api/batch-claude/jobb/{jobb_id:int}/starta")
+async def batch_starta_lokal(
+    jobb_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Starta eller återuppta ett lokalt jobb. Bakgrundsuppgiften tar det inom några sekunder."""
+    _require_batch_motor(current_user, "lokal")
+    jobb = db.query(ClaudeBatchJobb).filter(ClaudeBatchJobb.id == jobb_id, ClaudeBatchJobb.user_id == current_user.id).first()
+    if not jobb:
+        raise HTTPException(status_code=404, detail="Jobbet hittades inte")
+    if jobb.jobb_typ != "lokal":
+        raise HTTPException(status_code=400, detail="Bara jobb med lokal modell körs i bakgrunden.")
+    if jobb.status == "avbruten":
+        raise HTTPException(status_code=400, detail="Jobbet är avbrutet")
+    jobb.status = "kör"
+    db.commit()
+    return {"ok": True, "status": jobb.status}
 
 
 @router.post("/api/batch-claude/jobb/{jobb_id:int}/pausa")

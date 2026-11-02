@@ -64,9 +64,9 @@ Exempel på modell-ID: `claude-haiku-4-5-20251001` (snabbare/billigare), `claude
 
 Under **Inställningar → Claude OCR → Anropslogg** ser du alla Claude-anrop med token-förbrukning och beräknad kostnad i USD och SEK (valutakursen hämtas automatiskt). Filtrera per användare och se totalkostnaden.
 
-### Batch Claude OCR
+### Batch AI
 
-**Batch Claude OCR** (länk på startsidan, visas bara för admins) låter dig köra OCR på ett stort urval gravplatser och sedan låta transkriberings­personal granska resultaten. Se [Claude OCR – enskild och batch](claude-ocr.md) för fullständig beskrivning av batch-flödet, körsätt och statusar.
+**Batch AI** (länk på startsidan) låter dig köra OCR, med Claude eller en lokal modell, på ett stort urval gravplatser och sedan låta transkriberings­personal granska resultaten. Se [Claude OCR – enskild och batch](claude-ocr.md) för fullständig beskrivning av batch-flödet, körsätt och statusar.
 
 ## Säkerhetskopior
 

@@ -297,7 +297,7 @@ async function hamtaBatchPagarInfo() {
         ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
         : '';
       const jobbLank = document.createElement('a');
-      jobbLank.href = '/batch-claude';
+      jobbLank.href = '/batch-ai';
       jobbLank.textContent = data.jobb_namn || ('Jobb ' + data.jobb_id);
       banner.appendChild(document.createTextNode('Gravplatsen ingår i batch-jobbet '));
       banner.appendChild(jobbLank);
@@ -414,7 +414,7 @@ async function uppdateraVy(behallInmatningState = false) {
       granskaInfoEl.innerHTML = 'Granskar användares registreringar (' + (idx + 1) + ' av ' + n + '). <a href="/databasunderhall/granska-anvandare">Avsluta granskning</a>';
       granskaInfoEl.hidden = false;
     } else if (state.batchJobbMode && n > 0) {
-      granskaInfoEl.innerHTML = 'Granskar batch-jobb (' + (idx + 1) + ' av ' + n + '). <a href="/batch-claude">Avsluta granskning</a>';
+      granskaInfoEl.innerHTML = 'Granskar batch-jobb (' + (idx + 1) + ' av ' + n + '). <a href="/batch-ai">Avsluta granskning</a>';
       granskaInfoEl.hidden = false;
     } else {
       granskaInfoEl.hidden = true;

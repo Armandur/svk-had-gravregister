@@ -15,8 +15,14 @@ from app.database import SessionLocal, User  # noqa: E402
 from app.main import app  # noqa: E402
 
 
+async def _ingen_bakgrund():
+    """Proven driver bakgrundskörningen steg för steg själva."""
+
+
 @pytest.fixture(scope="session")
 def client():
+    from app.services import batch_korning
+    batch_korning.korningsslinga = _ingen_bakgrund
     with TestClient(app) as c:
         yield c
 

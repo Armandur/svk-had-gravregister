@@ -100,6 +100,17 @@ def _rensa_json(text: str) -> str:
 
 
 _VAXEL_SUFFIX = "/api/ollama/active"
+
+
+def _orsak(exc: Exception) -> str:
+    """Kort orsak för administratören, t.ex. att ett namn inte går att slå upp."""
+    if isinstance(exc, httpx.ConnectError):
+        return "får ingen kontakt, kontrollera att adressen går att nå från servern"
+    if isinstance(exc, httpx.TimeoutException):
+        return "svarade inte i tid"
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return type(exc).__name__
 _ANSPRAK_AGARE = "svk-had-gravregister"
 _ANSPRAK_MINUTER = 15  # förlängs vid varje anrop, så en batch håller anspråket hela vägen
 
@@ -121,7 +132,7 @@ async def _lokal_bas_url(client: httpx.AsyncClient, ta_ansprak: bool = False) ->
         aktiv = resp.json()
         bas = aktiv["url"].rstrip("/")
     except (httpx.HTTPError, KeyError, ValueError) as exc:
-        raise LokalOcrFel("Kunde inte fråga växeln vilken modellserver som är aktiv.") from exc
+        raise LokalOcrFel(f"Kunde inte fråga växeln ({url}) vilken modellserver som är aktiv: {_orsak(exc)}") from exc
     if ta_ansprak and aktiv.get("name"):
         portal = url[: -len(_VAXEL_SUFFIX)]
         try:
@@ -150,7 +161,7 @@ async def testa_lokal_server() -> dict:
             resp = await client.get(f"{bas}/api/tags")
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            raise LokalOcrFel(f"Modellservern på {bas} svarar inte. Är datorn påslagen?") from exc
+            raise LokalOcrFel(f"Modellservern på {bas} svarar inte ({_orsak(exc)}). Är datorn påslagen?") from exc
     modeller = sorted(m["name"] for m in resp.json().get("models", []))
     vald = _get_lokal_ocr_modell()
     return {"server": bas, "modeller": modeller, "vald_modell": vald, "vald_finns": vald in modeller}
