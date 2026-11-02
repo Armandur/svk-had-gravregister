@@ -349,3 +349,46 @@ def test_koade_jobb_kors_i_ordning_och_laser_inte_samma_grav_tva_ganger(logga_in
     assert c.get(f"/api/batch-claude/jobb/{andra}").json()["klara"] == 1
     asyncio.run(batch_korning.kor_ett_steg())  # båda jobben markeras klara
     assert {c.get(f"/api/batch-claude/jobb/{j}").json()["status"] for j in (forsta, andra)} == {"klar"}
+
+
+def test_batchjobb_rapporteras_till_portalens_modelljobb(logga_in, grav, lokal_installd, db, monkeypatch):
+    import fitz
+    from app.services import modelljobb_rapport
+    handelser = []
+
+    class FejkJobb:
+        def __init__(self, beskrivning, spar, **kw):
+            handelser.append(("start", beskrivning, spar, kw["agare"], kw["portal"], kw["endpoint"]))
+        def borjar(self, modell, redan_klara=0): handelser.append(("borjar", modell, redan_klara))
+        def anrop_borjar(self, modell, rubrik): handelser.append(("anrop", rubrik))
+        def klar_med(self, modell, rubrik=None, svar_meta=None): handelser.append(("klar", rubrik))
+        def preview(self, modell, rubrik, **kw): handelser.append(("preview", rubrik, kw["format"], kw["indata_bild"][:2]))
+        def fel(self, modell, text): handelser.append(("fel", text))
+        def modell_klar(self, modell): handelser.append(("modell_klar",))
+        def avsluta(self): handelser.append(("avsluta",))
+
+    png = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 1600, 1000), False).tobytes("png")
+    monkeypatch.setattr(api_keys, "_load_api_keys",
+                        lambda: {"lokal_ocr_url": "http://portal:8890/api/ollama/active", "lokal_ocr_modell": "provmodell"})
+    monkeypatch.setattr(modelljobb_rapport, "Jobb", FejkJobb)
+    monkeypatch.setattr(modelljobb_rapport, "_aktiv_endpoint", lambda portal: "dator")
+    monkeypatch.setattr(batch_korning, "_bilder", lambda gid: [png])
+    monkeypatch.setenv("LOKAL_OCR_AGARE", "gravregister-prov")
+
+    async def modell(bilder):
+        return dict(SVAR), {"input_tokens": 1, "output_tokens": 1, "modell": "provmodell", "svar_meta": {"eval_count": 9}}
+
+    monkeypatch.setattr(batch_korning, "ocr_gravplats_lokal", modell)
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    g = db.get(Gravplats, grav)
+    jobb_id = c.post("/api/batch-claude/jobb", json={"motor": "lokal", "kvarter": g.kvarter, "ej_transkriberade": False,
+                                                     "ej_claude_korda": False, "namn": "rapportprov"}).json()["id"]
+    asyncio.run(batch_korning.kor_ett_steg())
+    rubrik = f"HKG {g.kvarter} 7"
+    assert handelser[0] == ("start", "Gravregister: rapportprov", {"provmodell": 1}, "gravregister-prov", "http://portal:8890", "dator")
+    assert handelser[1:4] == [("borjar", "provmodell", 0), ("anrop", rubrik), ("klar", rubrik)]
+    assert handelser[4] == ("preview", rubrik, "json", b"\xff\xd8")  # nedskalad JPEG
+    asyncio.run(batch_korning.kor_ett_steg())  # kön tom: jobbet markeras klart
+    asyncio.run(modelljobb_rapport.stang_utom(set()))
+    assert handelser[-2:] == [("modell_klar",), ("avsluta",)]
+    assert jobb_id not in modelljobb_rapport._rapporter

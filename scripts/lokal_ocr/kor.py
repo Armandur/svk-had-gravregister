@@ -11,7 +11,6 @@ import argparse
 import base64
 import json
 import random
-import sys
 import time
 from pathlib import Path
 
@@ -23,8 +22,7 @@ from app.database import SessionLocal
 from app.services.ocr_service import OCR_INSTRUKTION, _load_spec
 from app.utils.ocr_utils import _collect_png_images_for_gravplats
 
-sys.path.insert(0, str(Path(__file__).parent))
-from modelljobb import Jobb  # noqa: E402
+from app.utils.modelljobb import Jobb
 
 PORTAL = "http://ubuntu-ai:8890"
 MAX_SVAR = 6000  # tak för genererade tokens, så en modell som fastnar i en slinga inte låser GPU:n

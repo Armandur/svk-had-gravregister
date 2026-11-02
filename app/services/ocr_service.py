@@ -260,6 +260,8 @@ async def ocr_gravplats_lokal(png_images: list[bytes]) -> tuple[dict, dict]:
         "output_tokens": raw.get("eval_count", 0) or 0,
         "modell": modell,
         "osakra": osakra_falt(raw.get("message", {}).get("content", ""), raw.get("logprobs") or []),
+        # Siffror för portalens modelljobb (token per sekund, avklippt svar)
+        "svar_meta": {k: raw.get(k) for k in ("eval_count", "eval_duration", "total_duration", "done_reason") if k in raw},
     }
     return result, usage
 

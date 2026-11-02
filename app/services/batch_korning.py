@@ -15,7 +15,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import update
 
-from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeBatchJobbPost, LokalOcrSvar, SessionLocal
+from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeBatchJobbPost, Gravplats, LokalOcrSvar, SessionLocal
+from app.services import modelljobb_rapport as rapport
+from app.utils.text import _format_fullstandigt
 from app.utils.api_keys import _get_lokal_ocr_modell
 from app.services.ocr_service import LokalOcrFel, ocr_gravplats_lokal, slapp_ansprak
 from app.utils.ocr_utils import _collect_png_images_for_gravplats, _spara_ocr_svar
@@ -95,6 +97,8 @@ async def kor_ett_steg() -> bool:
         jobb = db.get(ClaudeBatchJobb, post.jobb_id)
         jobb_id, gravplats_id, user_id = jobb.id, post.gravplats_id, jobb.user_id
         lagesbesked[jobb_id] = "Kör"
+        g = db.get(Gravplats, gravplats_id)
+        rubrik = _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer) if g else f"gravplats {gravplats_id}"
 
         # Två köade jobb kan innehålla samma grav. Har ett tidigare jobb redan läst
         # den med samma modell räknas den som klar i stället för att läsas igen.
@@ -109,6 +113,7 @@ async def kor_ett_steg() -> bool:
             post.fel_meddelande = None
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
             db.commit()
+            await rapport.grav_redan_last(jobb_id, rubrik)
             return True
 
         try:
@@ -123,6 +128,7 @@ async def kor_ett_steg() -> bool:
             db.commit()
             return True
 
+        await rapport.grav_borjar(jobb_id, jobb.namn, _get_lokal_ocr_modell(), jobb.totalt, jobb.klara, rubrik)
         t0 = time.monotonic()
         try:
             result, usage = await ocr_gravplats_lokal(bilder)
@@ -137,6 +143,7 @@ async def kor_ett_steg() -> bool:
             post.fel_meddelande = meddelande
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
+            await rapport.grav_fel(jobb_id, rubrik, meddelande)
             return True
         except Exception:
             logger.exception("Oväntat fel vid lokal OCR av gravplats %s", gravplats_id)
@@ -144,6 +151,7 @@ async def kor_ett_steg() -> bool:
             post.fel_meddelande = "Oväntat fel vid körningen, se serverloggen"
             db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(fel=ClaudeBatchJobb.fel + 1))
             db.commit()
+            await rapport.grav_fel(jobb_id, rubrik, post.fel_meddelande)
             return True
 
         db.add(ClaudeAnropslogg(
@@ -162,7 +170,13 @@ async def kor_ett_steg() -> bool:
         db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))
         db.commit()
         lagesbesked[jobb_id] = "Kör"
+        await rapport.grav_klar(jobb_id, rubrik, result, usage.get("svar_meta"), bilder[0])
         return True
+
+
+def _korande_jobb() -> set[int]:
+    with SessionLocal() as db:
+        return {jid for (jid,) in db.query(ClaudeBatchJobb.id).filter(ClaudeBatchJobb.jobb_typ == "lokal", ClaudeBatchJobb.status == "kör")}
 
 
 def _bilder(gravplats_id: int) -> list[bytes]:
@@ -180,6 +194,7 @@ async def korningsslinga() -> None:
     hade_arbete = False
     while True:
         try:
+            await rapport.stang_utom(_korande_jobb())
             gjorde_nagot = await kor_ett_steg()
             if gjorde_nagot:
                 hade_arbete = True
