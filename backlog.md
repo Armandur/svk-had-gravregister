@@ -66,7 +66,7 @@ Ingår också (Rasmus 2026-11-02):
 
 ---
 
-## [P3][todo] [gravregister] Status 'AI-läst, ej granskad' (lila) i listor, träd och startsidans staplar
+## [P3][done] [gravregister] Status 'AI-läst, ej granskad' (lila) i listor, träd och startsidans staplar
 
 Härleds ur sparade OCR-svar (claude_ocr_svar/lokal_ocr_svar) för gravar utan färdig transkribering. Skrivs INTE in i gravplats_inmatning, så /yrken och prestationer inte får overifierad data. Lila färg i startsidans diagram enligt Rasmus. Del av spåret lokal OCR (TASK-3283).
 
