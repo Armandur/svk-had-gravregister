@@ -72,7 +72,8 @@ Se `app/database.py` för fullständiga modeller. Viktigaste tabeller:
 - **Endpoint**: `POST /api/ocr/gravplats/{id}` → `app/routes/ocr.py`
 - **Batch**: `app/routes/batch.py`, använder Anthropic Batch API (50 % rabatt, upp till 24 h svarstid).
 - **Prompt caching** används för spec-texten (ephemeral cache) → ~90 % besparing på spec-tokens.
-- **Modell**: `claude-sonnet-4-6` (hårdkodat i `app/services/ocr_service.py::MODEL`).
+- **Modell**: `claude-sonnet-4-6` som default (`app/utils/api_keys.py`, går att ändra under Inställningar).
+- **Lokal modell**: `POST /api/ocr/lokal/gravplats/{id}` och batch med `motor: "lokal"` kör mot ollama (`LOKAL_OCR_URL`, `LOKAL_OCR_MODELL`). Kräver användarflaggan `lokal_ocr_aktiv`. Svaren sparas i `lokal_ocr_svar` bredvid Claudes. Utvärderingsskript: `scripts/lokal_ocr/`.
 
 ## Fil- och mappstruktur
 
@@ -134,7 +135,7 @@ Redigera HTML/JS/CSS direkt i `static/`. Ingen byggesteg krävs. Ladda om sidan 
 
 ## Kända begränsningar / teknisk skuld
 
-- **Inga automatiserade tester** – all testning är manuell. Prioritet att lägga till `pytest`-tester för åtminstone routes och OCR-service.
+- **Få automatiserade tester** – `tests/` täcker bara lokal OCR än så länge. Kör med `pip install -r requirements-dev.txt && pytest`. Fler prov för routes och OCR-service behövs.
 - **`@app.on_event("startup")` är deprecated** i FastAPI ≥ 0.93 – bör bytas till `lifespan` context manager.
 - **`api_keys.py`-funktioner läser JSON från disk vid varje anrop** – inget cachningslager.
 - **Synkron SQLAlchemy-session i async context** – fungerar men är inte optimalt; full migrering till `AsyncSession` är möjlig men kräver större refaktorering.

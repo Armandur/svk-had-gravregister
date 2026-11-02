@@ -42,7 +42,7 @@
     }
     var batchLank = document.getElementById('startsida-batch-claude-lank');
     if (batchLank) {
-      if (me.claude_batch_tillganglig) batchLank.removeAttribute('hidden');
+      if (me.claude_batch_tillganglig || me.lokal_ocr_tillganglig) batchLank.removeAttribute('hidden');
       else batchLank.remove();
     }
   });

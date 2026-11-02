@@ -24,6 +24,7 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(default=False)
     claude_aktiv: Mapped[bool] = mapped_column(default=True)  # om Claude-funktioner är aktiverade för användaren
     claude_batch_aktiv: Mapped[bool] = mapped_column(default=False)
+    lokal_ocr_aktiv: Mapped[bool] = mapped_column(default=False)  # OCR mot lokal modell (ollama), enskilt och batch
     # JSON: t.ex. {"fun_enabled": true, "toast_on_new_yrke": true, "sound_on_new_yrke": true}
     preferences: Mapped[str | None] = mapped_column(nullable=True)
 
@@ -205,6 +206,7 @@ class ClaudeAnropslogg(Base):
     cache_read_tokens: Mapped[int] = mapped_column(default=0)
     kostnad_usd: Mapped[float] = mapped_column(default=0.0)  # beräknad kostnad i USD
     svarstid_ms: Mapped[int | None] = mapped_column(nullable=True)  # ms från anrop till svar
+    modell: Mapped[str | None] = mapped_column(nullable=True)  # null = Claude (äldre rader), annars modellnamn
 
 
 class ClaudeOcrSvar(Base):
@@ -216,6 +218,21 @@ class ClaudeOcrSvar(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     skapad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
     svar_json: Mapped[str] = mapped_column()            # JSON-sträng (utan _ocr_usage)
+    ocr_kommentar: Mapped[str] = mapped_column(default="")
+    modell: Mapped[str | None] = mapped_column(nullable=True)  # Claude-modellens namn (null på äldre rader)
+
+
+class LokalOcrSvar(Base):
+    """Senaste OCR-svar per gravplats och lokal modell. Ligger bredvid Claudes svar och skriver aldrig över dem."""
+    __tablename__ = "lokal_ocr_svar"
+    __table_args__ = (UniqueConstraint("gravplats_id", "modell", name="uq_lokal_ocr_svar_grav_modell"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False, index=True)
+    modell: Mapped[str] = mapped_column()
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    skapad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
+    svar_json: Mapped[str] = mapped_column()
     ocr_kommentar: Mapped[str] = mapped_column(default="")
 
 
@@ -1151,6 +1168,17 @@ def init_db():
         if "claude_batch_aktiv" not in user_cols:
             conn.execute(text("ALTER TABLE user ADD COLUMN claude_batch_aktiv INTEGER NOT NULL DEFAULT 0"))
             conn.commit()
+
+        # ---------- Migration: lokal OCR (användarflagga + modellkolumner) ----------
+        for tabell, kolumn, definition in (
+            ("user", "lokal_ocr_aktiv", "INTEGER NOT NULL DEFAULT 0"),
+            ("claude_anropslogg", "modell", "TEXT"),
+            ("claude_ocr_svar", "modell", "TEXT"),  # Claude-modellens namn, null på äldre rader
+        ):
+            cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({tabell})"))]
+            if kolumn not in cols:
+                conn.execute(text(f"ALTER TABLE {tabell} ADD COLUMN {kolumn} {definition}"))
+                conn.commit()
 
         # ---------- Migration: claude_batch_jobb_post fel_meddelande ----------
         r = conn.execute(text("PRAGMA table_info(claude_batch_jobb_post)"))

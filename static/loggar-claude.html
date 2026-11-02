@@ -52,6 +52,11 @@
         <p style="font-size:0.82rem;color:#94a3b8;margin-top:0.35rem;">Miljövariablerna <code>CLAUDE_PRIS_INPUT</code>, <code>CLAUDE_PRIS_OUTPUT</code>, <code>CLAUDE_PRIS_CACHE_CREATION</code>, <code>CLAUDE_PRIS_CACHE_READ</code> har prioritet om de är satta.</p>
       </details>
       <p class="loggar-totalt" id="loggar-totalt"></p>
+      <table class="loggar-tabell" id="loggar-per-modell" hidden style="margin-bottom:1rem;">
+        <caption style="text-align:left;font-weight:600;padding-bottom:0.3rem;">Per modell</caption>
+        <thead><tr><th scope="col">Modell</th><th scope="col" class="num">Anrop</th><th scope="col" class="num">Snitt svarstid</th><th scope="col" class="num">Snitt indata</th><th scope="col" class="num">Snitt utdata</th></tr></thead>
+        <tbody></tbody>
+      </table>
       <div class="loggar-filter" style="margin-bottom:0.5rem;">
         <label style="font-size:0.9rem;color:#64748b;">USD/SEK-kurs <input type="number" id="sek-kurs" value="10.5" min="0.01" step="0.1" style="width:5.5rem;padding:0.3rem 0.5rem;border:1px solid var(--border,#e2e8f0);border-radius:6px;" /></label>
         <span id="sek-kurs-status" style="font-size:0.82rem;color:#94a3b8;">hämtar…</span>
@@ -69,6 +74,7 @@
               <th scope="col">Datum och tid</th>
               <th scope="col">Gravplats</th>
               <th scope="col">Användare</th>
+              <th scope="col">Modell</th>
               <th scope="col" class="num">Indata</th>
               <th scope="col" class="num">Utdata</th>
               <th scope="col" class="num">Cache skapad</th>
@@ -88,6 +94,7 @@
       </div>
     </section>
   </main>
+  <script src="/static/utils.js"></script>
   <script src="/static/auth.js"></script>
   <script>
     (function() {
@@ -189,6 +196,15 @@
               totaltEl.textContent = 'Total kostnad (alla anrop): $' + tusd.toFixed(4) + ' ≈ ' + tsek.toFixed(2) + ' kr';
             }
             var loggar = data.loggar || [];
+            var perModellTabell = document.getElementById('loggar-per-modell');
+            if (perModellTabell && data.per_modell && data.per_modell.length) {
+              perModellTabell.querySelector('tbody').innerHTML = data.per_modell.map(function(m) {
+                return '<tr><td>' + escapeHtml(m.modell) + '</td><td class="num">' + m.antal.toLocaleString('sv-SE') +
+                  '</td><td class="num">' + formatSvarstid(m.snitt_svarstid_ms) + '</td><td class="num">' +
+                  m.snitt_input_tokens.toLocaleString('sv-SE') + '</td><td class="num">' + m.snitt_output_tokens.toLocaleString('sv-SE') + '</td></tr>';
+              }).join('');
+              perModellTabell.hidden = false;
+            }
             if (loggar.length === 0 && currentOffset === 0) { tomEl.hidden = false; }
             loggar.forEach(function(r) {
               var tr = document.createElement('tr');
@@ -199,6 +215,7 @@
                 '<td class="loggar-datum">' + formatDatum(r.anropad_den) + '</td>' +
                 '<td>' + gravLink + '</td>' +
                 '<td>' + (r.username || '–') + '</td>' +
+                '<td>' + escapeHtml(r.modell || 'Claude') + '</td>' +
                 '<td class="num">' + (r.input_tokens || 0).toLocaleString('sv-SE') + '</td>' +
                 '<td class="num">' + (r.output_tokens || 0).toLocaleString('sv-SE') + '</td>' +
                 '<td class="num">' + (r.cache_creation_tokens || 0).toLocaleString('sv-SE') + '</td>' +

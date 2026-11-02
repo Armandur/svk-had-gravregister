@@ -121,7 +121,7 @@
 <body>
   <main class="batch-sida">
     <p><a href="/">&#8592; Tillbaka till menyn</a></p>
-    <h1>Batch Claude OCR</h1>
+    <h1>Batch OCR</h1>
     <p style="color:#64748b;font-size:0.95rem">Kör Claude OCR automatiskt på ett urval gravplatser och granska sedan resultaten.</p>
 
     <!-- Förklaring om de två API-lägena -->
@@ -197,6 +197,12 @@
     <div class="batch-avsnitt">
       <h2>Skapa nytt jobb</h2>
 
+      <div class="batch-rad" id="batch-motor-rad" style="display:none">
+        <label>Modell</label>
+        <label class="batch-label-check"><input type="radio" name="batch-motor" value="claude" checked /> Claude</label>
+        <label class="batch-label-check"><input type="radio" name="batch-motor" value="lokal" /> Lokal modell (gratis, en grav i taget, lägre träffsäkerhet)</label>
+      </div>
+
       <div class="batch-rad">
         <label for="batch-kyrkogard">Kyrkogård</label>
         <select id="batch-kyrkogard"><option value="">– Alla –</option></select>
@@ -227,9 +233,9 @@
       <div class="batch-rad" style="margin-top:0.75rem">
         <label>Filter</label>
         <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-transkriberade" checked /> Hoppa över färdigtranskriberade</label>
-        <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-korda" checked /> Hoppa över redan Claude-körda</label>
+        <label class="batch-label-check"><input type="checkbox" id="batch-filter-ej-korda" checked /> Hoppa över gravar som redan har ett OCR-svar</label>
       </div>
-      <div class="batch-rad">
+      <div class="batch-rad" id="batch-api-lage-rad">
         <label>API-läge</label>
         <label class="batch-label-check"><input type="checkbox" id="batch-tvinga-batch" /> Tvinga Batch API (för testning – använder Anthropics asynkrona kö oavsett antal)</label>
       </div>
@@ -263,8 +269,31 @@
   let statistikData = null;
   let anthropicPollTimer = null;  // auto-poll timer för väntar_svar-jobb
 
-  gpEnsureAuth().then(function(ok) {
-    if (!ok) return;
+  function valdMotor() {
+    const vald = document.querySelector('input[name="batch-motor"]:checked');
+    return vald ? vald.value : 'claude';
+  }
+
+  function uppdateraMotor() {
+    const lokal = valdMotor() === 'lokal';
+    document.getElementById('batch-api-lage-rad').style.display = lokal ? 'none' : '';
+    if (lokal) document.getElementById('batch-tvinga-batch').checked = false;
+    uppdateraTypInfo();
+    uppdateraKostnad();
+  }
+
+  gpEnsureAuth().then(function(me) {
+    if (!me) return;
+    const harClaude = !!me.claude_batch_tillganglig;
+    const harLokal = !!me.lokal_ocr_tillganglig;
+    if (harClaude && harLokal) {
+      document.getElementById('batch-motor-rad').style.display = '';
+    } else if (harLokal) {
+      document.querySelector('input[name="batch-motor"][value="lokal"]').checked = true;
+      document.getElementById('batch-api-lage-rad').style.display = 'none';
+      uppdateraTypInfo();
+    }
+    document.querySelectorAll('input[name="batch-motor"]').forEach(function(r) { r.addEventListener('change', uppdateraMotor); });
     laddaTrad();
     laddaStatistik();
     laddaJobb();
@@ -393,6 +422,15 @@
     const textEl = document.getElementById('batch-typ-info-text');
     const btnEl = document.getElementById('batch-skapa-btn');
 
+    if (valdMotor() === 'lokal') {
+      infoEl.style.display = 'flex';
+      infoEl.className = 'batch-typ-info batch-typ-info-realtid';
+      iconEl.textContent = '\u2699';
+      textEl.innerHTML = '<strong>Lokal modell</strong> &ndash; gravplatserna körs en i taget på den lokala modellservern, ungefär 10&ndash;30 sekunder per grav. Ingen kostnad. Kan pausas när som helst.';
+      btnEl.textContent = 'Skapa och kör';
+      return;
+    }
+
     const anvandBatch = tvingas || (antal !== null && !isNaN(antal) && antal >= BATCH_GRANS);
 
     if (!tvingas && (antal === null || isNaN(antal))) {
@@ -439,6 +477,7 @@
     const ejTranskriberade = document.getElementById('batch-filter-ej-transkriberade').checked;
     const ejKorda = document.getElementById('batch-filter-ej-korda').checked;
 
+    if (valdMotor() === 'lokal') { wrap.hidden = true; return; }
     const params = new URLSearchParams({ ej_transkriberade: ejTranskriberade, ej_claude_korda: ejKorda });
     if (kyrkogard) params.set('kyrkogard', kyrkogard);
     if (kvarter) params.set('kvarter', kvarter);
@@ -539,12 +578,15 @@
       const pct = j.totalt > 0 ? Math.round((j.klara / j.totalt) * 100) : 0;
       const harKlara = j.klara > 0;
       const arBatch = j.jobb_typ === 'anthropic_batch';
+      const arLokal = j.jobb_typ === 'lokal';
 
       if (j.status === 'väntar_svar') harVantarSvar = true;
 
       // Typ-badge
       const typBadge = arBatch
         ? '<span class="batch-jobb-typ batch-jobb-typ-batch" title="Asynkront via Anthropics Batch API – 50 % rabatt">Batch API</span>'
+        : arLokal
+        ? '<span class="batch-jobb-typ batch-jobb-typ-realtid" title="Lokal modell, en grav i taget">Lokal</span>'
         : '<span class="batch-jobb-typ batch-jobb-typ-realtid" title="Realtid via Messages API">Realtid</span>';
 
       // Åtgärdsknappar – skiljer sig åt beroende på typ och status
@@ -935,6 +977,7 @@
       ej_transkriberade: document.getElementById('batch-filter-ej-transkriberade').checked,
       ej_claude_korda: document.getElementById('batch-filter-ej-korda').checked,
       tvinga_batch: document.getElementById('batch-tvinga-batch').checked,
+      motor: valdMotor(),
     };
     try {
       const res = await fetch(API + '/batch-claude/jobb', {

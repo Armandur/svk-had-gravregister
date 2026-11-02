@@ -1,4 +1,6 @@
 """Pydantic-scheman (BaseModel-klasser) för API-endpoints."""
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -93,6 +95,8 @@ class ApiKeysBody(BaseModel):
     claude_batch_block_enskild: bool | None = None
     spara_redigeringslogg_snapshot: bool | None = None
     claude_model: str | None = None  # None = ej skickad, "" = återställ till default
+    lokal_ocr_url: str | None = None  # ollama-adress eller portalens /api/ollama/active, "" = ta bort
+    lokal_ocr_modell: str | None = None  # "" = ta bort
 
 
 # ---------- Mappkonfiguration och extramaterial ----------
@@ -250,3 +254,4 @@ class BatchJobbBody(BaseModel):
     ej_transkriberade: bool = True
     ej_claude_korda: bool = True
     tvinga_batch: bool = False  # om True: använd Anthropic Batch API oavsett antal
+    motor: Literal["claude", "lokal"] = "claude"  # lokal = ollama-modell, körs en grav i taget

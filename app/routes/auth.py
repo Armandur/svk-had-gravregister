@@ -15,6 +15,7 @@ from app.database import (
 )
 from app.schemas import LoginBody, MePasswordBody, MePreferencesBody
 from app.utils.achievements import _compute_achievements_niva
+from app.services.ocr_service import lokal_ocr_tillganglig
 from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 
 router = APIRouter()
@@ -118,12 +119,14 @@ async def me(current_user: User = Depends(get_current_user)):
         claude_tillganglig
         and getattr(current_user, "claude_batch_aktiv", False)
     )
+    lokal_ocr = getattr(current_user, "lokal_ocr_aktiv", False) and lokal_ocr_tillganglig()
     return {
         "id": current_user.id,
         "username": current_user.username,
         "is_admin": current_user.is_admin,
         "claude_tillganglig": claude_tillganglig,
         "claude_batch_tillganglig": claude_batch_tillganglig,
+        "lokal_ocr_tillganglig": lokal_ocr,
         "preferences": {
             "fun_enabled": prefs.get("fun_enabled", True),
             "toast_on_new_yrke": prefs.get("toast_on_new_yrke", True),

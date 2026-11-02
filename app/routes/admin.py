@@ -39,7 +39,7 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_claude_model, _get_spara_redigeringslogg_snapshot, _invalidate_cache, _load_api_keys
+from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_claude_model, _get_lokal_ocr_modell, _get_lokal_ocr_url, _get_spara_redigeringslogg_snapshot, _invalidate_cache, _load_api_keys
 from app.utils.git_version import GIT_VERSION
 from app.utils.text import _sanitize_backup_filename_part
 
@@ -117,6 +117,10 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
         "claude_model": _get_claude_model(),
         "claude_model_from_env": bool(os.environ.get("CLAUDE_MODEL")),
+        "lokal_ocr_url": _get_lokal_ocr_url(),
+        "lokal_ocr_url_from_env": bool(os.environ.get("LOKAL_OCR_URL")),
+        "lokal_ocr_modell": _get_lokal_ocr_modell(),
+        "lokal_ocr_modell_from_env": bool(os.environ.get("LOKAL_OCR_MODELL")),
     }
 
 
@@ -143,11 +147,28 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
                 existing["claude_model"] = model
             else:
                 existing.pop("claude_model", None)
+        for nyckel in ("lokal_ocr_url", "lokal_ocr_modell"):
+            varde = getattr(body, nyckel)
+            if varde is not None:
+                if varde.strip():
+                    existing[nyckel] = varde.strip()
+                else:
+                    existing.pop(nyckel, None)
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
         _invalidate_cache()
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
     return {"ok": True}
+
+
+@router.get("/api/settings/lokal-ocr/test")
+async def testa_lokal_ocr(admin: User = Depends(require_admin)):
+    """Kontrollera att den lokala modellservern svarar och har vald modell. Endast admin."""
+    from app.services.ocr_service import LokalOcrFel, testa_lokal_server
+    try:
+        return await testa_lokal_server()
+    except LokalOcrFel as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 # ---------- Användarhantering ----------
@@ -156,7 +177,7 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
 async def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Lista alla användare (endast admin)."""
     users = db.query(User).order_by(User.username).all()
-    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True), "claude_batch_aktiv": getattr(u, "claude_batch_aktiv", False)} for u in users]}
+    return {"users": [{"id": u.id, "username": u.username, "is_admin": u.is_admin, "claude_aktiv": getattr(u, "claude_aktiv", True), "claude_batch_aktiv": getattr(u, "claude_batch_aktiv", False), "lokal_ocr_aktiv": getattr(u, "lokal_ocr_aktiv", False)} for u in users]}
 
 
 @router.put("/api/admin/users/{user_id:int}/claude-aktiv")
@@ -189,6 +210,22 @@ async def set_user_claude_batch_aktiv(
     user.claude_batch_aktiv = body.aktiv
     db.commit()
     return {"ok": True, "claude_batch_aktiv": user.claude_batch_aktiv}
+
+
+@router.put("/api/admin/users/{user_id:int}/lokal-ocr-aktiv")
+async def set_user_lokal_ocr_aktiv(
+    user_id: int,
+    body: ClaudeAktivBody,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Aktivera eller inaktivera OCR mot lokal modell (enskilt och batch) för en användare. Endast admin."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Användaren hittades inte")
+    user.lokal_ocr_aktiv = body.aktiv
+    db.commit()
+    return {"ok": True, "lokal_ocr_aktiv": user.lokal_ocr_aktiv}
 
 
 @router.post("/api/admin/users")

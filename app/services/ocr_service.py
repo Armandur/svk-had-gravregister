@@ -5,12 +5,23 @@ from pathlib import Path
 
 import httpx
 
-from app.utils.api_keys import _get_claude_model
+from app.utils.api_keys import _get_claude_model, _get_lokal_ocr_modell, _get_lokal_ocr_url
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_BATCH_URL = "https://api.anthropic.com/v1/messages/batches"
 
 _SPEC_PATH = Path(__file__).resolve().parent.parent / "prompts" / "gravregister_spec.md"
+
+
+OCR_INSTRUKTION = (
+    "Extrahera all data från dessa gravplatskort enligt specifikationen "
+    "och returnera ENBART giltig JSON, utan förklaringar eller markdown. "
+    "Lägg till ett fält 'ocr_kommentar' (sträng) med en övergripande "
+    "notering om eventuella märkligheter, osäkerheter eller avvikelser "
+    "du stött på – lämna tom sträng om allt är tydligt. "
+    "Kommentera bara på saker som kan påverka datakvaliteten eller kräver "
+    "manuell kontroll – inte på tomma fält eller förtryckt text som saknar ifyllnad."
+)
 
 
 def _load_spec() -> str:
@@ -35,18 +46,7 @@ async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> tu
                 "data": data,
             },
         })
-    content.append({
-        "type": "text",
-        "text": (
-            "Extrahera all data från dessa gravplatskort enligt specifikationen "
-            "och returnera ENBART giltig JSON, utan förklaringar eller markdown. "
-            "Lägg till ett fält 'ocr_kommentar' (sträng) med en övergripande "
-            "notering om eventuella märkligheter, osäkerheter eller avvikelser "
-            "du stött på – lämna tom sträng om allt är tydligt. "
-            "Kommentera bara på saker som kan påverka datakvaliteten eller kräver "
-            "manuell kontroll – inte på tomma fält eller förtryckt text som saknar ifyllnad."
-        ),
-    })
+    content.append({"type": "text", "text": OCR_INSTRUKTION})
 
     payload = {
         "model": _get_claude_model(),
@@ -86,6 +86,134 @@ async def ocr_gravplats_from_images(png_images: list[bytes], api_key: str) -> tu
     return json.loads(text), usage
 
 
+# ── Lokal modell (ollama) ─────────────────────────────────────────────────────
+
+class LokalOcrFel(Exception):
+    """Fel från lokal modell. Meddelandet är skrivet för slutanvändaren."""
+
+
+def _rensa_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    return text
+
+
+_VAXEL_SUFFIX = "/api/ollama/active"
+_ANSPRAK_AGARE = "svk-had-gravregister"
+_ANSPRAK_MINUTER = 15  # förlängs vid varje anrop, så en batch håller anspråket hela vägen
+
+
+async def _lokal_bas_url(client: httpx.AsyncClient, ta_ansprak: bool = False) -> str:
+    """Adressen till modellservern. Via växeln tas också ett anspråk på den aktiva servern.
+
+    Anspråket är rådgivande: det visar andra att servern är upptagen. Har någon annan ett
+    levande anspråk avbryts körningen, så den inte laddar om modellen under deras körning.
+    """
+    url = _get_lokal_ocr_url().rstrip("/")
+    if not url:
+        raise LokalOcrFel("Lokal modell är inte inställd. Be en administratör ange adressen under Inställningar.")
+    if not url.endswith(_VAXEL_SUFFIX):
+        return url
+    try:
+        resp = await client.get(url, timeout=10)
+        resp.raise_for_status()
+        aktiv = resp.json()
+        bas = aktiv["url"].rstrip("/")
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        raise LokalOcrFel("Kunde inte fråga växeln vilken modellserver som är aktiv.") from exc
+    if ta_ansprak and aktiv.get("name"):
+        portal = url[: -len(_VAXEL_SUFFIX)]
+        try:
+            claim = await client.post(
+                f"{portal}/api/ollama/endpoints/{aktiv['name']}/claim",
+                json={"agare": _ANSPRAK_AGARE, "minuter": _ANSPRAK_MINUTER, "notis": "OCR av gravkort"},
+                timeout=10,
+            )
+        except httpx.HTTPError:
+            claim = None  # växeln svarar inte på anspråk: kör ändå, servern själv svarade nyss
+        if claim is not None and claim.status_code == 409:
+            try:
+                orsak = str(claim.json().get("detail") or "")
+            except ValueError:
+                orsak = ""
+            raise LokalOcrFel("Modellservern är upptagen av en annan körning. Försök igen senare."
+                              + (f" ({orsak})" if orsak else ""))
+    return bas
+
+
+async def testa_lokal_server() -> dict:
+    """Fråga den lokala servern vilka modeller den har. Kastar LokalOcrFel om den inte svarar."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        bas = await _lokal_bas_url(client)
+        try:
+            resp = await client.get(f"{bas}/api/tags")
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise LokalOcrFel(f"Modellservern på {bas} svarar inte. Är datorn påslagen?") from exc
+    modeller = sorted(m["name"] for m in resp.json().get("models", []))
+    vald = _get_lokal_ocr_modell()
+    return {"server": bas, "modeller": modeller, "vald_modell": vald, "vald_finns": vald in modeller}
+
+
+def lokal_ocr_tillganglig() -> bool:
+    """Sant om instansen har en lokal modell inställd (adress och modellnamn)."""
+    return bool(_get_lokal_ocr_url() and _get_lokal_ocr_modell())
+
+
+async def ocr_gravplats_lokal(png_images: list[bytes]) -> tuple[dict, dict]:
+    """Skicka bilderna till en lokal vision-modell via ollama och returnera (json, usage).
+
+    Samma specifikation och instruktion som Claude får. usage innehåller
+    input_tokens, output_tokens och modell.
+    """
+    modell = _get_lokal_ocr_modell()
+    if not modell:
+        raise LokalOcrFel("Ingen lokal modell är vald. Be en administratör välja en under Inställningar.")
+    payload = {
+        "model": modell,
+        "stream": False,
+        "think": False,
+        "format": "json",
+        # Taket hindrar en modell som fastnat i en slinga från att låsa GPU:n i minuter.
+        # Ett fullt kort med tio gravsatta ger cirka 2 500 tokens.
+        "options": {"temperature": 0, "num_predict": 6000},
+        "messages": [
+            {"role": "system", "content": _load_spec()},
+            {
+                "role": "user",
+                "content": OCR_INSTRUKTION,
+                "images": [base64.standard_b64encode(b).decode("utf-8") for b in png_images],
+            },
+        ],
+    }
+    async with httpx.AsyncClient(timeout=600) as client:
+        bas = await _lokal_bas_url(client, ta_ansprak=True)
+        try:
+            resp = await client.post(f"{bas}/api/chat", json=payload)
+        except httpx.TimeoutException as exc:
+            raise LokalOcrFel("Den lokala modellen svarade inte i tid.") from exc
+        except httpx.HTTPError as exc:
+            raise LokalOcrFel("Den lokala modellservern går inte att nå. Är datorn påslagen?") from exc
+    if resp.status_code == 404:
+        raise LokalOcrFel(f"Modellen {modell} finns inte på den lokala servern.")
+    if not resp.is_success:
+        raise LokalOcrFel(f"Den lokala modellen gav fel (HTTP {resp.status_code}).")
+    raw = resp.json()
+    try:
+        result = json.loads(_rensa_json(raw.get("message", {}).get("content", "")))
+    except json.JSONDecodeError as exc:
+        raise LokalOcrFel("Den lokala modellen gav inget giltigt svar. Försök igen.") from exc
+    if not isinstance(result, dict):
+        raise LokalOcrFel("Den lokala modellen gav inget giltigt svar. Försök igen.")
+    usage = {
+        "input_tokens": raw.get("prompt_eval_count", 0) or 0,
+        "output_tokens": raw.get("eval_count", 0) or 0,
+        "modell": modell,
+    }
+    return result, usage
+
+
 # ── Anthropic Batch API ───────────────────────────────────────────────────────
 
 def _batch_headers(api_key: str) -> dict:
@@ -107,18 +235,7 @@ def bygg_batch_request(custom_id: str, png_images: list[bytes]) -> dict:
             "type": "image",
             "source": {"type": "base64", "media_type": "image/png", "data": data},
         })
-    content.append({
-        "type": "text",
-        "text": (
-            "Extrahera all data från dessa gravplatskort enligt specifikationen "
-            "och returnera ENBART giltig JSON, utan förklaringar eller markdown. "
-            "Lägg till ett fält 'ocr_kommentar' (sträng) med en övergripande "
-            "notering om eventuella märkligheter, osäkerheter eller avvikelser "
-            "du stött på – lämna tom sträng om allt är tydligt. "
-            "Kommentera bara på saker som kan påverka datakvaliteten eller kräver "
-            "manuell kontroll – inte på tomma fält eller förtryckt text som saknar ifyllnad."
-        ),
-    })
+    content.append({"type": "text", "text": OCR_INSTRUKTION})
     return {
         "custom_id": custom_id,
         "params": {

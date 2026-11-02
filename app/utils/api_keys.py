@@ -59,6 +59,26 @@ def _get_claude_model() -> str:
     return _load_api_keys().get("claude_model") or _CLAUDE_MODEL_DEFAULT
 
 
+def _get_lokal_ocr_url() -> str:
+    """Adress till lokal modellserver (ollama). LOKAL_OCR_URL env > api_keys.json > tom (avstängt).
+
+    Slutar adressen på /api/ollama/active tolkas den som portalens växel, som svarar
+    med {"url": ...} för den maskin som är aktiv just nu.
+    """
+    env = os.environ.get("LOKAL_OCR_URL")
+    if env:
+        return env.strip()
+    return (_load_api_keys().get("lokal_ocr_url") or "").strip()
+
+
+def _get_lokal_ocr_modell() -> str:
+    """Vision-modell för lokal OCR. LOKAL_OCR_MODELL env > api_keys.json > tom."""
+    env = os.environ.get("LOKAL_OCR_MODELL")
+    if env:
+        return env.strip()
+    return (_load_api_keys().get("lokal_ocr_modell") or "").strip()
+
+
 def _get_spara_redigeringslogg_snapshot() -> bool:
     """Om True: spara en JSON-snapshot av inmatningsdata vid varje sparande (default: True)."""
     return bool(_load_api_keys().get("spara_redigeringslogg_snapshot", True))

@@ -2500,3 +2500,8 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
     padding-right: 0.5rem !important;
   }
 }
+
+/* Flera sparade OCR-svar (Claude och lokala modeller) sida vid sida */
+.gp-ocr-svar-lista { display: flex; flex-direction: column; gap: 0.6rem; }
+.gp-ocr-svar-rad { display: flex; flex-direction: column; gap: 0.3rem; }
+.gp-ocr-svar-rad + .gp-ocr-svar-rad { border-top: 1px solid #bae6fd; padding-top: 0.6rem; }

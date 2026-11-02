@@ -9,6 +9,7 @@ from app.auth import get_current_user, require_admin
 from app.database import (
     ClaudeAnropslogg,
     ClaudeOcrSvar,
+    LokalOcrSvar,
     Gravplats,
     GravplatsRedigeringslogg,
     MappConfig,
@@ -101,7 +102,39 @@ async def get_ocr_svar(
         "ocr_kommentar": svar.ocr_kommentar,
         "skapad_den": svar.skapad_den,
         "username": username or "",
+        "modell": svar.modell or "",
     }
+
+
+@router.get("/api/ocr/gravplats/{gravplats_id:int}/svar-alla")
+async def get_alla_ocr_svar(
+    gravplats_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Alla sparade OCR-svar för en gravplats: Claudes först, sedan lokala modeller (senaste först)."""
+    svar = []
+    claude = (
+        db.query(ClaudeOcrSvar, User.username)
+        .join(User, ClaudeOcrSvar.user_id == User.id)
+        .filter(ClaudeOcrSvar.gravplats_id == gravplats_id)
+        .first()
+    )
+    if claude:
+        rad, username = claude
+        svar.append({"kalla": "claude", "modell": rad.modell or "Claude", "svar_json": json.loads(rad.svar_json),
+                     "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or ""})
+    lokala = (
+        db.query(LokalOcrSvar, User.username)
+        .join(User, LokalOcrSvar.user_id == User.id)
+        .filter(LokalOcrSvar.gravplats_id == gravplats_id)
+        .order_by(LokalOcrSvar.skapad_den.desc())
+        .all()
+    )
+    for rad, username in lokala:
+        svar.append({"kalla": "lokal", "modell": rad.modell, "svar_json": json.loads(rad.svar_json),
+                     "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or ""})
+    return {"svar": svar}
 
 
 @router.get("/api/loggar/claude")
@@ -150,5 +183,18 @@ async def list_loggar_claude(
             "cache_read_tokens": logg.cache_read_tokens,
             "kostnad_usd": logg.kostnad_usd,
             "svarstid_ms": logg.svarstid_ms,
+            "modell": logg.modell or "Claude",
         })
-    return {"loggar": loggar, "antal": len(loggar), "total": total, "totalt_kostnad_usd": round(totalt_kostnad, 4)}
+    per_modell = [
+        {"modell": m or "Claude", "antal": n, "snitt_svarstid_ms": int(t) if t is not None else None,
+         "snitt_input_tokens": int(i or 0), "snitt_output_tokens": int(o or 0)}
+        for m, n, t, i, o in db.query(
+            ClaudeAnropslogg.modell,
+            func.count(ClaudeAnropslogg.id),
+            func.avg(ClaudeAnropslogg.svarstid_ms),
+            func.avg(ClaudeAnropslogg.input_tokens),
+            func.avg(ClaudeAnropslogg.output_tokens),
+        ).group_by(ClaudeAnropslogg.modell).all()
+    ]
+    return {"loggar": loggar, "antal": len(loggar), "total": total, "totalt_kostnad_usd": round(totalt_kostnad, 4),
+            "per_modell": per_modell}

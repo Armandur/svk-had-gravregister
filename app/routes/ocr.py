@@ -1,14 +1,12 @@
 """Rutter för enskild Claude OCR."""
-import json
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import fitz  # PyMuPDF
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.utils.api_keys import _get_claude_pris
+from app.utils.api_keys import _get_claude_model, _get_claude_pris
 from app.database import (
     get_db,
     User,
@@ -17,13 +15,11 @@ from app.database import (
     Gravplats,
     GravplatsDoldHalva,
     ClaudeAnropslogg,
-    ClaudeOcrSvar,
-    ClaudeBatchJobb,
-    ClaudeBatchJobbPost,
 )
 from app.auth import get_current_user
-from app.services.ocr_service import ocr_gravplats_from_images
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv, _get_claude_batch_block_enskild
+from app.services.ocr_service import LokalOcrFel, ocr_gravplats_from_images, ocr_gravplats_lokal
+from app.utils.ocr_utils import _collect_png_images_for_gravplats, _require_lokal_ocr, _spara_ocr_svar, _sparra_om_i_pagaende_batch
+from app.utils.api_keys import _get_anthropic_api_key, _get_claude_instans_aktiv
 from app.utils.pdf_utils import (
     _mapp_path,
     _excluded_filenames_for_mapp,
@@ -58,23 +54,7 @@ async def ocr_gravplats_endpoint(
     if not g:
         raise HTTPException(status_code=404, detail="Gravplats hittades inte")
 
-    if _get_claude_batch_block_enskild():
-        pagar_post = (
-            db.query(ClaudeBatchJobbPost)
-            .join(ClaudeBatchJobb, ClaudeBatchJobbPost.jobb_id == ClaudeBatchJobb.id)
-            .filter(
-                ClaudeBatchJobbPost.gravplats_id == gravplats_id,
-                ClaudeBatchJobbPost.status == "väntar",
-                ClaudeBatchJobb.status.in_(["väntar_svar", "kör"]),
-            )
-            .first()
-        )
-        if pagar_post:
-            jobb_namn = db.query(ClaudeBatchJobb.namn).filter(ClaudeBatchJobb.id == pagar_post.jobb_id).scalar() or ""
-            raise HTTPException(
-                status_code=409,
-                detail=f"Gravplatsen ingår i det pågående batch-jobbet \"{jobb_namn}\". Enskild körning är blockerad – ändra i Inställningar om du vill tillåta det.",
-            )
+    _sparra_om_i_pagaende_batch(db, gravplats_id)
 
     mapp_config = db.query(MappConfig).filter(MappConfig.id == g.mapp_id).first()
     if not mapp_config:
@@ -214,24 +194,7 @@ async def ocr_gravplats_endpoint(
     db.add(logg)
     db.commit()
 
-    svar_json_str = json.dumps(
-        {k: v for k, v in result.items() if k != "_ocr_usage"},
-        ensure_ascii=False
-    )
-    existing_svar = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
-    if existing_svar:
-        existing_svar.user_id = current_user.id
-        existing_svar.skapad_den = datetime.now(timezone.utc).isoformat()
-        existing_svar.svar_json = svar_json_str
-        existing_svar.ocr_kommentar = result.get("ocr_kommentar", "")
-    else:
-        db.add(ClaudeOcrSvar(
-            gravplats_id=gravplats_id,
-            user_id=current_user.id,
-            skapad_den=datetime.now(timezone.utc).isoformat(),
-            svar_json=svar_json_str,
-            ocr_kommentar=result.get("ocr_kommentar", ""),
-        ))
+    _spara_ocr_svar(db, current_user.id, gravplats_id, result, _get_claude_model())
     db.commit()
 
     result["_ocr_usage"] = {
@@ -240,5 +203,51 @@ async def ocr_gravplats_endpoint(
         "cache_creation_tokens": cache_create,
         "cache_read_tokens": cache_read,
         "kostnad_usd": round(kostnad, 6),
+    }
+    return result
+
+
+@router.post("/api/ocr/lokal/gravplats/{gravplats_id:int}")
+async def ocr_gravplats_lokal_endpoint(
+    gravplats_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Kör OCR mot den lokala modellen (ollama). Samma svarsformat som Claude-routen."""
+    _require_lokal_ocr(current_user)
+    if not db.query(Gravplats.id).filter(Gravplats.id == gravplats_id).first():
+        raise HTTPException(status_code=404, detail="Gravplats hittades inte")
+    _sparra_om_i_pagaende_batch(db, gravplats_id)
+    png_images = _collect_png_images_for_gravplats(gravplats_id, db)
+    if not png_images:
+        raise HTTPException(status_code=422, detail="Inga bilder hittades för gravplatsen")
+
+    _t0 = time.monotonic()
+    try:
+        result, usage = await ocr_gravplats_lokal(png_images)
+    except LokalOcrFel as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    svarstid_ms = int((time.monotonic() - _t0) * 1000)
+
+    db.add(ClaudeAnropslogg(
+        user_id=current_user.id,
+        gravplats_id=gravplats_id,
+        anropad_den=datetime.now(timezone.utc).isoformat(),
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        kostnad_usd=0.0,
+        svarstid_ms=svarstid_ms,
+        modell=usage["modell"],
+    ))
+    _spara_ocr_svar(db, current_user.id, gravplats_id, result, usage["modell"], lokal=True)
+    db.commit()
+
+    result["_ocr_usage"] = {
+        "input_tokens": usage["input_tokens"],
+        "output_tokens": usage["output_tokens"],
+        "cache_creation_tokens": 0,
+        "cache_read_tokens": 0,
+        "kostnad_usd": 0.0,
+        "modell": usage["modell"],
     }
     return result

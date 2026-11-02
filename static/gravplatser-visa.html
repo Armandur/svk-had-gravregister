@@ -57,6 +57,7 @@
           <div class="gp-inmatning-spara-wrap gp-inmatning-spara-wrap-edit" id="gp-inmatning-spara-wrap" hidden>
             <button type="button" id="gp-inmatning-spara" class="gp-inmatning-spara-btn" disabled>Spara</button>
             <button type="button" id="gp-claude-ocr-btn" class="gp-claude-ocr-btn">Hämta från Claude</button>
+            <button type="button" id="gp-lokal-ocr-btn" class="gp-claude-ocr-btn" hidden title="Kör igenkänning mot en lokal modell. Gratis men långsammare och mindre träffsäker än Claude.">Hämta från lokal modell</button>
             <button type="button" id="gp-claude-avbryt-btn" class="gp-claude-avbryt-btn" hidden>Avbryt</button>
             <span id="gp-inmatning-status" class="gp-inmatning-status" aria-live="polite"></span>
           </div>
@@ -68,9 +69,9 @@
           <div id="gp-ocr-kommentar-banner" class="gp-ocr-kommentar-banner" hidden aria-live="polite"></div>
           <div id="gp-batch-pagar-banner" class="gp-batch-pagar-banner" hidden aria-live="polite"></div>
           <div id="gp-claude-sparat-panel" class="gp-claude-sparat-panel" hidden>
-            <div class="gp-claude-sparat-meta" id="gp-claude-sparat-meta"></div>
             <div class="gp-claude-sparat-kommentar" id="gp-claude-sparat-kommentar" hidden></div>
-            <button type="button" id="gp-claude-applicera-btn" class="gp-claude-applicera-btn">Ladda in i formuläret</button>
+            <div id="gp-ocr-svar-lista" class="gp-ocr-svar-lista"></div>
+            <button type="button" id="gp-claude-applicera-btn" class="gp-claude-applicera-btn" hidden>Ladda in i formuläret</button>
           </div>
           <dialog id="gp-claude-diff-dialog" class="gp-claude-diff-dialog">
             <h3>Ändringar som kommer att göras</h3>

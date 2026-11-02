@@ -123,6 +123,23 @@
           Exempel: <code>claude-haiku-4-5-20251001</code>, <code>claude-opus-4-6</code>.
         </p>
       </div>
+      <div style="margin-top:1.25rem;">
+        <label style="font-size:0.95rem; display:block; margin-bottom:0.35rem;">Lokal modell (ollama)</label>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <input type="text" id="inst-lokal-url-input" aria-label="Adress till lokal modellserver" placeholder="http://server:11434 eller http://portal:8890/api/ollama/active" style="flex:1; min-width:14rem; padding:0.45rem 0.65rem; font-size:0.95rem; font-family:monospace; border:1px solid var(--border,#e2e8f0); border-radius:5px; background:var(--card,#fff);" />
+          <input type="text" id="inst-lokal-modell-input" aria-label="Lokal modell" placeholder="qwen2.5vl:7b" style="flex:1; min-width:14rem; padding:0.45rem 0.65rem; font-size:0.95rem; font-family:monospace; border:1px solid var(--border,#e2e8f0); border-radius:5px; background:var(--card,#fff);" />
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="inst-lokal-spara" style="padding:0.45rem 1rem; font-size:0.95rem; background:var(--accent,#2563eb); color:#fff; border:none; border-radius:5px; cursor:pointer; font-family:inherit;">Spara lokal modell</button>
+            <button type="button" id="inst-lokal-testa" style="padding:0.45rem 1rem; font-size:0.95rem; background:var(--accent,#2563eb); color:#fff; border:none; border-radius:5px; cursor:pointer; font-family:inherit;">Testa anslutning</button>
+            <span id="inst-lokal-status" style="font-size:0.85rem; color:#64748b;" aria-live="polite"></span>
+          </div>
+        </div>
+        <p style="margin:0.4rem 0 0; font-size:0.82rem; color:#64748b;">
+          Miljövariablerna <code>LOKAL_OCR_URL</code> och <code>LOKAL_OCR_MODELL</code> går före inställningen.
+          Slutar adressen på <code>/api/ollama/active</code> frågar appen portalens växel vilken server som är aktiv.
+          Användare behöver dessutom flaggan Lokal under Användare.
+        </p>
+      </div>
       <div style="margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border,#e2e8f0);">
         <p style="font-size:0.95rem; font-weight:600; margin:0 0 0.5rem; color:#475569;">Anthropic API-nyckel</p>
         <p class="inst-api-status" id="inst-api-status" aria-live="polite">Laddar…</p>
@@ -247,6 +264,38 @@
         }
       });
 
+      const lokalUrl = document.getElementById('inst-lokal-url-input');
+      const lokalModell = document.getElementById('inst-lokal-modell-input');
+      const lokalStatus = document.getElementById('inst-lokal-status');
+      document.getElementById('inst-lokal-spara')?.addEventListener('click', async function() {
+        lokalStatus.textContent = 'Sparar…';
+        try {
+          const body = {};
+          if (!lokalUrl.disabled) body.lokal_ocr_url = lokalUrl.value.trim();
+          if (!lokalModell.disabled) body.lokal_ocr_modell = lokalModell.value.trim();
+          const res = await fetch('/api/settings/api-keys', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error();
+          lokalStatus.textContent = 'Sparad.';
+        } catch (_) {
+          lokalStatus.textContent = 'Kunde inte spara.';
+        }
+      });
+      document.getElementById('inst-lokal-testa')?.addEventListener('click', async function() {
+        lokalStatus.textContent = 'Testar…';
+        try {
+          const res = await fetch('/api/settings/lokal-ocr/test', { credentials: 'include' });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(d.detail || 'Okänt fel');
+          lokalStatus.textContent = 'Servern svarar (' + d.server + '). ' +
+            (d.vald_finns ? 'Modellen ' + d.vald_modell + ' finns.' : 'Modellen ' + (d.vald_modell || '(ingen vald)') + ' saknas. Tillgängliga: ' + d.modeller.join(', '));
+        } catch (e) {
+          lokalStatus.textContent = e.message;
+        }
+      });
+
       async function laddaStatus() {
         try {
           const res = await fetch('/api/settings/api-keys', { credentials: 'include' });
@@ -269,6 +318,12 @@
             modelInput.disabled = d.claude_model_from_env;
             if (modelSparaBtn) modelSparaBtn.disabled = d.claude_model_from_env;
             if (d.claude_model_from_env && modelStatus) modelStatus.textContent = '(styrs av miljövariabel CLAUDE_MODEL)';
+          }
+          if (lokalUrl) {
+            lokalUrl.value = d.lokal_ocr_url || '';
+            lokalUrl.disabled = d.lokal_ocr_url_from_env;
+            lokalModell.value = d.lokal_ocr_modell || '';
+            lokalModell.disabled = d.lokal_ocr_modell_from_env;
           }
         } catch (_) {
           statusEl.textContent = 'Kunde inte hämta status.';

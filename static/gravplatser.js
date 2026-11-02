@@ -288,8 +288,10 @@ async function hamtaBatchPagarInfo() {
     if (!data.pagar) return;
     state._gravplatsHarBatchPagar = true;
     // Uppdatera knappens tillstånd
-    const ocrBtn = document.getElementById('gp-claude-ocr-btn');
-    if (ocrBtn) ocrBtn.disabled = state._claudeBatchBlockEnskild;
+    ['gp-claude-ocr-btn', 'gp-lokal-ocr-btn'].forEach((id) => {
+      const ocrBtn = document.getElementById(id);
+      if (ocrBtn) ocrBtn.disabled = state._claudeBatchBlockEnskild;
+    });
     if (banner) {
       const datum = data.skapad_den
         ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })
@@ -613,12 +615,15 @@ async function batchAutoLaddaClaude() {
     uppdateraExtramaterialSektion(state.currentExtramaterial, state.currentExtramaterialMapp);
   }
 
-  // Hämta sparat Claude-svar
+  // Hämta jobbets svar: lokala jobb laddar senaste lokala svaret, övriga Claudes
   try {
-    const res = await fetch(`${API}/ocr/gravplats/${gpId}/svar`, { credentials: 'include' });
+    const res = await fetch(`${API}/ocr/gravplats/${gpId}/svar-alla`, { credentials: 'include' });
     if (!res.ok || state.currentGravplatsId !== gpId) return;
-    const data = await res.json();
+    const alla = (await res.json()).svar || [];
     if (state.currentGravplatsId !== gpId) return;
+    const data = alla.find(function(s) { return s.kalla === (state.batchJobbLokal ? 'lokal' : 'claude'); });
+    if (!data) return;
+    state.sparadeOcrSvar = alla;
     state.sparatClaudeSvar = data;
 
     const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
@@ -633,7 +638,7 @@ async function batchAutoLaddaClaude() {
       }
     } else {
       // Befintlig data finns – visa panel för manuell bekräftelse
-      visaSparatClaudeSvar(data);
+      visaSparatClaudeSvar();
     }
   } catch (e) {}
 }
@@ -2681,14 +2686,17 @@ function valideraAllaDatumFalt() {
 function hamtaSparatClaudeSvar() {
   if (state.currentGravplatsId == null) return;
   const panel = document.getElementById('gp-claude-sparat-panel');
+  const gravId = state.currentGravplatsId;
   state.sparatClaudeSvar = null;
+  state.sparadeOcrSvar = [];
   if (panel) panel.hidden = true;
-  fetch(`${API}/ocr/gravplats/${state.currentGravplatsId}/svar`, { credentials: 'include' })
+  fetch(`${API}/ocr/gravplats/${gravId}/svar-alla`, { credentials: 'include' })
     .then(function(r) { return r.ok ? r.json() : null; })
     .then(function(data) {
-      if (!data) return;
-      state.sparatClaudeSvar = data;
-      visaSparatClaudeSvar(data);
+      if (!data || !data.svar || data.svar.length === 0 || gravId !== state.currentGravplatsId) return;
+      state.sparadeOcrSvar = data.svar;
+      state.sparatClaudeSvar = data.svar[0];
+      visaSparatClaudeSvar();
     })
     .catch(function() {});
 }
@@ -2703,15 +2711,29 @@ function formatOcrKommentar(text) {
   }).join('') + '</ul>';
 }
 
-function visaSparatClaudeSvar(data) {
+function visaSparatClaudeSvar() {
   if (!state.inmatningRedigerar) return;
   const panel = document.getElementById('gp-claude-sparat-panel');
-  const metaEl = document.getElementById('gp-claude-sparat-meta');
+  const lista = document.getElementById('gp-ocr-svar-lista');
   const kommentarEl = document.getElementById('gp-claude-sparat-kommentar');
-  if (!panel) return;
-
-  var datum = data.skapad_den ? new Date(data.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '';
-  if (metaEl) metaEl.textContent = 'Sparat Claude-svar – ' + datum + (data.username ? ' av ' + data.username : '');
+  const svar = state.sparadeOcrSvar || [];
+  if (!panel || !lista || svar.length === 0) return;
+  lista.innerHTML = svar.map(function(s, i) {
+    var datum = s.skapad_den ? new Date(s.skapad_den).toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    var kalla = s.kalla === 'lokal' ? 'lokal modell' : 'Claude';
+    var modell = s.modell && s.modell !== 'Claude' ? ' (' + escapeHtml(s.modell) + ')' : '';
+    return '<div class="gp-ocr-svar-rad">' +
+      '<div class="gp-claude-sparat-meta">Sparat svar från ' + kalla + modell + ' – ' +
+      escapeHtml(datum) + (s.username ? ' av ' + escapeHtml(s.username) : '') + '</div>' +
+      '<button type="button" class="gp-claude-applicera-btn gp-ocr-svar-ladda" data-index="' + i + '">Ladda in i formuläret</button>' +
+      '</div>';
+  }).join('');
+  lista.querySelectorAll('.gp-ocr-svar-ladda').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      state.sparatClaudeSvar = state.sparadeOcrSvar[parseInt(btn.dataset.index, 10)];
+      document.getElementById('gp-claude-applicera-btn')?.click();
+    });
+  });
   if (kommentarEl) kommentarEl.hidden = true;
   panel.hidden = false;
 }
@@ -2752,6 +2774,9 @@ function byggDiff(claudeData) {
     jmf(prefix + ' förnamn', ni.fornamn, ci.fornamn);
     jmf(prefix + ' efternamn', ni.efternamn, ci.efternamn);
     jmf(prefix + ' yrke', ni.yrke, ci.yrke);
+    jmf(prefix + ' gatuadress', ni.gatuadress, ci.gatuadress);
+    jmf(prefix + ' postnummer', ni.postnummer, ci.postnummer);
+    jmf(prefix + ' postort', ni.postort, ci.postort);
   }
   if (cInnh.length !== nInnh.length) {
     andringar.push({ etikett: 'Antal innehavare', gammalt: String(nInnh.length), nytt: String(cInnh.length) });
@@ -2768,8 +2793,15 @@ function byggDiff(claudeData) {
     jmf(gPrefix + ' förnamn', ng.fornamn, cg.fornamn);
     jmf(gPrefix + ' efternamn', ng.efternamn, cg.efternamn);
     jmf(gPrefix + ' föd.år', ng.fodelse_ar, cg.fodelse_ar);
+    jmf(gPrefix + ' föd.mån', ng.fodelse_manad, cg.fodelse_manad);
+    jmf(gPrefix + ' föd.dag', ng.fodelse_dag, cg.fodelse_dag);
+    jmf(gPrefix + ' föd.nr', ng.fod_nr, cg.fod_nr);
     jmf(gPrefix + ' dödsår', ng.dods_ar, cg.dods_ar);
+    jmf(gPrefix + ' döds.mån', ng.dods_manad, cg.dods_manad);
+    jmf(gPrefix + ' döds.dag', ng.dods_dag, cg.dods_dag);
+    jmf(gPrefix + ' db.nr', ng.dodsbok_nr, cg.dodsbok_nr);
     jmf(gPrefix + ' gravsatt den', ng.gravsatt_den, cg.gravsatt_den);
+    jmf(gPrefix + ' urna', ng.urna, cg.urna);
   }
   if (cGs.length !== nGs.length) {
     andringar.push({ etikett: 'Antal gravsatta', gammalt: String(nGs.length), nytt: String(cGs.length) });
@@ -2972,21 +3004,26 @@ document.querySelectorAll('.gp-sektion-rubrik').forEach((btn) => {
 });
 document.getElementById('gp-inmatning-spara')?.addEventListener('click', sparaInmatning);
 
-document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async function () {
+async function hamtaOcr(lokal) {
   if (state.currentGravplatsId == null) return;
   if (state._gravplatsHarBatchPagar && !state._claudeBatchBlockEnskild) {
     if (!await showConfirm('Gravplatsen ingår i ett pågående batch-jobb. Vill du ändå köra en enskild körning nu?')) return;
   }
-  const btn = document.getElementById('gp-claude-ocr-btn');
+  const btn = document.getElementById(lokal ? 'gp-lokal-ocr-btn' : 'gp-claude-ocr-btn');
+  const andraBtn = document.getElementById(lokal ? 'gp-claude-ocr-btn' : 'gp-lokal-ocr-btn');
+  const knapptext = btn.textContent;
+  const kalla = lokal ? 'den lokala modellen' : 'Claude';
   const avbrytBtn = document.getElementById('gp-claude-avbryt-btn');
   const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
   state._claudeOcrAbortController = new AbortController();
   btn.disabled = true;
+  if (andraBtn) andraBtn.disabled = true;
   btn.textContent = 'Hämtar…';
   if (avbrytBtn) avbrytBtn.hidden = false;
   if (bannerEl) { bannerEl.hidden = true; bannerEl.textContent = ''; }
   try {
-    const res = await fetch(`${API}/ocr/gravplats/${state.currentGravplatsId}`, {
+    const url = lokal ? `${API}/ocr/lokal/gravplats/${state.currentGravplatsId}` : `${API}/ocr/gravplats/${state.currentGravplatsId}`;
+    const res = await fetch(url, {
       method: 'POST',
       credentials: 'include',
       signal: state._claudeOcrAbortController.signal,
@@ -3003,17 +3040,21 @@ document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', async fu
       bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
       bannerEl.hidden = false;
     }
-    state.sparatClaudeSvar = { svar_json: data, ocr_kommentar: data.ocr_kommentar || '', skapad_den: new Date().toISOString(), username: '' };
+    hamtaSparatClaudeSvar();
   } catch (err) {
     if (err.name === 'AbortError') { /* användaren avbröt – inget felmeddelande */ }
-    else showToast('Kunde inte hämta data från Claude: ' + (err.message || 'okänt fel'), 'fel');
+    else showToast('Kunde inte hämta data från ' + kalla + ': ' + (err.message || 'okänt fel'), 'fel');
   } finally {
     state._claudeOcrAbortController = null;
     btn.disabled = false;
-    btn.textContent = 'Hämta från Claude';
+    if (andraBtn) andraBtn.disabled = false;
+    btn.textContent = knapptext;
     if (avbrytBtn) avbrytBtn.hidden = true;
   }
-});
+}
+
+document.getElementById('gp-claude-ocr-btn')?.addEventListener('click', () => hamtaOcr(false));
+document.getElementById('gp-lokal-ocr-btn')?.addEventListener('click', () => hamtaOcr(true));
 
 document.getElementById('gp-claude-avbryt-btn')?.addEventListener('click', function () {
   if (state._claudeOcrAbortController) state._claudeOcrAbortController.abort();
@@ -3065,8 +3106,10 @@ function toggleRedigeraVy() {
     const batchBannerClose = document.getElementById('gp-batch-pagar-banner');
     if (batchBannerClose) { batchBannerClose.hidden = true; batchBannerClose.innerHTML = ''; }
     state._gravplatsHarBatchPagar = false;
-    const ocrBtnClose = document.getElementById('gp-claude-ocr-btn');
-    if (ocrBtnClose) ocrBtnClose.disabled = false;
+    ['gp-claude-ocr-btn', 'gp-lokal-ocr-btn'].forEach((id) => {
+      const ocrBtnClose = document.getElementById(id);
+      if (ocrBtnClose) ocrBtnClose.disabled = false;
+    });
     const btn = document.getElementById('gp-btn-redigera');
     if (btn) btn.textContent = 'Redigera gravplatsen';
     expandAllInmatningSektioner();
@@ -3261,6 +3304,7 @@ async function initFromUrl() {
       state.currentIndex = idx;
       state.batchJobbMode = true;
       state.batchJobbId = batchJobbIdParam;
+      state.batchJobbLokal = data.jobb_typ === 'lokal';
       await uppdateraVy();
       applyVyFromUrl();
       return;
@@ -3293,9 +3337,17 @@ try {
       } else {
         applyInmatningSectionsOrder(state.inmatningSectionsOrder);
       }
+      if (me && me.lokal_ocr_tillganglig) {
+        var lokalBtn = document.getElementById('gp-lokal-ocr-btn');
+        if (lokalBtn) lokalBtn.hidden = false;
+      }
       if (me && !me.claude_tillganglig) {
-        ['gp-claude-ocr-btn', 'gp-claude-avbryt-btn',
-         'gp-claude-sparat-panel', 'gp-ocr-kommentar-banner', 'gp-claude-diff-dialog'].forEach(function(id) {
+        var claudeId = ['gp-claude-ocr-btn'];
+        if (!me.lokal_ocr_tillganglig) {
+          claudeId = claudeId.concat(['gp-lokal-ocr-btn', 'gp-claude-avbryt-btn',
+            'gp-claude-sparat-panel', 'gp-ocr-kommentar-banner', 'gp-claude-diff-dialog']);
+        }
+        claudeId.forEach(function(id) {
           var el = document.getElementById(id);
           if (el) el.remove();
         });

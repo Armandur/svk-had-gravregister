@@ -132,3 +132,78 @@ def _require_claude_batch(current_user) -> None:
         raise HTTPException(status_code=403, detail="Claude batch är inte aktiverat för ditt konto")
     if not _get_anthropic_api_key():
         raise HTTPException(status_code=500, detail="Anthropic API-nyckel saknas")
+
+
+def _require_lokal_ocr(current_user) -> None:
+    """Kasta 403/503 om lokal OCR inte är tillgänglig för användaren eller instansen."""
+    from app.services.ocr_service import lokal_ocr_tillganglig
+    if not getattr(current_user, "lokal_ocr_aktiv", False):
+        raise HTTPException(status_code=403, detail="Lokal modell är inte aktiverad för ditt konto")
+    if not lokal_ocr_tillganglig():
+        raise HTTPException(status_code=503, detail="Lokal modell är inte inställd. Be en administratör ange adress och modell under Inställningar.")
+
+
+def _spara_ocr_svar(db: Session, user_id: int, gravplats_id: int, result: dict, modell: str | None,
+                    lokal: bool = False) -> None:
+    """Spara senaste OCR-svar (upsert). Claude: en rad per grav. Lokal: en rad per grav och modell.
+
+    Lokala svar hamnar i en egen tabell och skriver aldrig över Claudes svar. Committar inte.
+    """
+    from datetime import datetime, timezone
+    import json
+    from app.database import ClaudeOcrSvar, LokalOcrSvar
+    svar_json = json.dumps({k: v for k, v in result.items() if k != "_ocr_usage"}, ensure_ascii=False)
+    if lokal:
+        rad = db.query(LokalOcrSvar).filter(LokalOcrSvar.gravplats_id == gravplats_id, LokalOcrSvar.modell == modell).first()
+        if rad is None:
+            rad = LokalOcrSvar(gravplats_id=gravplats_id, modell=modell)
+            db.add(rad)
+    else:
+        rad = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
+        if rad is None:
+            rad = ClaudeOcrSvar(gravplats_id=gravplats_id)
+            db.add(rad)
+        rad.modell = modell
+    rad.user_id = user_id
+    rad.skapad_den = datetime.now(timezone.utc).isoformat()
+    rad.svar_json = svar_json
+    rad.ocr_kommentar = result.get("ocr_kommentar", "")
+
+
+def _require_batch_motor(current_user, motor: str) -> None:
+    """Behörighet för att skapa eller köra ett batch-jobb med given motor ('claude' eller 'lokal')."""
+    if motor == "lokal":
+        _require_lokal_ocr(current_user)
+    else:
+        _require_claude_batch(current_user)
+
+
+def _require_batch_atkomst(current_user) -> None:
+    """Behörighet att se och hantera egna batch-jobb: Claude batch eller lokal modell räcker."""
+    if getattr(current_user, "lokal_ocr_aktiv", False):
+        return
+    _require_claude_batch(current_user)
+
+
+def _sparra_om_i_pagaende_batch(db: Session, gravplats_id: int) -> None:
+    """Kasta 409 om graven väntar i ett pågående batch-jobb och instansen blockerar enskild körning."""
+    from app.database import ClaudeBatchJobb, ClaudeBatchJobbPost
+    from app.utils.api_keys import _get_claude_batch_block_enskild
+    if not _get_claude_batch_block_enskild():
+        return
+    pagar_post = (
+        db.query(ClaudeBatchJobbPost)
+        .join(ClaudeBatchJobb, ClaudeBatchJobbPost.jobb_id == ClaudeBatchJobb.id)
+        .filter(
+            ClaudeBatchJobbPost.gravplats_id == gravplats_id,
+            ClaudeBatchJobbPost.status == "väntar",
+            ClaudeBatchJobb.status.in_(["väntar_svar", "kör"]),
+        )
+        .first()
+    )
+    if pagar_post:
+        jobb_namn = db.query(ClaudeBatchJobb.namn).filter(ClaudeBatchJobb.id == pagar_post.jobb_id).scalar() or ""
+        raise HTTPException(
+            status_code=409,
+            detail=f"Gravplatsen ingår i det pågående batch-jobbet \"{jobb_namn}\". Enskild körning är blockerad – ändra i Inställningar om du vill tillåta det.",
+        )
