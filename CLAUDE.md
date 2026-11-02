@@ -87,11 +87,13 @@ app/
   constants.py      App-konstanter (cache-headers, batch-tröskel)
   routes/           En fil per domänområde (auth, admin, mappar, gravplatser, ocr, batch, …)
   services/
-    ocr_service.py  Claude API-klient
+    ocr_service.py  Claude API-klient och lokal modell (ollama)
+    batch_korning.py  Bakgrundsuppgift som kör lokala batchjobb (startas i lifespan)
   utils/
     api_keys.py     Läs/skriv api_keys.json + env-override
     pdf_utils.py    PDF-listning, rendering-hjälpare
     gravplats_utils.py  Beräkna "halvor" per gravplats
+    rimlighet.py    Rimlighetsregler för datum i OCR-svar (varningar i gravvyn)
     achievements.py Achievement-logik
     git_version.py  Läs git-versionstagg
   prompts/

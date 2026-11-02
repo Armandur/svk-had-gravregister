@@ -205,3 +205,18 @@ def test_ansprak_i_vaxeln(monkeypatch, status, ska_falla):
     else:
         assert asyncio.run(kor()) == "http://dator:11434"
 
+
+def test_svarslistan_och_lokal_route_bar_rimlighetsvarningar(logga_in, grav, lokal_installd, db, monkeypatch):
+    fel_svar = {"gravsatta": [{"fodelse_ar": 1883, "fodelse_manad": 6, "fodelse_dag": 1, "dods_ar": 1937,
+                               "dods_manad": 5, "dods_dag": 18, "gravsatt_den": "1937-03-23"}]}
+
+    async def felläst(bilder):
+        return dict(fel_svar), {"input_tokens": 1, "output_tokens": 1, "modell": "provmodell"}
+
+    monkeypatch.setattr(ocr_routes, "ocr_gravplats_lokal", felläst)
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    r = c.post(f"/api/ocr/lokal/gravplats/{grav}")
+    assert [v["falt"] for v in r.json()["_varningar"]] == ["dods_manad"]
+    sparat = c.get(f"/api/ocr/gravplats/{grav}/svar-alla").json()["svar"]
+    assert [v["falt"] for v in sparat[0]["varningar"]] == ["dods_manad"]
+    assert "_varningar" not in sparat[0]["svar_json"]

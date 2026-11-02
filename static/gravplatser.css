@@ -2505,3 +2505,18 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 .gp-ocr-svar-lista { display: flex; flex-direction: column; gap: 0.6rem; }
 .gp-ocr-svar-rad { display: flex; flex-direction: column; gap: 0.3rem; }
 .gp-ocr-svar-rad + .gp-ocr-svar-rad { border-top: 1px solid #bae6fd; padding-top: 0.6rem; }
+
+/* Rimlighetsvarningar för AI-lästa datum */
+.gp-rimlighet-banner {
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.5rem 0.75rem;
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #991b1b;
+}
+.gp-rimlighet-banner[hidden] { display: none; }
+.gp-rimlighet-banner ul { margin: 0.25rem 0 0 1.1rem; padding: 0; }
+.gp-falt-varning { outline: 2px solid #f87171; outline-offset: 1px; background: #fef2f2; }
+.gp-ocr-svar-varning { color: #b91c1c; font-weight: 600; }

@@ -315,6 +315,7 @@ async function hamtaBatchPagarInfo() {
 async function uppdateraVy(behallInmatningState = false) {
   const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
   if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
+  visaRimlighetsvarningar([]);
   const batchBanner = document.getElementById('gp-batch-pagar-banner');
   if (batchBanner) { batchBanner.hidden = true; batchBanner.innerHTML = ''; }
   const rubrikEl = document.getElementById('gp-rubrik');
@@ -630,6 +631,7 @@ async function batchAutoLaddaClaude() {
     if (!inmatningHarNagonData()) {
       // Ingen befintlig data – applicera direkt (inget pling, svaret är redan sparat sedan batch-körningen)
       prefillFranClaude(data.svar_json);
+      visaRimlighetsvarningar(data.varningar);
       markInmatningDirty();
       uppdateraFardigtranskriberadKnapp();
       if (data.ocr_kommentar && bannerEl) {
@@ -2701,6 +2703,47 @@ function hamtaSparatClaudeSvar() {
     .catch(function() {});
 }
 
+/** Fält som en rimlighetsvarning gäller, som namn på formulärets textfält. */
+function rimlighetsFalt(v) {
+  const idx = v.gravsatt - 1;
+  if (v.falt.startsWith('fodelse')) return ['gs_fodelse_datum_' + idx];
+  if (v.falt === 'dods_manad') return ['gs_dods_datum_' + idx, 'gs_gravsatt_den_' + idx];
+  return ['gs_dods_datum_' + idx];
+}
+
+/**
+ * Visa varningar om orimliga datum i AI-svaret, i en ruta och vid fälten.
+ * En fältmarkering försvinner när någon ändrar fältet.
+ */
+function visaRimlighetsvarningar(varningar) {
+  document.querySelectorAll('.gp-falt-varning').forEach(function(el) {
+    el.classList.remove('gp-falt-varning');
+    el.removeAttribute('title');
+  });
+  const banner = document.getElementById('gp-rimlighet-banner');
+  if (!banner) return;
+  const lista = varningar || [];
+  if (lista.length === 0) { banner.hidden = true; banner.innerHTML = ''; return; }
+  banner.innerHTML = '<strong>Kontrollera mot kortet:</strong><ul>' +
+    lista.map(function(v) { return '<li>' + escapeHtml(v.meddelande) + '</li>'; }).join('') + '</ul>';
+  banner.hidden = false;
+  const root = document.getElementById('gp-inmatning');
+  lista.forEach(function(v) {
+    const falt = rimlighetsFalt(v)
+      .map(function(namn) { return root && root.querySelector('[name="' + namn + '"]'); })
+      .filter(Boolean);
+    // Rättar man ett av fälten är varningen hanterad, så markeringen släpps på alla
+    const slapp = function() {
+      falt.forEach(function(el) { el.classList.remove('gp-falt-varning'); el.removeAttribute('title'); });
+    };
+    falt.forEach(function(el) {
+      el.classList.add('gp-falt-varning');
+      el.title = v.meddelande;
+      el.addEventListener('input', slapp, { once: true });
+    });
+  });
+}
+
 function formatOcrKommentar(text) {
   if (!text) return '';
   var rader = text.split('\n').map(function(r) { return r.trim(); }).filter(function(r) { return r.length > 0; });
@@ -2724,7 +2767,8 @@ function visaSparatClaudeSvar() {
     var modell = s.modell && s.modell !== 'Claude' ? ' (' + escapeHtml(s.modell) + ')' : '';
     return '<div class="gp-ocr-svar-rad">' +
       '<div class="gp-claude-sparat-meta">Sparat svar från ' + kalla + modell + ' – ' +
-      escapeHtml(datum) + (s.username ? ' av ' + escapeHtml(s.username) : '') + '</div>' +
+      escapeHtml(datum) + (s.username ? ' av ' + escapeHtml(s.username) : '') +
+      (s.varningar && s.varningar.length ? ' <span class="gp-ocr-svar-varning">' + s.varningar.length + (s.varningar.length === 1 ? ' varning' : ' varningar') + '</span>' : '') + '</div>' +
       '<button type="button" class="gp-claude-applicera-btn gp-ocr-svar-ladda" data-index="' + i + '">Ladda in i formuläret</button>' +
       '</div>';
   }).join('');
@@ -3035,6 +3079,7 @@ async function hamtaOcr(lokal) {
     const data = await res.json();
     await ensureInmatningData();
     prefillFranClaude(data);
+    visaRimlighetsvarningar(data._varningar);
     gpPlayPling();
     if (data.ocr_kommentar && bannerEl) {
       bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
@@ -3149,6 +3194,7 @@ document.getElementById('gp-claude-applicera-btn')?.addEventListener('click', fu
   if (!state.sparatClaudeSvar) return;
   visaDiffDialog(state.sparatClaudeSvar.svar_json, function() {
     prefillFranClaude(state.sparatClaudeSvar.svar_json);
+    visaRimlighetsvarningar(state.sparatClaudeSvar.varningar);
     gpPlayPling();
     const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
     if (state.sparatClaudeSvar.ocr_kommentar && bannerEl) {
