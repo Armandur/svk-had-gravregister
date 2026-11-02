@@ -2558,3 +2558,33 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 .gp-inmatning-meddelanden { display: flex; flex-direction: column; gap: 0.4rem; }
 .gp-inmatning-meddelanden:has(> :not([hidden])) { margin-bottom: 0.6rem; }
 .gp-inmatning-meddelanden > * { margin: 0; }
+
+/* Smala skärmar (telefon): stapla bilderna ovanför formuläret och låt hela vyn scrolla
+   som en sida. Två spalter bredvid varandra gav en 120 px bred formulärspalt vid 390 px. */
+@media (max-width: 760px) {
+  .gravplatser-main { padding: 0.35rem 0.4rem 0.6rem; }
+  .gravplatser-innehall { padding: 0.4rem 0.5rem; }
+  .gravplatser-innehall.gp-vertikal-vy { overflow-y: auto; }
+  .gravplatser-innehall.gp-vertikal-vy .gp-innehall-body {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .gravplatser-innehall.gp-vertikal-vy .gp-innehall-vanster,
+  .gravplatser-innehall.gp-vertikal-vy .gp-innehall-hoger {
+    flex: 0 0 auto;
+    min-width: 0;
+    overflow: visible;
+  }
+  /* Vyväxlingen saknar betydelse när spalterna ändå staplas */
+  #gp-btn-vy { display: none; }
+  .gravplatser-innehall-topp { flex-wrap: wrap; gap: 0.2rem 1rem; }
+  .gravplatser-menyrad { gap: 0.4rem; }
+  .gravplatser-menyrad button { padding: 0.35rem 0.55rem; font-size: 0.85rem; }
+  .gravplatser-menyrad-hoger { margin-left: 0; }
+  /* Knapphuvudet i formuläret: mindre knappar så det tar en eller två rader */
+  .gp-inmatning-header { gap: 0.35rem; justify-content: flex-start; }
+  .gp-inmatning-header button { padding: 0.35rem 0.6rem; font-size: 0.85rem; }
+  .gp-inmatning input[type="text"],
+  .gp-inmatning input[type="number"],
+  .gp-inmatning textarea { max-width: none; }
+}
