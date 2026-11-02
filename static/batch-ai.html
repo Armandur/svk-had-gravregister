@@ -381,9 +381,17 @@
         return '<div class="batch-stapel-segment batch-stapel-seg-' + d[0] + '-v' + (v % N) + '" style="flex:' + d[1] + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
       }).join('');
     }
-    function gravSegment(st, v, titel) {
-      var del = st === 'f' ? 'fardig' : st === 'a' ? 'ai' : 'ej-fardig';
-      return '<div class="batch-stapel-segment batch-stapel-seg-' + del + '-v' + (v % N) + '" style="flex:1 0 0"' + (titel ? ' title="' + escHtml(titel) + '"' : '') + '></div>';
+    /** Ett segment per följd av gravar med samma status, så stora kvarter ryms i stapeln. */
+    function gravSegmentRader(status, v, titel) {
+      var h = '';
+      for (var i = 0; i < status.length; ) {
+        var j = i;
+        while (j < status.length && status[j] === status[i]) j++;
+        var del = status[i] === 'f' ? 'fardig' : status[i] === 'a' ? 'ai' : 'ej-fardig';
+        h += '<div class="batch-stapel-segment batch-stapel-seg-' + del + '-v' + (v % N) + '" style="flex:' + (j - i) + ' 0 0"' + (titel ? ' title="' + escHtml(titel) + '"' : '') + '></div>';
+        i = j;
+      }
+      return h;
     }
     function aiText(x) {
       return x && x.ai ? ', ' + x.ai + ' AI-lästa' + (x.ai_varningar ? ' (' + x.ai_varningar + ' med varningar)' : '') : '';
@@ -396,7 +404,7 @@
         var label = escHtml(valdKyrkogard + ' – ' + valdKvarter) + ' &nbsp;<span style="color:#64748b">' + kv.fardiga + ' av ' + kv.total + ' färdigtranskriberade (' + Math.round((kv.fardiga / Math.max(kv.total,1)) * 100) + '%)' + aiText(kv) + '</span>';
         var inner = '';
         if (kv.gravplatser_status && kv.gravplatser_status.length) {
-          kv.gravplatser_status.forEach(function(st) { inner += gravSegment(st, 0); });
+          inner = gravSegmentRader(kv.gravplatser_status, 0);
         } else {
           inner = stapelSegment(kv.total, kv.fardiga, 0, valdKvarter, kv.ai);
         }
@@ -413,7 +421,7 @@
           var kvLabel = escHtml(kv.kvarter) + ' &nbsp;<span style="color:#94a3b8">' + kv.fardiga + '/' + kv.total + ' (' + pct + '%)' + aiText(kv) + '</span>';
           var inner = '';
           if (kv.gravplatser_status && kv.gravplatser_status.length) {
-            kv.gravplatser_status.forEach(function(st) { inner += gravSegment(st, i, kv.kvarter); });
+            inner = gravSegmentRader(kv.gravplatser_status, i, kv.kvarter);
           } else {
             inner = stapelSegment(kv.total, kv.fardiga, i, kv.kvarter, kv.ai);
           }

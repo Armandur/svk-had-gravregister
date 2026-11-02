@@ -406,6 +406,7 @@
               }).join('');
             }
             var barClass = 'startsida-statistik-stapel startsida-statistik-stapel-segmentbar';
+            if (opts.enGravPerSegment) barClass += ' startsida-statistik-stapel-en-grav-per-segment';
             if (useGap) barClass += ' startsida-statistik-stapel-segmentbar-med-gap';
             return '<div class="' + barClass + '" role="img" aria-label="Grönt är färdigtranskriberat, lila är AI-läst men inte granskat, rött återstår">' + segmentDivs + '</div>';
           }
@@ -414,6 +415,7 @@
           }
           function kvarterTillSegment(kv) {
             if (Array.isArray(kv.gravplatser_status)) {
+              // En grav per segment. Nyanserna växlar, så ränderna visar hur många gravar kvarteret har.
               return kv.gravplatser_status.map(function (st) {
                 return { total: 1, fardiga: st === 'f' ? 1 : 0, ai: st === 'a' ? 1 : 0 };
               });
@@ -472,7 +474,7 @@
               kvarterList.forEach(function (kv) {
                 var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter + ' – ' + kv.fardiga + ' av ' + kv.total + ', ' + procentStr(kv.total, kv.fardiga) + '%' + aiText(kv);
                 html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter startsida-transk-goto-nasta-kvarter" role="button" tabindex="0" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" data-kvarter="' + escapeHtml(kv.kvarter) + '" title="Gå till ' + escapeHtml(kg.kyrkogard) + ' ' + escapeHtml(kv.kvarter) + '">' +
-                  radMedStapel(escapeHtml(kvarterLabel), kvarterTillSegment(kv)) +
+                  radMedStapel(escapeHtml(kvarterLabel), kvarterTillSegment(kv), { enGravPerSegment: true }) +
                   '</div>';
               });
               html += '</div>';

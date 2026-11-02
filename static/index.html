@@ -102,6 +102,9 @@
     .startsida-statistik-stapel-segment-fardig { background: #16a34a; }
     .startsida-statistik-stapel-segment-ej-fardig { background: #dc2626; }
     .startsida-statistik-stapel-segment-ai { background: #7c3aed; }
+    /* Kvarterstapel med en grav per segment: ingen minsta bredd, annars ryms inte stora
+       kvarter (395 gravar x 2 px) och slutet klipps bort till höger. */
+    .startsida-statistik-stapel-en-grav-per-segment .startsida-statistik-stapel-segment { min-width: 0; }
     .startsida-statistik-stapel-segment-ai-v0 { background: #6d28d9; }
     .startsida-statistik-stapel-segment-ai-v1 { background: #7c3aed; }
     .startsida-statistik-stapel-segment-ai-v2 { background: #8b5cf6; }
