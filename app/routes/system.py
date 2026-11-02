@@ -21,6 +21,10 @@ from app.utils.api_keys import (
     _get_spara_redigeringslogg_snapshot,
     _get_claude_pris,
     _get_claude_pris_from_env,
+    _get_claude_model,
+    _get_lokal_ocr_modell,
+    _get_lokal_ocr_url,
+    _invalidate_cache,
 )
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"
@@ -115,6 +119,9 @@ class ApiKeysBody(BaseModel):
     claude_pris_output: float | None = None
     claude_pris_cache_creation: float | None = None
     claude_pris_cache_read: float | None = None
+    claude_model: str | None = None  # None = ej skickad, "" = återställ till default
+    lokal_ocr_url: str | None = None  # ollama-adress eller portalens /api/ollama/active, "" = ta bort
+    lokal_ocr_modell: str | None = None  # "" = ta bort
 
 
 @router.get("/api/settings/api-keys")
@@ -136,6 +143,12 @@ async def get_api_keys(admin: User = Depends(require_admin)):
         "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
         "claude_pris": _get_claude_pris(),
         "claude_pris_from_env": _get_claude_pris_from_env(),
+        "claude_model": _get_claude_model(),
+        "claude_model_from_env": bool(os.environ.get("CLAUDE_MODEL")),
+        "lokal_ocr_url": _get_lokal_ocr_url(),
+        "lokal_ocr_url_from_env": bool(os.environ.get("LOKAL_OCR_URL")),
+        "lokal_ocr_modell": _get_lokal_ocr_modell(),
+        "lokal_ocr_modell_from_env": bool(os.environ.get("LOKAL_OCR_MODELL")),
     }
 
 
@@ -165,7 +178,16 @@ async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
             val = getattr(body, f"claude_pris_{key}")
             if val is not None and val > 0:
                 existing[f"claude_pris_{key}"] = val
+        # Textinställningar: None = ej skickad, tom sträng = ta bort (återgå till default)
+        for nyckel in ("claude_model", "lokal_ocr_url", "lokal_ocr_modell"):
+            varde = getattr(body, nyckel)
+            if varde is not None:
+                if varde.strip():
+                    existing[nyckel] = varde.strip()
+                else:
+                    existing.pop(nyckel, None)
         API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+        _invalidate_cache()
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
     return {"ok": True}

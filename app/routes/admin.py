@@ -3,14 +3,13 @@ import json
 import os
 import shutil
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, hash_password, require_admin
-from app.config import API_KEYS_PATH, BACKUP_DIR, DATABASE_PATH
+from app.config import BACKUP_DIR, DATABASE_PATH
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
@@ -28,7 +27,6 @@ from app.schemas import (
     NyYrkesKategoriBody,
     ToastFormuleringCreateBody,
     ToastFormuleringUpdateBody,
-    ApiKeysBody,
     ClaudeAktivBody,
     ClaudeBatchAktivBody,
     CreateUserBody,
@@ -39,7 +37,6 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.api_keys import _get_anthropic_api_key, _get_claude_batch_block_enskild, _get_claude_instans_aktiv, _get_claude_model, _get_lokal_ocr_modell, _get_lokal_ocr_url, _get_spara_redigeringslogg_snapshot, _invalidate_cache, _load_api_keys
 from app.utils.git_version import GIT_VERSION
 from app.utils.text import _sanitize_backup_filename_part
 
@@ -97,69 +94,6 @@ def download_backup(filename: str, admin: User = Depends(require_admin)):
 
 
 # ---------- API-nycklar / inställningar ----------
-
-@router.get("/api/settings/api-keys")
-async def get_api_keys(admin: User = Depends(require_admin)):
-    """Returnera status för API-nycklar (om de är satta och en maskerad förhandsgranskning). Endast admin."""
-    key = _get_anthropic_api_key()
-    if key:
-        preview = key[:12] + "••••••••••••" if len(key) > 12 else "••••••••••••"
-        from_env = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    else:
-        preview = None
-        from_env = False
-    return {
-        "anthropic_api_key_set": bool(key),
-        "anthropic_api_key_preview": preview,
-        "anthropic_api_key_from_env": from_env,
-        "claude_aktiv_instans": _get_claude_instans_aktiv(),
-        "claude_batch_block_enskild": _get_claude_batch_block_enskild(),
-        "spara_redigeringslogg_snapshot": _get_spara_redigeringslogg_snapshot(),
-        "claude_model": _get_claude_model(),
-        "claude_model_from_env": bool(os.environ.get("CLAUDE_MODEL")),
-        "lokal_ocr_url": _get_lokal_ocr_url(),
-        "lokal_ocr_url_from_env": bool(os.environ.get("LOKAL_OCR_URL")),
-        "lokal_ocr_modell": _get_lokal_ocr_modell(),
-        "lokal_ocr_modell_from_env": bool(os.environ.get("LOKAL_OCR_MODELL")),
-    }
-
-
-@router.put("/api/settings/api-keys")
-async def put_api_keys(body: ApiKeysBody, admin: User = Depends(require_admin)):
-    """Spara API-nycklar och instansinställningar till api_keys.json. Endast admin."""
-    try:
-        existing = dict(_load_api_keys())
-        if body.anthropic_api_key is not None:
-            key = body.anthropic_api_key.strip()
-            if key:
-                existing["anthropic_api_key"] = key
-            else:
-                existing.pop("anthropic_api_key", None)
-        if body.claude_aktiv_instans is not None:
-            existing["claude_aktiv_instans"] = body.claude_aktiv_instans
-        if body.claude_batch_block_enskild is not None:
-            existing["claude_batch_block_enskild"] = body.claude_batch_block_enskild
-        if body.spara_redigeringslogg_snapshot is not None:
-            existing["spara_redigeringslogg_snapshot"] = body.spara_redigeringslogg_snapshot
-        if body.claude_model is not None:
-            model = body.claude_model.strip()
-            if model:
-                existing["claude_model"] = model
-            else:
-                existing.pop("claude_model", None)
-        for nyckel in ("lokal_ocr_url", "lokal_ocr_modell"):
-            varde = getattr(body, nyckel)
-            if varde is not None:
-                if varde.strip():
-                    existing[nyckel] = varde.strip()
-                else:
-                    existing.pop(nyckel, None)
-        API_KEYS_PATH.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
-        _invalidate_cache()
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Kunde inte spara nyckelfilen: {e}")
-    return {"ok": True}
-
 
 @router.get("/api/settings/lokal-ocr/test")
 async def testa_lokal_ocr(admin: User = Depends(require_admin)):

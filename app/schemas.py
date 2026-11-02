@@ -89,16 +89,6 @@ class KyrkogardCreateBody(BaseModel):
 
 # ---------- Inställningar / API-nycklar ----------
 
-class ApiKeysBody(BaseModel):
-    anthropic_api_key: str | None = None  # None = ej skickad (rör ej nyckeln), "" = ta bort
-    claude_aktiv_instans: bool | None = None
-    claude_batch_block_enskild: bool | None = None
-    spara_redigeringslogg_snapshot: bool | None = None
-    claude_model: str | None = None  # None = ej skickad, "" = återställ till default
-    lokal_ocr_url: str | None = None  # ollama-adress eller portalens /api/ollama/active, "" = ta bort
-    lokal_ocr_modell: str | None = None  # "" = ta bort
-
-
 # ---------- Mappkonfiguration och extramaterial ----------
 
 class MappConfigSchema(BaseModel):
