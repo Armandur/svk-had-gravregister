@@ -66,16 +66,6 @@
             <button type="button" id="gp-avbryt-bekraftelse-ja" class="gp-avbryt-bekraftelse-ja">Avbryt ändå</button>
             <button type="button" id="gp-avbryt-bekraftelse-nej" class="gp-avbryt-bekraftelse-nej">Fortsätt redigera</button>
           </div>
-          <div id="gp-ocr-kommentar-banner" class="gp-ocr-kommentar-banner" hidden aria-live="polite"></div>
-          <div id="gp-ai-forslag-banner" class="gp-ai-forslag-banner" hidden aria-live="polite"></div>
-          <div id="gp-rimlighet-banner" class="gp-rimlighet-banner" hidden aria-live="polite"></div>
-          <div id="gp-osaker-banner" class="gp-osaker-banner" hidden aria-live="polite"></div>
-          <div id="gp-batch-pagar-banner" class="gp-batch-pagar-banner" hidden aria-live="polite"></div>
-          <div id="gp-claude-sparat-panel" class="gp-claude-sparat-panel" hidden>
-            <div class="gp-claude-sparat-kommentar" id="gp-claude-sparat-kommentar" hidden></div>
-            <div id="gp-ocr-svar-lista" class="gp-ocr-svar-lista"></div>
-            <button type="button" id="gp-claude-applicera-btn" class="gp-claude-applicera-btn" hidden>Ladda in i formuläret</button>
-          </div>
           <dialog id="gp-claude-diff-dialog" class="gp-claude-diff-dialog">
             <h3>Ändringar som kommer att göras</h3>
             <div id="gp-claude-diff-innehall" class="gp-claude-diff-innehall"></div>
@@ -107,6 +97,19 @@
               <a id="gp-historik-logg-lank" href="/loggar" class="gp-historik-logg-lank">Visa alla i loggvyn →</a>
             </div>
           </dialog>
+        </div>
+        <!-- Meddelanden om AI-svaret: utanför det fästa knapphuvudet, så de scrollar med formuläret -->
+        <div class="gp-inmatning-meddelanden" id="gp-inmatning-meddelanden">
+          <div id="gp-ocr-kommentar-banner" class="gp-ocr-kommentar-banner" hidden aria-live="polite"></div>
+          <div id="gp-ai-forslag-banner" class="gp-ai-forslag-banner" hidden aria-live="polite"></div>
+          <div id="gp-rimlighet-banner" class="gp-rimlighet-banner" hidden aria-live="polite"></div>
+          <div id="gp-osaker-banner" class="gp-osaker-banner" hidden aria-live="polite"></div>
+          <div id="gp-batch-pagar-banner" class="gp-batch-pagar-banner" hidden aria-live="polite"></div>
+          <div id="gp-claude-sparat-panel" class="gp-claude-sparat-panel" hidden>
+            <div class="gp-claude-sparat-kommentar" id="gp-claude-sparat-kommentar" hidden></div>
+            <div id="gp-ocr-svar-lista" class="gp-ocr-svar-lista"></div>
+            <button type="button" id="gp-claude-applicera-btn" class="gp-claude-applicera-btn" hidden>Ladda in i formuläret</button>
+          </div>
         </div>
         <section class="gp-inmatning-sektion" id="gp-sektion-innehavare" aria-label="Gravrättsinnehavare">
           <button type="button" class="gp-em-rubrik gp-sektion-rubrik" data-sektion="innehavare" aria-expanded="false">Gravrättsinnehavare</button>

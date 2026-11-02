@@ -2553,3 +2553,8 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 }
 .gp-osaker-banner[hidden] { display: none; }
 .gp-osaker-banner ul { margin: 0.25rem 0 0 1.1rem; padding: 0; }
+
+/* Meddelanden om AI-svaret ligger under det fästa knapphuvudet och scrollar med formuläret */
+.gp-inmatning-meddelanden { display: flex; flex-direction: column; gap: 0.4rem; }
+.gp-inmatning-meddelanden:has(> :not([hidden])) { margin-bottom: 0.6rem; }
+.gp-inmatning-meddelanden > * { margin: 0; }
