@@ -401,7 +401,9 @@
                 if (useGap && seg.kyrkogardStart && segIdx > 0) {
                   html += '<div class="startsida-statistik-stapel-gap" aria-hidden="true"></div>';
                 }
-                var bredd = useGap ? flex : function (n) { return 'width:' + (n / barTotal) * 100 + '%'; };
+                // Flex fördelar bredden exakt. Procentbredd per segment avrundas, och med över tusen
+                // gravar i ett kvarter fyllde segmenten inte ut stapeln.
+                var bredd = (useGap || opts.enGravPerSegment) ? flex : function (n) { return 'width:' + (n / barTotal) * 100 + '%'; };
                 return html + segmentDelar(seg, v, segmentTitel(seg), bredd);
               }).join('');
             }
