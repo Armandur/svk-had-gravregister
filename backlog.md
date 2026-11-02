@@ -50,7 +50,7 @@ Skissen = val bland tre förtryckta rutor (vänster kvadrat x~0,05, mitten x~0,4
 
 ---
 
-## [P3][todo] [gravregister] Bakgrundskörning av lokal OCR-batch på servern (utan öppen flik)
+## [P3][done] [gravregister] Bakgrundskörning av lokal OCR-batch på servern (utan öppen flik)
 
 Batch körs i dag genom att webbläsaren anropar /nasta i en slinga. 3 200 gravar x ~8 s = ~7 h. Bygg en serverkörning som tål sidbyten och omstart, med paus/avbryt och anspråk i växeln. Del av TASK-3283.
 
