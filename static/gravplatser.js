@@ -316,6 +316,8 @@ async function uppdateraVy(behallInmatningState = false) {
   const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
   if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
   visaRimlighetsvarningar([]);
+  state.aiForslag = null;
+  visaAiForslagBanner();
   const batchBanner = document.getElementById('gp-batch-pagar-banner');
   if (batchBanner) { batchBanner.hidden = true; batchBanner.innerHTML = ''; }
   const rubrikEl = document.getElementById('gp-rubrik');
@@ -591,6 +593,51 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   }
   uppdateraFardigtranskriberadKnapp();
   if (state.batchJobbMode) await batchAutoLaddaClaude();
+  else await visaAiForslagOmAiLast();
+}
+
+/** Bästa förslaget att visa: Claudes om det finns, annars senaste lokala. */
+function valjAiForslag(alla) {
+  return alla.find(function(s) { return s.kalla === 'claude'; }) || alla[0] || null;
+}
+
+/**
+ * För en AI-läst grav som ingen har sparat något på: visa AI-förslaget direkt i
+ * formuläret, så man granskar i stället för att först klicka Ladda in. Förslaget
+ * räknas inte som en osparad ändring förrän man går in i redigeringsläget.
+ */
+async function visaAiForslagOmAiLast() {
+  const d = state.inmatningData;
+  if (!d || !d.ai_svar_finns || d.fardigtranskriberad || inmatningHarNagonData() || state.inmatningRedigerar) return;
+  const gpId = state.currentGravplatsId;
+  try {
+    const res = await fetch(`${API}/ocr/gravplats/${gpId}/svar-alla`, { credentials: 'include' });
+    if (!res.ok || gpId !== state.currentGravplatsId) return;
+    const alla = (await res.json()).svar || [];
+    const forslag = valjAiForslag(alla);
+    if (!forslag || gpId !== state.currentGravplatsId || state.inmatningRedigerar) return;
+    state.sparadeOcrSvar = alla;
+    state.sparatClaudeSvar = forslag;
+    state.aiForslag = { gravplatsId: gpId, svar: forslag };
+    prefillFranClaude(forslag.svar_json);
+    state.inmatningDirty = false;
+    uppdateraInmatningSparaKnapp();
+    visaRimlighetsvarningar(forslag.varningar);
+    visaAiForslagBanner();
+    uppdateraFardigtranskriberadKnapp();
+  } catch (e) { /* förslaget är en bekvämlighet, vyn fungerar utan det */ }
+}
+
+function visaAiForslagBanner() {
+  const banner = document.getElementById('gp-ai-forslag-banner');
+  if (!banner) return;
+  const f = state.aiForslag;
+  if (!f || f.gravplatsId !== state.currentGravplatsId) { banner.hidden = true; banner.textContent = ''; return; }
+  const kalla = f.svar.kalla === 'lokal' ? 'lokal modell (' + f.svar.modell + ')' : 'Claude';
+  banner.textContent = state.inmatningRedigerar
+    ? 'Formuläret är ifyllt med AI-förslaget från ' + kalla + '. Rätta mot kortet och spara.'
+    : 'Visar AI-förslaget från ' + kalla + '. Inget är granskat eller sparat. Klicka Redigera gravplatsen för att rätta och spara.';
+  banner.hidden = false;
 }
 
 /**
@@ -1308,13 +1355,21 @@ function uppdateraFardigtranskriberadKnapp() {
   if (!btn) return;
   const arFardig = state.inmatningData && state.inmatningData.fardigtranskriberad === true;
   const harData = inmatningHarNagonData();
-  btn.classList.remove('gp-fardigtranskriberad-ja', 'gp-fardigtranskriberad-paborjad', 'gp-fardigtranskriberad-nej');
+  btn.classList.remove('gp-fardigtranskriberad-ja', 'gp-fardigtranskriberad-paborjad', 'gp-fardigtranskriberad-nej', 'gp-fardigtranskriberad-ai');
   if (arFardig) {
     btn.classList.add('gp-fardigtranskriberad-ja');
     btn.textContent = 'Färdigtranskriberad';
+  } else if (state.aiForslag && state.aiForslag.gravplatsId === state.currentGravplatsId) {
+    const n = (state.aiForslag.svar.varningar || []).length;
+    btn.classList.add('gp-fardigtranskriberad-ai');
+    btn.textContent = 'AI-läst, ej granskad' + (n ? ' (' + n + (n === 1 ? ' varning)' : ' varningar)') : '');
   } else if (harData) {
     btn.classList.add('gp-fardigtranskriberad-paborjad');
     btn.textContent = 'Transkribering påbörjad';
+  } else if (state.inmatningData && state.inmatningData.ai_svar_finns) {
+    const n = state.inmatningData.ai_varningar || 0;
+    btn.classList.add('gp-fardigtranskriberad-ai');
+    btn.textContent = 'AI-läst, ej granskad' + (n ? ' (' + n + (n === 1 ? ' varning)' : ' varningar)') : '');
   } else {
     btn.classList.add('gp-fardigtranskriberad-nej');
     btn.textContent = 'Ej transkriberad';
@@ -3018,6 +3073,8 @@ async function sparaInmatning() {
       if (em) em.kommentar = item.kommentar || '';
     });
     state.inmatningDirty = false;
+    state.aiForslag = null;  // sparat: graven är nu påbörjad, inte längre bara AI-läst
+    visaAiForslagBanner();
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
@@ -3162,9 +3219,15 @@ function toggleRedigeraVy() {
     sektioner.forEach((s) => {
       ensureInmatningData().then((ok) => { if (ok) renderInmatningSektion(s); });
     });
+    // Lämnar man utan att spara visas AI-förslaget igen, som när graven öppnades
+    if (state.aiForslag) {
+      state.aiForslag = null;
+      ensureInmatningData().then(() => visaAiForslagOmAiLast());
+    }
     if (state.currentExtramaterial.length > 0 && state.currentExtramaterialMapp) {
       uppdateraExtramaterialSektion(state.currentExtramaterial, state.currentExtramaterialMapp);
     }
+    visaAiForslagBanner();
     uppdateraFardigtranskriberadKnapp();
   } else {
     state.inmatningRedigerar = true;
@@ -3182,6 +3245,11 @@ function toggleRedigeraVy() {
     });
     if (state.currentExtramaterial.length > 0 && state.currentExtramaterialMapp) {
       uppdateraExtramaterialSektion(state.currentExtramaterial, state.currentExtramaterialMapp);
+    }
+    if (state.aiForslag && state.aiForslag.gravplatsId === state.currentGravplatsId) {
+      markInmatningDirty();
+      visaAiForslagBanner();
+      visaRimlighetsvarningar(state.aiForslag.svar.varningar);
     }
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();

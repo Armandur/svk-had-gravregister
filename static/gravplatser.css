@@ -855,9 +855,15 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   color: white;
 }
 
+.gp-inmatning-btn-fardigtranskriberad.gp-fardigtranskriberad-ai {
+  background: #7c3aed;
+  color: white;
+}
+
 .gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-ja:hover,
 .gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-paborjad:hover,
-.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-nej:hover {
+.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-nej:hover,
+.gp-inmatning-btn-fardigtranskriberad:not(:disabled).gp-fardigtranskriberad-ai:hover {
   filter: brightness(1.15);
 }
 
@@ -2520,3 +2526,15 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 .gp-rimlighet-banner ul { margin: 0.25rem 0 0 1.1rem; padding: 0; }
 .gp-falt-varning { outline: 2px solid #f87171; outline-offset: 1px; background: #fef2f2; }
 .gp-ocr-svar-varning { color: #b91c1c; font-weight: 600; }
+
+/* AI-förslaget visas i formuläret för AI-lästa, ogranskade gravar */
+.gp-ai-forslag-banner {
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.5rem 0.75rem;
+  background: #f5f3ff;
+  border: 1px solid #a78bfa;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #5b21b6;
+}
+.gp-ai-forslag-banner[hidden] { display: none; }

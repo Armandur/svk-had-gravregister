@@ -46,6 +46,14 @@ def _gravplats_halvor(
     return halvor
 
 
+def _ai_status(gravplats_id: int, db: Session) -> dict:
+    """Om graven har AI-svar, och hur många rimlighetsvarningar svaret med flest har."""
+    from app.utils.gravplats_status import ai_svar_per_grav
+    from app.utils.rimlighet import kontrollera
+    svar = ai_svar_per_grav(db, {gravplats_id}).get(gravplats_id, [])
+    return {"ai_svar_finns": bool(svar), "ai_varningar": max((len(kontrollera(x)) for x in svar), default=0)}
+
+
 def _inmatning_response(gravplats_id: int, db: Session) -> dict:
     """Bygg svar för GET inmatning."""
     from app.database import (
@@ -159,6 +167,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
             "utfordat_den": "",
             "kommentar": "",
             "fardigtranskriberad": False,
+            **_ai_status(gravplats_id, db),
             "has_skiss": False,
             "gravsatta": gravsatta_list,
             "skisser": skisser_list,
@@ -182,6 +191,7 @@ def _inmatning_response(gravplats_id: int, db: Session) -> dict:
         "utfordat_den": row.utfordat_den or "",
         "kommentar": row.kommentar or "",
         "fardigtranskriberad": getattr(row, "fardigtranskriberad", False),
+        **_ai_status(gravplats_id, db),
         "has_skiss": row.skiss_bild is not None and len(row.skiss_bild) > 0,
         "gravsatta": gravsatta_list,
         "skisser": skisser_list,

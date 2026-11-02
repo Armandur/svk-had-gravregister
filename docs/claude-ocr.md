@@ -26,6 +26,18 @@ En administratör kan låta gravkorten läsas av en modell på en egen server (o
 - Under **Inställningar → Användare** slår administratören på kolumnen **Lokal** för de konton som ska få använda den.
 - I redigeringsläget finns då knappen **Hämta från lokal modell**. Svaret sparas bredvid ett eventuellt Claude-svar, och panelen listar alla sparade svar. Klicka **Ladda in i formuläret** på det svar du vill utgå från.
 
+## Status: AI-läst, ej granskad
+
+En grav som har ett AI-svar men där ingen har sparat något får statusen **AI-läst, ej granskad**. Den visas i lila:
+
+- i staplarna på startsidan och på Batch AI, mellan grönt (färdigt) och rött (återstår)
+- på statusknappen i gravvyn, med antalet varningar om svaret har orimliga datum
+- som sökval under Avancerad sökning: **AI-läst, ej granskad** och **AI-läst med varningar**
+
+När du öppnar en AI-läst grav visas AI-förslaget direkt i formuläret, med en lila ruta som säger att inget är granskat. Har graven både ett Claude-svar och ett lokalt svar visas Claudes. Du kan bläddra vidare utan att något sparas. Klicka **Redigera gravplatsen** för att rätta mot kortet och spara. Panelen med sparade svar låter dig byta till ett annat förslag.
+
+**Gå till nästa ej färdiga gravplats** tar AI-lästa gravar först, eftersom de har ett förslag och går snabbast att granska. Så fort någon sparar formuläret blir graven **Transkribering påbörjad**.
+
 ## Batch AI
 
 **Batch AI** (länk på startsidan) låter dig köra OCR på ett stort urval gravplatser och sedan granska resultaten. Har kontot både Claude och lokal modell väljer du modell överst i formuläret.

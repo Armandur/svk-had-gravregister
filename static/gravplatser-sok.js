@@ -312,7 +312,7 @@ async function koraAvanceradSok(e) {
   setArFromDatum('utfardad_till', fd.get('utfardad_till'));
   if (fd.get('har_extramaterial') === '1') params.set('har_extramaterial', 'true');
   const transkStatus = (fd.get('transkriberingsstatus') || '').trim();
-  if (transkStatus === 'ej' || transkStatus === 'paborjad' || transkStatus === 'fardig') params.set('transkriberingsstatus', transkStatus);
+  if (['ej', 'ai', 'ai_varning', 'paborjad', 'fardig'].includes(transkStatus)) params.set('transkriberingsstatus', transkStatus);
   params.set('limit', '5000');
 
   const harNagonFiltret = Array.from(params.keys()).some((k) => k !== 'limit');

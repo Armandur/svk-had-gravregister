@@ -40,6 +40,7 @@ from app.utils.pdf_utils import (
     _clip_rect_for_segment,
     _redan_halva_filenames_for_mapp,
 )
+from app.utils.gravplats_status import status_per_grav
 from app.utils.text import _ledande_tal
 
 router = APIRouter()
@@ -136,8 +137,10 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         .group_by(Gravplats.kyrkogard, Gravplats.kvarter)
         .all()
     )
+    status_map, ai_varningar = status_per_grav(db)
     gravplatser_per_kvarter = (
         db.query(
+            Gravplats.id,
             Gravplats.kyrkogard,
             Gravplats.kvarter,
             Gravplats.gravplatsnummer,
@@ -159,16 +162,28 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         key = (kg, kv)
         if key not in kvarter_gravplatser_fardiga:
             kvarter_gravplatser_fardiga[key] = []
-        kvarter_gravplatser_fardiga[key].append((g.gravplatsnummer or "", bool(g.fardigtranskriberad)))
+        kvarter_gravplatser_fardiga[key].append(
+            (g.gravplatsnummer or "", bool(g.fardigtranskriberad), status_map.get(g.id, "ej"), ai_varningar.get(g.id, 0))
+        )
     for key in kvarter_gravplatser_fardiga:
         kvarter_gravplatser_fardiga[key].sort(
             key=lambda x: (_ledande_tal(x[0]), (x[0] or ""))
         )
     kvarter_gravplatser_fardiga_list: dict[tuple[str, str], list[bool]] = {
-        k: [fardig for _, fardig in lst] for k, lst in kvarter_gravplatser_fardiga.items()
+        k: [fardig for _, fardig, _, _ in lst] for k, lst in kvarter_gravplatser_fardiga.items()
+    }
+    # Statuskod per grav i nummerordning: f = färdig, a = AI-läst ej granskad, e = övriga
+    kvarter_status: dict[tuple[str, str], list[str]] = {
+        k: [{"fardig": "f", "ai": "a"}.get(st, "e") for _, _, st, _ in lst]
+        for k, lst in kvarter_gravplatser_fardiga.items()
+    }
+    kvarter_varningar: dict[tuple[str, str], int] = {
+        k: sum(1 for *_, n in lst if n) for k, lst in kvarter_gravplatser_fardiga.items()
     }
     transk_total = 0
     transk_fardiga = 0
+    transk_ai = 0
+    transk_ai_varningar = 0
     per_kyrkogard: dict[str, dict] = {}
     for row in transkriberings_rows:
         kg = (row.kyrkogard or "").strip()
@@ -178,13 +193,22 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
         transk_total += total_val
         transk_fardiga += fardiga_val
         gravplatser_fardiga = kvarter_gravplatser_fardiga_list.get((kg, kv))
+        koder = kvarter_status.get((kg, kv), [])
+        ai_val = koder.count("a")
+        varn_val = kvarter_varningar.get((kg, kv), 0)
+        transk_ai += ai_val
+        transk_ai_varningar += varn_val
         if kg not in per_kyrkogard:
-            per_kyrkogard[kg] = {"total": 0, "fardiga": 0, "kvarter": []}
+            per_kyrkogard[kg] = {"total": 0, "fardiga": 0, "ai": 0, "ai_varningar": 0, "kvarter": []}
         per_kyrkogard[kg]["total"] += total_val
         per_kyrkogard[kg]["fardiga"] += fardiga_val
-        kvarter_item: dict = {"kvarter": kv, "total": total_val, "fardiga": fardiga_val}
+        per_kyrkogard[kg]["ai"] += ai_val
+        per_kyrkogard[kg]["ai_varningar"] += varn_val
+        kvarter_item: dict = {"kvarter": kv, "total": total_val, "fardiga": fardiga_val,
+                              "ai": ai_val, "ai_varningar": varn_val}
         if gravplatser_fardiga is not None:
             kvarter_item["gravplatser_fardiga"] = gravplatser_fardiga
+            kvarter_item["gravplatser_status"] = koder
         per_kyrkogard[kg]["kvarter"].append(kvarter_item)
     kyrkogardar_data: list[dict] = []
     for kg in sorted(per_kyrkogard.keys(), key=lambda x: (x.upper(), x)):
@@ -194,10 +218,12 @@ async def get_statistik(db: Session = Depends(get_db), current_user: User = Depe
             "kyrkogard": kg,
             "total": per_kyrkogard[kg]["total"],
             "fardiga": per_kyrkogard[kg]["fardiga"],
+            "ai": per_kyrkogard[kg]["ai"],
+            "ai_varningar": per_kyrkogard[kg]["ai_varningar"],
             "kvarter": kvarter_list,
         })
     transkriberingsstatus = {
-        "total": {"total": transk_total, "fardiga": transk_fardiga},
+        "total": {"total": transk_total, "fardiga": transk_fardiga, "ai": transk_ai, "ai_varningar": transk_ai_varningar},
         "kyrkogardar": kyrkogardar_data,
     }
     return {

@@ -114,6 +114,12 @@
     .batch-stapel-seg-ej-fardig-v3 { background: #991b1b; }
     .batch-stapel-seg-ej-fardig-v4 { background: #f87171; }
     .batch-stapel-seg-ej-fardig-v5 { background: #7f1d1d; }
+    .batch-stapel-seg-ai-v0 { background: #6d28d9; }
+    .batch-stapel-seg-ai-v1 { background: #7c3aed; }
+    .batch-stapel-seg-ai-v2 { background: #8b5cf6; }
+    .batch-stapel-seg-ai-v3 { background: #5b21b6; }
+    .batch-stapel-seg-ai-v4 { background: #a78bfa; }
+    .batch-stapel-seg-ai-v5 { background: #4c1d95; }
     .batch-stapel-segment { min-width: 2px; transition: flex 0.2s; }
     .batch-stapel-gap { flex: 0 0 4px; min-width: 4px; background: var(--card, #fff); }
   </style>
@@ -366,49 +372,50 @@
     var html = '';
     var N = 6;
 
-    function stapelSegment(total, fardiga, v, kvarter) {
-      var vf = ' batch-stapel-seg-fardig-v' + (v % N);
-      var vr = ' batch-stapel-seg-ej-fardig-v' + (v % N);
+    function stapelSegment(total, fardiga, v, kvarter, ai) {
+      ai = Math.min(ai || 0, total - fardiga);
       var prefix = kvarter ? kvarter + ': ' : '';
-      var tooltip = prefix + fardiga + ' av ' + total + ' klara';
-      var h = '';
-      if (fardiga > 0) h += '<div class="batch-stapel-segment' + vf + '" style="flex:' + fardiga + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
-      var rest = total - fardiga;
-      if (rest > 0) h += '<div class="batch-stapel-segment' + vr + '" style="flex:' + rest + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
-      return h;
+      var tooltip = prefix + fardiga + ' av ' + total + ' klara' + (ai ? ', ' + ai + ' AI-lästa' : '');
+      return [['fardig', fardiga], ['ai', ai], ['ej-fardig', total - fardiga - ai]].map(function(d) {
+        if (d[1] <= 0) return '';
+        return '<div class="batch-stapel-segment batch-stapel-seg-' + d[0] + '-v' + (v % N) + '" style="flex:' + d[1] + ' 0 0" title="' + escHtml(tooltip) + '"></div>';
+      }).join('');
+    }
+    function gravSegment(st, v, titel) {
+      var del = st === 'f' ? 'fardig' : st === 'a' ? 'ai' : 'ej-fardig';
+      return '<div class="batch-stapel-segment batch-stapel-seg-' + del + '-v' + (v % N) + '" style="flex:1 0 0"' + (titel ? ' title="' + escHtml(titel) + '"' : '') + '></div>';
+    }
+    function aiText(x) {
+      return x && x.ai ? ', ' + x.ai + ' AI-lästa' + (x.ai_varningar ? ' (' + x.ai_varningar + ' med varningar)' : '') : '';
     }
 
     if (valdKvarter) {
       var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
       var kv = kg && (kg.kvarter || []).find(function(k) { return k.kvarter === valdKvarter; });
       if (kv) {
-        var label = escHtml(valdKyrkogard + ' – ' + valdKvarter) + ' &nbsp;<span style="color:#64748b">' + kv.fardiga + ' av ' + kv.total + ' färdigtranskriberade (' + Math.round((kv.fardiga / Math.max(kv.total,1)) * 100) + '%)</span>';
+        var label = escHtml(valdKyrkogard + ' – ' + valdKvarter) + ' &nbsp;<span style="color:#64748b">' + kv.fardiga + ' av ' + kv.total + ' färdigtranskriberade (' + Math.round((kv.fardiga / Math.max(kv.total,1)) * 100) + '%)' + aiText(kv) + '</span>';
         var inner = '';
-        if (kv.gravplatser_fardiga && kv.gravplatser_fardiga.length) {
-          kv.gravplatser_fardiga.forEach(function(f, i) {
-            inner += '<div class="batch-stapel-segment ' + (f ? 'batch-stapel-seg-fardig-v0' : 'batch-stapel-seg-ej-fardig-v0') + '" style="flex:1 0 0"></div>';
-          });
+        if (kv.gravplatser_status && kv.gravplatser_status.length) {
+          kv.gravplatser_status.forEach(function(st) { inner += gravSegment(st, 0); });
         } else {
-          inner = stapelSegment(kv.total, kv.fardiga, 0, valdKvarter);
+          inner = stapelSegment(kv.total, kv.fardiga, 0, valdKvarter, kv.ai);
         }
         html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + label + '</div><div class="batch-stapel">' + inner + '</div></div>';
       }
     } else if (valdKyrkogard) {
       var kg = kyrkogardar.find(function(k) { return k.kyrkogard === valdKyrkogard; });
       if (kg) {
-        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + Math.round((kg.fardiga / Math.max(kg.total,1)) * 100) + '%)</span>';
-        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, i, kv.kvarter); }).join('<div class="batch-stapel-gap"></div>');
+        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + Math.round((kg.fardiga / Math.max(kg.total,1)) * 100) + '%)' + aiText(kg) + '</span>';
+        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, i, kv.kvarter, kv.ai); }).join('<div class="batch-stapel-gap"></div>');
         html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + kgLabel + '</div><div class="batch-stapel">' + segs + '</div></div>';
         (kg.kvarter || []).forEach(function(kv, i) {
           var pct = Math.round((kv.fardiga / Math.max(kv.total,1)) * 100);
-          var kvLabel = escHtml(kv.kvarter) + ' &nbsp;<span style="color:#94a3b8">' + kv.fardiga + '/' + kv.total + ' (' + pct + '%)</span>';
+          var kvLabel = escHtml(kv.kvarter) + ' &nbsp;<span style="color:#94a3b8">' + kv.fardiga + '/' + kv.total + ' (' + pct + '%)' + aiText(kv) + '</span>';
           var inner = '';
-          if (kv.gravplatser_fardiga && kv.gravplatser_fardiga.length) {
-            kv.gravplatser_fardiga.forEach(function(f) {
-              inner += '<div class="batch-stapel-segment ' + (f ? 'batch-stapel-seg-fardig-v' + (i%N) : 'batch-stapel-seg-ej-fardig-v' + (i%N)) + '" style="flex:1 0 0" title="' + escHtml(kv.kvarter) + '"></div>';
-            });
+          if (kv.gravplatser_status && kv.gravplatser_status.length) {
+            kv.gravplatser_status.forEach(function(st) { inner += gravSegment(st, i, kv.kvarter); });
           } else {
-            inner = stapelSegment(kv.total, kv.fardiga, i, kv.kvarter);
+            inner = stapelSegment(kv.total, kv.fardiga, i, kv.kvarter, kv.ai);
           }
           html += '<div class="batch-stapel-rad" style="padding-left:1rem"><div class="batch-stapel-label" style="font-size:0.78rem">' + kvLabel + '</div><div class="batch-stapel">' + inner + '</div></div>';
         });
@@ -416,8 +423,8 @@
     } else {
       kyrkogardar.forEach(function(kg, kgi) {
         var pct = Math.round((kg.fardiga / Math.max(kg.total,1)) * 100);
-        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + pct + '%)</span>';
-        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, kgi, kv.kvarter); }).join('<div class="batch-stapel-gap"></div>');
+        var kgLabel = escHtml(kg.kyrkogard) + ' &nbsp;<span style="color:#64748b">' + kg.fardiga + ' av ' + kg.total + ' (' + pct + '%)' + aiText(kg) + '</span>';
+        var segs = (kg.kvarter || []).map(function(kv, i) { return stapelSegment(kv.total, kv.fardiga, kgi, kv.kvarter, kv.ai); }).join('<div class="batch-stapel-gap"></div>');
         html += '<div class="batch-stapel-rad"><div class="batch-stapel-label">' + kgLabel + '</div><div class="batch-stapel">' + segs + '</div></div>';
       });
     }

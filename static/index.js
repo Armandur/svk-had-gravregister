@@ -344,6 +344,22 @@
             return String(Math.min(100, Math.round((fardiga / t) * 100)));
           }
           var N_TONER = 6;
+          /** Delarna i ett segment: grönt färdigt, lila AI-läst ej granskat, rött återstår. */
+          function segmentDelar(seg, v, title, storlek) {
+            var t = seg.total || 0;
+            var f = Math.min(t, seg.fardiga || 0);
+            var a = Math.min(t - f, seg.ai || 0);
+            return [['fardig', f], ['ai', a], ['ej-fardig', t - f - a]].map(function (d) {
+              if (d[1] <= 0) return '';
+              return '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-' + d[0] +
+                ' startsida-statistik-stapel-segment-' + d[0] + '-v' + v + '" style="' + storlek(d[1]) + '" title="' + title + '"></div>';
+            }).join('');
+          }
+          function segmentTitel(seg) {
+            return (seg.kvarter ? seg.kvarter + ': ' : '') + (seg.fardiga || 0) + ' av ' + (seg.total || 0) + ' klara' +
+              (seg.ai ? ', ' + seg.ai + ' AI-lästa' : '');
+          }
+          function flex(n) { return 'flex:' + n + ' 0 0'; }
           function segmentBarHtml(segments, opts) {
             opts = opts || {};
             if (!segments || segments.length === 0) {
@@ -372,72 +388,37 @@
               segmentDivs = groups.map(function (group) {
                 var groupTotal = group.reduce(function (s, seg) { return s + (seg.total || 0); }, 0);
                 var inner = group.map(function (seg) {
-                  var segTotal = seg.total || 0;
-                  var segFardiga = seg.fardiga || 0;
                   var v = globalIdx % N_TONER;
                   globalIdx += 1;
-                  var vClassF = ' startsida-statistik-stapel-segment-fardig-v' + v;
-                  var vClassR = ' startsida-statistik-stapel-segment-ej-fardig-v' + v;
-                  var title = (seg.kvarter ? seg.kvarter + ': ' : '') + segFardiga + ' av ' + segTotal + ' klara';
-                  var h = '';
-                  if (segFardiga > 0) {
-                    h += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-fardig' + vClassF + '" style="flex:' + segFardiga + ' 0 0" title="' + title + '"></div>';
-                  }
-                  if (segTotal - segFardiga > 0) {
-                    h += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-ej-fardig' + vClassR + '" style="flex:' + (segTotal - segFardiga) + ' 0 0" title="' + title + '"></div>';
-                  }
-                  return h;
+                  return segmentDelar(seg, v, segmentTitel(seg), flex);
                 }).join('');
                 return '<div class="startsida-statistik-stapel-kyrkogard-block" style="flex:' + groupTotal + ' 0 0">' + inner + '</div>';
               }).join('<div class="startsida-statistik-stapel-gap" aria-hidden="true"></div>');
             } else {
               segmentDivs = segments.map(function (seg, segIdx) {
-                var segTotal = seg.total || 0;
-                var segFardiga = seg.fardiga || 0;
                 var v = segIdx % N_TONER;
-                var vClassF = ' startsida-statistik-stapel-segment-fardig-v' + v;
-                var vClassR = ' startsida-statistik-stapel-segment-ej-fardig-v' + v;
-                var title = (seg.kvarter ? seg.kvarter + ': ' : '') + segFardiga + ' av ' + segTotal + ' klara';
                 var html = '';
                 if (useGap && seg.kyrkogardStart && segIdx > 0) {
                   html += '<div class="startsida-statistik-stapel-gap" aria-hidden="true"></div>';
                 }
-                if (useGap) {
-                  if (segFardiga > 0) {
-                    html += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-fardig' + vClassF + '" style="flex:' + segFardiga + ' 0 0" title="' + title + '"></div>';
-                  }
-                  if (segTotal - segFardiga > 0) {
-                    html += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-ej-fardig' + vClassR + '" style="flex:' + (segTotal - segFardiga) + ' 0 0" title="' + title + '"></div>';
-                  }
-                } else {
-                  var w = Math.max(0, Math.min(100, (segTotal / barTotal) * 100));
-                  var pFardig = segTotal > 0 ? Math.min(1, segFardiga / segTotal) : 0;
-                  var wGreen = w * pFardig;
-                  var wRed = w * (1 - pFardig);
-                  if (wGreen > 0) {
-                    html += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-fardig' + vClassF + '" style="width:' + wGreen + '%" title="' + title + '"></div>';
-                  }
-                  if (wRed > 0) {
-                    html += '<div class="startsida-statistik-stapel-segment startsida-statistik-stapel-segment-ej-fardig' + vClassR + '" style="width:' + wRed + '%" title="' + title + '"></div>';
-                  }
-                }
-                return html;
+                var bredd = useGap ? flex : function (n) { return 'width:' + (n / barTotal) * 100 + '%'; };
+                return html + segmentDelar(seg, v, segmentTitel(seg), bredd);
               }).join('');
             }
             var barClass = 'startsida-statistik-stapel startsida-statistik-stapel-segmentbar';
             if (useGap) barClass += ' startsida-statistik-stapel-segmentbar-med-gap';
-            return '<div class="' + barClass + '" role="img" aria-label="Grönt är färdigtranskriberat, rött återstår">' + segmentDivs + '</div>';
+            return '<div class="' + barClass + '" role="img" aria-label="Grönt är färdigtranskriberat, lila är AI-läst men inte granskat, rött återstår">' + segmentDivs + '</div>';
           }
           function radMedStapel(labelHtml, segments, opts) {
             return '<div class="startsida-statistik-stapel-label">' + labelHtml + '</div>' + segmentBarHtml(segments, opts);
           }
           function kvarterTillSegment(kv) {
-            if (kv.gravplatser_fardiga && Array.isArray(kv.gravplatser_fardiga)) {
-              return kv.gravplatser_fardiga.map(function (f) {
-                return { total: 1, fardiga: f ? 1 : 0 };
+            if (Array.isArray(kv.gravplatser_status)) {
+              return kv.gravplatser_status.map(function (st) {
+                return { total: 1, fardiga: st === 'f' ? 1 : 0, ai: st === 'a' ? 1 : 0 };
               });
             }
-            return [{ total: kv.total, fardiga: kv.fardiga }];
+            return [{ total: kv.total, fardiga: kv.fardiga, ai: kv.ai }];
           }
           var allSegments = [];
           kyrkogardar.forEach(function (kg) {
@@ -446,15 +427,23 @@
               allSegments.push({
                 total: kv.total,
                 fardiga: kv.fardiga,
+                ai: kv.ai,
                 kyrkogardStart: i === 0,
                 kvarter: kv.kvarter,
                 kyrkogard: kg.kyrkogard
               });
             });
           });
-          var html = '<h3>Transkriberingsstatus</h3>';
+          function aiText(x) {
+            if (!x || !x.ai) return '';
+            return ', ' + x.ai + ' AI-lästa' + (x.ai_varningar ? ' (' + x.ai_varningar + ' med varningar)' : '');
+          }
+          var html = '<h3>Transkriberingsstatus</h3>' +
+            '<p class="startsida-stapel-forklaring"><span class="startsida-forklaring-ruta startsida-statistik-stapel-segment-fardig-v1"></span>Färdigt ' +
+            '<span class="startsida-forklaring-ruta startsida-statistik-stapel-segment-ai-v1"></span>AI-läst, ej granskat ' +
+            '<span class="startsida-forklaring-ruta startsida-statistik-stapel-segment-ej-fardig-v1"></span>Återstår</p>';
           if (total && typeof total.total === 'number' && total.total > 0) {
-            var totalLabel = 'Totalt – ' + total.fardiga + ' av ' + total.total + ', ' + procentStr(total.total, total.fardiga) + '%';
+            var totalLabel = 'Totalt – ' + total.fardiga + ' av ' + total.total + ', ' + procentStr(total.total, total.fardiga) + '%' + aiText(total);
             html += '<div class="startsida-transkriberingsstatus-rad">' +
               radMedStapel(escapeHtml(totalLabel), allSegments, { kyrkogardGap: true }) + '</div>';
           }
@@ -462,7 +451,7 @@
             var kvarterList = kg.kvarter || [];
             var nKvarter = kvarterList.length;
             var kvarterListId = 'transk-kvarter-' + kgIndex;
-            var kgLabel = kg.kyrkogard + ' – ' + kg.fardiga + ' av ' + kg.total + ', ' + procentStr(kg.total, kg.fardiga) + '%';
+            var kgLabel = kg.kyrkogard + ' – ' + kg.fardiga + ' av ' + kg.total + ', ' + procentStr(kg.total, kg.fardiga) + '%' + aiText(kg);
             html += '<div class="startsida-transkriberingsstatus-kyrkogard-block">';
             if (nKvarter > 0) {
               html += '<div class="startsida-transkriberingsstatus-kyrkogard-klickbar startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kyrkogard" role="button" tabindex="0" aria-expanded="false" aria-controls="' + kvarterListId + '" aria-label="' + escapeHtml(kg.kyrkogard + ', klicka för att visa kvarter') + '">';
@@ -476,12 +465,12 @@
               html += '<button type="button" class="startsida-transk-goto-nasta" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" title="Gå till nästa ej färdigtranskriberade i ' + escapeHtml(kg.kyrkogard) + '">' + escapeHtml(kgLabel) + '</button>';
               html += '</div>';
             }
-            html += segmentBarHtml(kvarterList.map(function (kv) { return { total: kv.total, fardiga: kv.fardiga, kvarter: kv.kvarter, kyrkogard: kg.kyrkogard }; }));
+            html += segmentBarHtml(kvarterList.map(function (kv) { return { total: kv.total, fardiga: kv.fardiga, ai: kv.ai, kvarter: kv.kvarter, kyrkogard: kg.kyrkogard }; }));
             html += '</div>';
             if (nKvarter > 0) {
               html += '<div class="startsida-transkriberingsstatus-kvarter-list" id="' + kvarterListId + '" hidden>';
               kvarterList.forEach(function (kv) {
-                var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter + ' – ' + kv.fardiga + ' av ' + kv.total + ', ' + procentStr(kv.total, kv.fardiga) + '%';
+                var kvarterLabel = kg.kyrkogard + ' – ' + kv.kvarter + ' – ' + kv.fardiga + ' av ' + kv.total + ', ' + procentStr(kv.total, kv.fardiga) + '%' + aiText(kv);
                 html += '<div class="startsida-transkriberingsstatus-rad startsida-transkriberingsstatus-kvarter startsida-transk-goto-nasta-kvarter" role="button" tabindex="0" data-kyrkogard="' + escapeHtml(kg.kyrkogard) + '" data-kvarter="' + escapeHtml(kv.kvarter) + '" title="Gå till ' + escapeHtml(kg.kyrkogard) + ' ' + escapeHtml(kv.kvarter) + '">' +
                   radMedStapel(escapeHtml(kvarterLabel), kvarterTillSegment(kv)) +
                   '</div>';

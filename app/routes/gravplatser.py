@@ -2,7 +2,7 @@
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, func, or_, tuple_
+from sqlalchemy import and_, func, tuple_
 from sqlalchemy.orm import Session
 
 from app.database import (
@@ -15,11 +15,11 @@ from app.database import (
     GravplatsInmatning,
     GravplatsInnehavare,
     GravplatsNarmastAnhorig,
-    GravplatsSkiss,
     Gravsatt,
 )
 from app.auth import get_current_user
 from app.schemas import GravplatsSchema, DoldHalvaBody
+from app.utils.gravplats_status import ai_lasta, status_per_grav
 from app.utils.text import _format_fullstandigt, _ledande_tal
 from app.utils.pdf_utils import (
     _mapp_path,
@@ -208,7 +208,7 @@ async def nasta_ej_fardig_gravplats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returnerar nästa gravplats som inte är markerad som färdigtranskriberad."""
+    """Nästa gravplats som inte är färdigtranskriberad. AI-lästa men ogranskade gravar kommer först."""
     subq = db.query(GravplatsInmatning.gravplats_id).filter(
         GravplatsInmatning.fardigtranskriberad == True
     ).distinct()
@@ -225,9 +225,12 @@ async def nasta_ej_fardig_gravplats(
     rows = q.all()
     if not rows:
         raise HTTPException(status_code=404, detail="Ingen ej färdig gravplats hittades")
+    # AI-lästa gravar först: de har ett förslag och går snabbast att granska
+    ai = ai_lasta(db)
     rows_sorted = sorted(
         rows,
         key=lambda g: (
+            g.id not in ai,
             g.kyrkogard or "",
             g.kvarter or "",
             _ledande_tal(g.gravplatsnummer or ""),
@@ -400,44 +403,14 @@ async def avancerad_sok_gravplatser(
                 continue
             gp_ids.add(gid)
         q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
-    ids_fardiga = set()
-    ids_med_data = set()
-    if transkriberingsstatus in ("ej", "paborjad", "fardig") or ej_fardigtranskriberad:
-        ids_fardiga = set(
-            r.gravplats_id for r in db.query(GravplatsInmatning.gravplats_id).filter(
-                GravplatsInmatning.fardigtranskriberad == True
-            ).all()
-        )
-        for gid, in db.query(GravplatsInnehavare.gravplats_id).distinct().all():
-            ids_med_data.add(gid)
-        for gid, in db.query(GravplatsNarmastAnhorig.gravplats_id).distinct().all():
-            ids_med_data.add(gid)
-        for gid, in db.query(Gravsatt.gravplats_id).distinct().all():
-            ids_med_data.add(gid)
-        for gid, in db.query(GravplatsSkiss.gravplats_id).distinct().all():
-            ids_med_data.add(gid)
-        for r in db.query(GravplatsInmatning).filter(
-            or_(
-                GravplatsInmatning.storlek != "",
-                GravplatsInmatning.underhall_text != "",
-                GravplatsInmatning.gravrattstid != "",
-                GravplatsInmatning.monument != "",
-                GravplatsInmatning.gravens_utformning != "",
-                GravplatsInmatning.gravplats_nr != "",
-                GravplatsInmatning.karta_nr != "",
-                GravplatsInmatning.gravbrev_nr != "",
-                GravplatsInmatning.utfordat_den != "",
-                GravplatsInmatning.kommentar != "",
-                GravplatsInmatning.skiss_bild.isnot(None),
-            )
-        ).all():
-            ids_med_data.add(r.gravplats_id)
-    if transkriberingsstatus == "ej":
-        q = q.filter(~Gravplats.id.in_(ids_med_data))
-    elif transkriberingsstatus == "paborjad":
-        q = q.filter(Gravplats.id.in_(ids_med_data), ~Gravplats.id.in_(ids_fardiga))
-    elif transkriberingsstatus == "fardig":
-        q = q.filter(Gravplats.id.in_(ids_fardiga))
+    if transkriberingsstatus in ("ej", "paborjad", "fardig", "ai", "ai_varning"):
+        status_map, ai_varningar = status_per_grav(db)
+        if transkriberingsstatus == "ej":
+            q = q.filter(~Gravplats.id.in_(set(status_map)))
+        elif transkriberingsstatus == "ai_varning":
+            q = q.filter(Gravplats.id.in_({gid for gid, n in ai_varningar.items() if n}))
+        else:
+            q = q.filter(Gravplats.id.in_({gid for gid, st in status_map.items() if st == transkriberingsstatus}))
     elif ej_fardigtranskriberad:
         subq = db.query(GravplatsInmatning.gravplats_id).filter(
             GravplatsInmatning.fardigtranskriberad == True
