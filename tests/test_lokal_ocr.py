@@ -206,6 +206,63 @@ def test_ansprak_i_vaxeln(monkeypatch, status, ska_falla):
         assert asyncio.run(kor()) == "http://dator:11434"
 
 
+def test_agarnamn_skiljer_prod_och_dev(monkeypatch, tmp_path):
+    from app.services import ocr_service
+    monkeypatch.delenv("LOKAL_OCR_AGARE", raising=False)
+    monkeypatch.setattr(ocr_service, "DATABASE_PATH", tmp_path / "gravregister.db")
+    assert ocr_service.ansprak_agare() == "gravregister-prod"
+    monkeypatch.setattr(ocr_service, "DATABASE_PATH", tmp_path / "gravregister-dev.db")
+    assert ocr_service.ansprak_agare() == "gravregister-dev"
+    monkeypatch.setenv("LOKAL_OCR_AGARE", "egen")
+    assert ocr_service.ansprak_agare() == "egen"
+
+
+def test_slapp_ansprak_skickar_bara_eget_agarnamn(monkeypatch):
+    import httpx
+    from app.services import ocr_service
+    monkeypatch.setenv("LOKAL_OCR_AGARE", "gravregister-dev")
+    anrop = []
+
+    class Klient:
+        def __init__(self, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def delete(self, url, params=None):
+            anrop.append((url, params))
+            return httpx.Response(200)
+
+    monkeypatch.setattr(ocr_service.httpx, "AsyncClient", Klient)
+    monkeypatch.setattr(ocr_service, "_senaste_ansprak", ("http://portal", "dator"))
+    asyncio.run(ocr_service.slapp_ansprak())
+    assert anrop == [("http://portal/api/ollama/endpoints/dator/claim", {"agare": "gravregister-dev"})]
+    asyncio.run(ocr_service.slapp_ansprak())  # inget kvar att släppa
+    assert len(anrop) == 1
+
+
+def test_slingan_slapper_ansprak_nar_kon_tomts(monkeypatch, riktig_korningsslinga):
+    steg = iter([True, True, False])
+    slappt = []
+
+    async def ett_steg():
+        try:
+            return next(steg)
+        except StopIteration:
+            raise asyncio.CancelledError
+
+    async def slapp():
+        slappt.append(1)
+
+    async def ingen_vila(_):
+        return None
+
+    monkeypatch.setattr(batch_korning, "kor_ett_steg", ett_steg)
+    monkeypatch.setattr(batch_korning, "slapp_ansprak", slapp)
+    monkeypatch.setattr(batch_korning.asyncio, "sleep", ingen_vila)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(riktig_korningsslinga())
+    assert slappt == [1]
+
+
 def test_svarslistan_och_lokal_route_bar_rimlighetsvarningar(logga_in, grav, lokal_installd, db, monkeypatch):
     fel_svar = {"gravsatta": [{"fodelse_ar": 1883, "fodelse_manad": 6, "fodelse_dag": 1, "dods_ar": 1937,
                                "dods_manad": 5, "dods_dag": 18, "gravsatt_den": "1937-03-23"}]}

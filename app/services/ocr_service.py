@@ -1,11 +1,13 @@
 """Skickar gravplatskortbilder till Claude och returnerar strukturerad JSON."""
 import base64
+import os
 import json
 from pathlib import Path
 
 import httpx
 
 from app.utils.api_keys import _get_claude_model, _get_lokal_ocr_modell, _get_lokal_ocr_url
+from app.config import DATABASE_PATH
 from app.utils.sakerhet import osakra_falt
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -102,6 +104,9 @@ def _rensa_json(text: str) -> str:
 
 _VAXEL_SUFFIX = "/api/ollama/active"
 
+# Senaste anspråk som den här processen tog: (portaladress, endpointnamn). Används för att släppa det.
+_senaste_ansprak: tuple[str, str] | None = None
+
 
 def _orsak(exc: Exception) -> str:
     """Kort orsak för administratören, t.ex. att ett namn inte går att slå upp."""
@@ -112,7 +117,6 @@ def _orsak(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         return f"HTTP {exc.response.status_code}"
     return type(exc).__name__
-_ANSPRAK_AGARE = "svk-had-gravregister"
 _ANSPRAK_MINUTER = 15  # förlängs vid varje anrop, så en batch håller anspråket hela vägen
 
 
@@ -139,7 +143,7 @@ async def _lokal_bas_url(client: httpx.AsyncClient, ta_ansprak: bool = False) ->
         try:
             claim = await client.post(
                 f"{portal}/api/ollama/endpoints/{aktiv['name']}/claim",
-                json={"agare": _ANSPRAK_AGARE, "minuter": _ANSPRAK_MINUTER, "notis": "OCR av gravkort"},
+                json={"agare": ansprak_agare(), "minuter": _ANSPRAK_MINUTER, "notis": "OCR av gravkort"},
                 timeout=10,
             )
         except httpx.HTTPError:
@@ -151,7 +155,37 @@ async def _lokal_bas_url(client: httpx.AsyncClient, ta_ansprak: bool = False) ->
                 orsak = ""
             raise LokalOcrFel("Modellservern är upptagen av en annan körning. Försök igen senare."
                               + (f" ({orsak})" if orsak else ""))
+        if claim is not None and claim.is_success:
+            global _senaste_ansprak
+            _senaste_ansprak = (portal, aktiv["name"])
     return bas
+
+
+def ansprak_agare() -> str:
+    """Namnet anspråket tas i, så det syns i växeln vilken instans som kör.
+
+    LOKAL_OCR_AGARE i miljön går först. Annars härleds namnet ur databasfilen:
+    gravregister.db blir gravregister-prod och gravregister-dev.db blir gravregister-dev.
+    """
+    env = os.environ.get("LOKAL_OCR_AGARE", "").strip()
+    if env:
+        return env
+    stam = DATABASE_PATH.stem
+    return "gravregister-prod" if stam == "gravregister" else stam
+
+
+async def slapp_ansprak() -> None:
+    """Släpp processens anspråk i växeln. Portalen släpper bara om ägaren stämmer."""
+    global _senaste_ansprak
+    if _senaste_ansprak is None:
+        return
+    portal, namn = _senaste_ansprak
+    _senaste_ansprak = None
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.delete(f"{portal}/api/ollama/endpoints/{namn}/claim", params={"agare": ansprak_agare()})
+    except httpx.HTTPError:
+        pass  # anspråket löper ändå ut av sig självt inom en kvart
 
 
 async def testa_lokal_server() -> dict:

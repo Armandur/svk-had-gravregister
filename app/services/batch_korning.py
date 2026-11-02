@@ -17,7 +17,7 @@ from sqlalchemy import update
 
 from app.database import ClaudeAnropslogg, ClaudeBatchJobb, ClaudeBatchJobbPost, LokalOcrSvar, SessionLocal
 from app.utils.api_keys import _get_lokal_ocr_modell
-from app.services.ocr_service import LokalOcrFel, ocr_gravplats_lokal
+from app.services.ocr_service import LokalOcrFel, ocr_gravplats_lokal, slapp_ansprak
 from app.utils.ocr_utils import _collect_png_images_for_gravplats, _spara_ocr_svar
 
 logger = logging.getLogger(__name__)
@@ -176,10 +176,16 @@ def _ar_tillfalligt(meddelande: str) -> bool:
 
 
 async def korningsslinga() -> None:
-    """Körs som bakgrundsuppgift så länge appen lever."""
+    """Körs som bakgrundsuppgift så länge appen lever. Släpper anspråket när kön är tom."""
+    hade_arbete = False
     while True:
         try:
             gjorde_nagot = await kor_ett_steg()
+            if gjorde_nagot:
+                hade_arbete = True
+            elif hade_arbete:
+                await slapp_ansprak()
+                hade_arbete = False
         except ServernOtillganglig as exc:
             logger.info("Lokal batch väntar på modellservern: %s", exc)
             await asyncio.sleep(VILA_SERVER_S)

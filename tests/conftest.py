@@ -19,9 +19,19 @@ async def _ingen_bakgrund():
     """Proven driver bakgrundskörningen steg för steg själva."""
 
 
+from app.services import batch_korning  # noqa: E402
+
+_RIKTIG_SLINGA = batch_korning.korningsslinga
+
+
+@pytest.fixture
+def riktig_korningsslinga():
+    """Bakgrundsslingan som den är, för prov av själva slingan."""
+    return _RIKTIG_SLINGA
+
+
 @pytest.fixture(scope="session")
 def client():
-    from app.services import batch_korning
     batch_korning.korningsslinga = _ingen_bakgrund
     with TestClient(app) as c:
         yield c

@@ -41,6 +41,9 @@ Sätt miljövariabeln `DATA_DIR` till sökvägen till denna katalog i containern
 | `SESSION_SECRET_KEY` | Hemlig nyckel för session-cookies. **Sätt i produktion** (t.ex. lång slumpsträng). |
 | `ADMIN_INITIAL_PASSWORD` | Valfritt: om databasen är tom skapas användaren `admin` med detta lösenord vid första start. |
 | `ANTHROPIC_API_KEY` | Valfritt: Anthropic API-nyckel för Claude OCR. Har prioritet framför nyckeln som sparas i `api_keys.json` via Inställningar i appen. |
+| `LOKAL_OCR_URL` | Valfritt: adress till lokal modellserver (ollama), eller portalens växel (`…/api/ollama/active`). Går före inställningen i appen. Containern når inte `.ts.net`-namn, så använd IP-adresser. |
+| `LOKAL_OCR_MODELL` | Valfritt: vision-modell för lokal OCR, t.ex. `gemma4:12b`. Går före inställningen i appen. |
+| `LOKAL_OCR_AGARE` | Valfritt: namnet anspråket i växeln tas i. Utan den blir det `gravregister-prod` för `gravregister.db` och `gravregister-dev` för `gravregister-dev.db`. |
 
 ## Exempel: docker run
 
