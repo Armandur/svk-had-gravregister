@@ -86,9 +86,9 @@ Härleds ur sparade OCR-svar (claude_ocr_svar/lokal_ocr_svar) för gravar utan f
 
 ---
 
-## [P3][doing] [gravregister] Lokal modell för OCR-igenkänning (rasmus-dator3 via portalens växel :8890), facit mot granskade/Claude-körningar, bedöm KB-BERT
+## [P3][done] [gravregister] Lokal modell för OCR-igenkänning (rasmus-dator3 via portalens växel :8890), facit mot granskade/Claude-körningar, bedöm KB-BERT
 
-Utvärdering klar (backlog doc 'Lokal OCR - utvärdering och implementation 2026-11-02'): gemma4:12b valdes. Implementation (flagga lokal_ocr_aktiv, enskild + batch, logg per modell) väntar på Rasmus test innan commit. KB-BERT bedömd som onödig i detta steg.
+Klart och i prod 2026-11-02 (1716f55): lokal OCR med gemma4:12b via portalens växel, bakgrundsbatch med kö och sluttid, svar sida vid sida, rimlighetsvarningar, osäkra siffror (logprobs), lila status 'AI-läst, ej granskad', förslagsläge och mobilvy. Utvärdering: backlog doc 'Lokal OCR - utvärdering och implementation 2026-11-02'. KB-BERT bedömd som onödig. Uppföljning i TASK-3286..3290.
 
 - ID: `01M6ER522XWBR4131DCC3YSHSW`
 - Type: spike
