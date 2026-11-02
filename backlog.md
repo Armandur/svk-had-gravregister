@@ -1,6 +1,6 @@
 # Backlog Export
 
-## [P3][todo] [gravregister] Gravvyn vid mobilbredd: högerspalten klipps i vänsterkanten
+## [P3][done] [gravregister] Gravvyn vid mobilbredd: högerspalten klipps i vänsterkanten
 
 Vid 390 px ligger gravvyn kvar i två spalter. Högerspalten (statusknapp, banners, formulär) klipps i vänsterkanten och rubriken överlappar 'Senast redigerad'. Fanns före lokal OCR-arbetet, sett 2026-11-02 i shot av HKG U 25.
 
