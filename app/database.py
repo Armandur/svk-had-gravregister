@@ -234,6 +234,7 @@ class LokalOcrSvar(Base):
     skapad_den: Mapped[str] = mapped_column()           # ISO 8601 datetime (UTC)
     svar_json: Mapped[str] = mapped_column()
     ocr_kommentar: Mapped[str] = mapped_column(default="")
+    osakra_falt: Mapped[str | None] = mapped_column(nullable=True)  # JSON {sökväg: {sakerhet, kanske}}, se app/utils/sakerhet.py
 
 
 class ClaudeBatchJobb(Base):
@@ -1174,6 +1175,7 @@ def init_db():
             ("user", "lokal_ocr_aktiv", "INTEGER NOT NULL DEFAULT 0"),
             ("claude_anropslogg", "modell", "TEXT"),
             ("claude_ocr_svar", "modell", "TEXT"),  # Claude-modellens namn, null på äldre rader
+            ("lokal_ocr_svar", "osakra_falt", "TEXT"),
         ):
             cols = [row[1] for row in conn.execute(text(f"PRAGMA table_info({tabell})"))]
             if kolumn not in cols:

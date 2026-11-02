@@ -62,15 +62,31 @@ def ai_svar_per_grav(db: Session, ids: set[int] | None = None) -> dict[int, list
     return ut
 
 
-def ai_lasta(db: Session) -> dict[int, int]:
-    """AI-lästa gravar som ingen har granskat än: {gravplats_id: antal rimlighetsvarningar}.
+def osakra_per_grav(db: Session, ids: set[int] | None = None) -> dict[int, int]:
+    """Antal osäkra sifferfält per grav, från det lokala svar som har flest."""
+    ut: dict[int, int] = {}
+    q = db.query(LokalOcrSvar.gravplats_id, LokalOcrSvar.osakra_falt).filter(LokalOcrSvar.osakra_falt.isnot(None))
+    if ids is not None:
+        q = q.filter(LokalOcrSvar.gravplats_id.in_(ids))
+    for gid, osakra in q:
+        try:
+            n = len(json.loads(osakra))
+        except (TypeError, ValueError):
+            continue
+        ut[gid] = max(ut.get(gid, 0), n)
+    return ut
 
-    Varningarna räknas på det svar som har flest, så en grav flaggas om något
-    av dess svar har ett orimligt datum.
+
+def ai_lasta(db: Session) -> dict[int, int]:
+    """AI-lästa gravar som ingen har granskat än: {gravplats_id: antal varningar}.
+
+    Varningar är orimliga datum plus siffror modellen var osäker på. Båda räknas
+    på det svar som har flest, så graven flaggas om något svar har ett problem.
     """
     upptagna = ids_fardiga(db) | ids_med_data(db)
+    osakra = osakra_per_grav(db)
     return {
-        gid: max(len(kontrollera(s)) for s in svar)
+        gid: max(len(kontrollera(s)) for s in svar) + osakra.get(gid, 0)
         for gid, svar in ai_svar_per_grav(db).items()
         if gid not in upptagna and svar
     }

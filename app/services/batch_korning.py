@@ -140,7 +140,7 @@ async def kor_ett_steg() -> bool:
             svarstid_ms=int((time.monotonic() - t0) * 1000),
             modell=usage["modell"],
         ))
-        _spara_ocr_svar(db, user_id, gravplats_id, result, usage["modell"], lokal=True)
+        _spara_ocr_svar(db, user_id, gravplats_id, result, usage["modell"], lokal=True, osakra=usage.get("osakra"))
         post.status = "klar"
         post.fel_meddelande = None
         db.execute(update(ClaudeBatchJobb).where(ClaudeBatchJobb.id == jobb_id).values(klara=ClaudeBatchJobb.klara + 1))

@@ -2538,3 +2538,18 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
   color: #5b21b6;
 }
 .gp-ai-forslag-banner[hidden] { display: none; }
+
+/* Siffror som den lokala modellen var osäker på (app/utils/sakerhet.py) */
+.gp-falt-osaker { outline: 2px solid #f59e0b; outline-offset: 1px; background: #fffbeb; }
+.gp-falt-varning.gp-falt-osaker { outline-color: #f87171; }
+.gp-osaker-banner {
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.5rem 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  color: #92400e;
+}
+.gp-osaker-banner[hidden] { display: none; }
+.gp-osaker-banner ul { margin: 0.25rem 0 0 1.1rem; padding: 0; }

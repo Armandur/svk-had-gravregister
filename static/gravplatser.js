@@ -315,7 +315,7 @@ async function hamtaBatchPagarInfo() {
 async function uppdateraVy(behallInmatningState = false) {
   const ocrBanner = document.getElementById('gp-ocr-kommentar-banner');
   if (ocrBanner) { ocrBanner.hidden = true; ocrBanner.textContent = ''; }
-  visaRimlighetsvarningar([]);
+  visaFaltmarkeringar([], {});
   state.aiForslag = null;
   visaAiForslagBanner();
   const batchBanner = document.getElementById('gp-batch-pagar-banner');
@@ -622,7 +622,7 @@ async function visaAiForslagOmAiLast() {
     prefillFranClaude(forslag.svar_json);
     state.inmatningDirty = false;
     uppdateraInmatningSparaKnapp();
-    visaRimlighetsvarningar(forslag.varningar);
+    visaFaltmarkeringar(forslag.varningar, forslag.osakra);
     visaAiForslagBanner();
     uppdateraFardigtranskriberadKnapp();
   } catch (e) { /* förslaget är en bekvämlighet, vyn fungerar utan det */ }
@@ -636,7 +636,8 @@ function visaAiForslagBanner() {
   const kalla = f.svar.kalla === 'lokal' ? 'lokal modell (' + f.svar.modell + ')' : 'Claude';
   banner.textContent = state.inmatningRedigerar
     ? 'Formuläret är ifyllt med AI-förslaget från ' + kalla + '. Rätta mot kortet och spara.'
-    : 'Visar AI-förslaget från ' + kalla + '. Inget är granskat eller sparat. Klicka Redigera gravplatsen för att rätta och spara.';
+    : 'Visar AI-förslaget från ' + kalla + '. Inget är granskat eller sparat. Klicka Redigera gravplatsen för att rätta och spara.' +
+      (Object.keys(f.svar.osakra || {}).length ? ' Siffror som modellen var osäker på ramas in i gult när du redigerar.' : '');
   banner.hidden = false;
 }
 
@@ -678,7 +679,7 @@ async function batchAutoLaddaClaude() {
     if (!inmatningHarNagonData()) {
       // Ingen befintlig data – applicera direkt (inget pling, svaret är redan sparat sedan batch-körningen)
       prefillFranClaude(data.svar_json);
-      visaRimlighetsvarningar(data.varningar);
+      visaFaltmarkeringar(data.varningar, data.osakra);
       markInmatningDirty();
       uppdateraFardigtranskriberadKnapp();
       if (data.ocr_kommentar && bannerEl) {
@@ -1360,7 +1361,7 @@ function uppdateraFardigtranskriberadKnapp() {
     btn.classList.add('gp-fardigtranskriberad-ja');
     btn.textContent = 'Färdigtranskriberad';
   } else if (state.aiForslag && state.aiForslag.gravplatsId === state.currentGravplatsId) {
-    const n = (state.aiForslag.svar.varningar || []).length;
+    const n = (state.aiForslag.svar.varningar || []).length + Object.keys(state.aiForslag.svar.osakra || {}).length;
     btn.classList.add('gp-fardigtranskriberad-ai');
     btn.textContent = 'AI-läst, ej granskad' + (n ? ' (' + n + (n === 1 ? ' varning)' : ' varningar)') : '');
   } else if (harData) {
@@ -2758,6 +2759,86 @@ function hamtaSparatClaudeSvar() {
     .catch(function() {});
 }
 
+/** Formulärfältet för en sökväg i AI-svaret, t.ex. "gravsatta.0.dods_ar" -> "gs_dods_datum_0". */
+function osakertFaltNamn(vag) {
+  if (vag === 'utfardat_den') return 'utfordat_den';
+  const m = /^gravsatta\.(\d+)\.(\w+)$/.exec(vag);
+  if (!m) return null;
+  const idx = m[1], falt = m[2];
+  if (falt.startsWith('fodelse_')) return 'gs_fodelse_datum_' + idx;
+  if (falt.startsWith('dods_')) return 'gs_dods_datum_' + idx;
+  const prefix = { fod_nr: 'gs_fod_nr_', dodsbok_nr: 'gs_dodsbok_nr_', gravsatt_den: 'gs_gravsatt_den_' }[falt];
+  return prefix ? prefix + idx : null;
+}
+
+/** Andrahandsvalet som helt värde: för en datumdel byts bara den delen ut i fältets datum. */
+function osakertAlternativ(vag, info, faltVarde) {
+  if (!info.kanske) return '';
+  const del = /\.(fodelse|dods)_(ar|manad|dag)$/.exec(vag);
+  if (!del) return info.kanske;
+  const delar = String(faltVarde || '').split('-');
+  const i = { ar: 0, manad: 1, dag: 2 }[del[2]];
+  if (delar.length <= i) return info.kanske;
+  delar[i] = i === 0 ? info.kanske : String(info.kanske).padStart(2, '0');
+  return delar.join('-');
+}
+
+/**
+ * Gul ram på siffror som den lokala modellen var osäker på, med dess andrahandsval.
+ * Ett datumfält samlar år, månad och dag, så den minst säkra delen bestämmer.
+ */
+function visaOsakraFalt(osakra) {
+  document.querySelectorAll('.gp-falt-osaker').forEach(function(el) {
+    el.classList.remove('gp-falt-osaker');
+    if (el.dataset.titelFore !== undefined) { el.title = el.dataset.titelFore; delete el.dataset.titelFore; }
+  });
+  const banner = document.getElementById('gp-osaker-banner');
+  const rader = [];
+  const root = document.getElementById('gp-inmatning');
+  if (!root) return;
+  const perFalt = {};
+  Object.entries(osakra || {}).forEach(function([vag, info]) {
+    const namn = osakertFaltNamn(vag);
+    if (namn && (!perFalt[namn] || info.sakerhet < perFalt[namn].info.sakerhet)) perFalt[namn] = { vag: vag, info: info };
+  });
+  Object.entries(perFalt).forEach(function([namn, { vag, info }]) {
+    const el = root.querySelector('[name="' + namn + '"]');
+    if (!el) return;
+    const kanske = osakertAlternativ(vag, info, el.value);
+    rader.push(osakertFaltEtikett(namn) + ': ' + el.value + ' (' + Math.round(info.sakerhet * 100) + ' % säker)' +
+      (kanske && kanske !== el.value ? ', kanske ' + kanske : ''));
+    if (el.dataset.titelFore === undefined) el.dataset.titelFore = el.title || '';
+    el.classList.add('gp-falt-osaker');
+    el.title = 'Modellen var osäker på en siffra här (' + Math.round(info.sakerhet * 100) + ' %).' +
+      (kanske && kanske !== el.value ? ' Kanske ' + kanske + '?' : '') + ' Kontrollera mot kortet.';
+    el.addEventListener('input', function() {
+      el.classList.remove('gp-falt-osaker');
+      el.title = el.dataset.titelFore || '';
+      delete el.dataset.titelFore;
+    }, { once: true });
+  });
+  if (banner) {
+    banner.innerHTML = rader.length
+      ? '<strong>Modellen var osäker på de här siffrorna:</strong><ul>' + rader.map(function(r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') + '</ul>'
+      : '';
+    banner.hidden = rader.length === 0;
+  }
+}
+
+/** Läsbar etikett för ett formulärfält, t.ex. "gs_dods_datum_0" -> "Gravsatt 1, dödsdatum". */
+function osakertFaltEtikett(namn) {
+  if (namn === 'utfordat_den') return 'Utfärdat den';
+  const m = /^gs_(.+)_(\d+)$/.exec(namn);
+  if (!m) return namn;
+  const falt = { fodelse_datum: 'födelsedatum', dods_datum: 'dödsdatum', fod_nr: 'födelsenummer', dodsbok_nr: 'db. nummer', gravsatt_den: 'gravsatt den' }[m[1]] || m[1];
+  return 'Gravsatt ' + (parseInt(m[2], 10) + 1) + ', ' + falt;
+}
+
+function visaFaltmarkeringar(varningar, osakra) {
+  visaRimlighetsvarningar(varningar);
+  visaOsakraFalt(osakra);
+}
+
 /** Fält som en rimlighetsvarning gäller, som namn på formulärets textfält. */
 function rimlighetsFalt(v) {
   const idx = v.gravsatt - 1;
@@ -3136,7 +3217,7 @@ async function hamtaOcr(lokal) {
     const data = await res.json();
     await ensureInmatningData();
     prefillFranClaude(data);
-    visaRimlighetsvarningar(data._varningar);
+    visaFaltmarkeringar(data._varningar, data._osakra);
     gpPlayPling();
     if (data.ocr_kommentar && bannerEl) {
       bannerEl.innerHTML = formatOcrKommentar(data.ocr_kommentar);
@@ -3249,7 +3330,7 @@ function toggleRedigeraVy() {
     if (state.aiForslag && state.aiForslag.gravplatsId === state.currentGravplatsId) {
       markInmatningDirty();
       visaAiForslagBanner();
-      visaRimlighetsvarningar(state.aiForslag.svar.varningar);
+      visaFaltmarkeringar(state.aiForslag.svar.varningar, state.aiForslag.svar.osakra);
     }
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
@@ -3262,7 +3343,7 @@ document.getElementById('gp-claude-applicera-btn')?.addEventListener('click', fu
   if (!state.sparatClaudeSvar) return;
   visaDiffDialog(state.sparatClaudeSvar.svar_json, function() {
     prefillFranClaude(state.sparatClaudeSvar.svar_json);
-    visaRimlighetsvarningar(state.sparatClaudeSvar.varningar);
+    visaFaltmarkeringar(state.sparatClaudeSvar.varningar, state.sparatClaudeSvar.osakra);
     gpPlayPling();
     const bannerEl = document.getElementById('gp-ocr-kommentar-banner');
     if (state.sparatClaudeSvar.ocr_kommentar && bannerEl) {

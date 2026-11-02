@@ -144,7 +144,7 @@ def _require_lokal_ocr(current_user) -> None:
 
 
 def _spara_ocr_svar(db: Session, user_id: int, gravplats_id: int, result: dict, modell: str | None,
-                    lokal: bool = False) -> None:
+                    lokal: bool = False, osakra: dict | None = None) -> None:
     """Spara senaste OCR-svar (upsert). Claude: en rad per grav. Lokal: en rad per grav och modell.
 
     Lokala svar hamnar i en egen tabell och skriver aldrig över Claudes svar. Committar inte.
@@ -158,6 +158,7 @@ def _spara_ocr_svar(db: Session, user_id: int, gravplats_id: int, result: dict, 
         if rad is None:
             rad = LokalOcrSvar(gravplats_id=gravplats_id, modell=modell)
             db.add(rad)
+        rad.osakra_falt = json.dumps(osakra or {}, ensure_ascii=False)
     else:
         rad = db.query(ClaudeOcrSvar).filter(ClaudeOcrSvar.gravplats_id == gravplats_id).first()
         if rad is None:

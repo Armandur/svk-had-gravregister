@@ -123,7 +123,7 @@ async def get_alla_ocr_svar(
     )
     if claude:
         rad, username = claude
-        svar.append({"kalla": "claude", "modell": rad.modell or "Claude", "svar_json": json.loads(rad.svar_json),
+        svar.append({"kalla": "claude", "modell": rad.modell or "Claude", "svar_json": json.loads(rad.svar_json), "osakra": {},
                      "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or ""})
     lokala = (
         db.query(LokalOcrSvar, User.username)
@@ -134,7 +134,8 @@ async def get_alla_ocr_svar(
     )
     for rad, username in lokala:
         svar.append({"kalla": "lokal", "modell": rad.modell, "svar_json": json.loads(rad.svar_json),
-                     "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or ""})
+                     "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or "",
+                     "osakra": json.loads(rad.osakra_falt or "{}")})
     for s in svar:
         s["varningar"] = kontrollera_rimlighet(s["svar_json"])
     return {"svar": svar}

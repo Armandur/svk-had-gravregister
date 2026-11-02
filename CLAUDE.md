@@ -94,6 +94,7 @@ app/
     pdf_utils.py    PDF-listning, rendering-hjälpare
     gravplats_utils.py  Beräkna "halvor" per gravplats
     rimlighet.py    Rimlighetsregler för datum i OCR-svar (varningar i gravvyn)
+    sakerhet.py     Lokala modellens säkerhet per sifferfält ur ollamas logprobs
     gravplats_status.py  Transkriberingsstatus (färdig, påbörjad, AI-läst, ej) för statistik, sök och nästa-knappen
     achievements.py Achievement-logik
     git_version.py  Läs git-versionstagg

@@ -24,6 +24,7 @@ En administratör kan låta gravkorten läsas av en modell på en egen server (o
 
 - Under **Inställningar** anger administratören serverns adress och modell. **Testa anslutning** visar om servern svarar och har modellen.
 - Under **Inställningar → Användare** slår administratören på kolumnen **Lokal** för de konton som ska få använda den.
+- Den lokala modellen anger också hur säker den är på varje siffra. Siffror och datum under 95 % säkerhet ramas in i gult och listas i en gul ruta, med modellens andrahandsval: "dödsdatum 1972-09-16 (64 % säker), kanske 1975-09-16". I utvärderingen var vartannat sådant värde fel. För text är måttet för opålitligt, så textfält markeras inte. Claude ger ingen sådan siffra.
 - I redigeringsläget finns då knappen **Hämta från lokal modell**. Svaret sparas bredvid ett eventuellt Claude-svar, och panelen listar alla sparade svar. Klicka **Ladda in i formuläret** på det svar du vill utgå från.
 
 ## Status: AI-läst, ej granskad

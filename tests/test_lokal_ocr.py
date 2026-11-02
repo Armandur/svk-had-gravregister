@@ -220,3 +220,17 @@ def test_svarslistan_och_lokal_route_bar_rimlighetsvarningar(logga_in, grav, lok
     sparat = c.get(f"/api/ocr/gravplats/{grav}/svar-alla").json()["svar"]
     assert [v["falt"] for v in sparat[0]["varningar"]] == ["dods_manad"]
     assert "_varningar" not in sparat[0]["svar_json"]
+
+
+def test_osakra_siffror_sparas_och_raknas_som_varningar(logga_in, grav, lokal_installd, db, monkeypatch):
+    async def osaker(bilder):
+        return {"gravsatta": [{"dods_ar": 1972}]}, {"input_tokens": 1, "output_tokens": 1, "modell": "provmodell",
+                                                    "osakra": {"gravsatta.0.dods_ar": {"sakerhet": 0.64, "kanske": "1975"}}}
+
+    monkeypatch.setattr(ocr_routes, "ocr_gravplats_lokal", osaker)
+    c = logga_in("med", lokal_ocr_aktiv=True)
+    r = c.post(f"/api/ocr/lokal/gravplats/{grav}")
+    assert r.json()["_osakra"]["gravsatta.0.dods_ar"]["kanske"] == "1975"
+    sparat = c.get(f"/api/ocr/gravplats/{grav}/svar-alla").json()["svar"]
+    assert sparat[-1]["osakra"] == {"gravsatta.0.dods_ar": {"sakerhet": 0.64, "kanske": "1975"}}
+    assert c.get(f"/api/gravplats/{grav}/inmatning").json()["ai_varningar"] == 1

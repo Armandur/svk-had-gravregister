@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from app.utils.api_keys import _get_claude_model, _get_lokal_ocr_modell, _get_lokal_ocr_url
+from app.utils.sakerhet import osakra_falt
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_BATCH_URL = "https://api.anthropic.com/v1/messages/batches"
@@ -186,6 +187,9 @@ async def ocr_gravplats_lokal(png_images: list[bytes]) -> tuple[dict, dict]:
         "stream": False,
         "think": False,
         "format": "json",
+        # Tokensannolikheter ger modellens säkerhet per sifferfält (app/utils/sakerhet.py)
+        "logprobs": True,
+        "top_logprobs": 3,
         # Taket hindrar en modell som fastnat i en slinga från att låsa GPU:n i minuter.
         # Ett fullt kort med tio gravsatta ger cirka 2 500 tokens.
         "options": {"temperature": 0, "num_predict": 6000},
@@ -221,6 +225,7 @@ async def ocr_gravplats_lokal(png_images: list[bytes]) -> tuple[dict, dict]:
         "input_tokens": raw.get("prompt_eval_count", 0) or 0,
         "output_tokens": raw.get("eval_count", 0) or 0,
         "modell": modell,
+        "osakra": osakra_falt(raw.get("message", {}).get("content", ""), raw.get("logprobs") or []),
     }
     return result, usage
 

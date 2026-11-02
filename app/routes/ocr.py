@@ -241,7 +241,7 @@ async def ocr_gravplats_lokal_endpoint(
         svarstid_ms=svarstid_ms,
         modell=usage["modell"],
     ))
-    _spara_ocr_svar(db, current_user.id, gravplats_id, result, usage["modell"], lokal=True)
+    _spara_ocr_svar(db, current_user.id, gravplats_id, result, usage["modell"], lokal=True, osakra=usage.get("osakra"))
     db.commit()
 
     result["_ocr_usage"] = {
@@ -252,5 +252,6 @@ async def ocr_gravplats_lokal_endpoint(
         "kostnad_usd": 0.0,
         "modell": usage["modell"],
     }
+    result["_osakra"] = usage.get("osakra") or {}
     result["_varningar"] = kontrollera_rimlighet(result)
     return result
