@@ -34,6 +34,7 @@ En grav som har ett AI-svar men där ingen har sparat något får statusen **AI-
 - i staplarna på startsidan och på Batch AI, mellan grönt (färdigt) och rött (återstår)
 - på statusknappen i gravvyn, med antalet varningar om svaret har orimliga datum
 - som sökval under Avancerad sökning: **AI-läst, ej granskad** och **AI-läst med varningar**
+- i sökresultaten: Avancerad sökning letar också i AI-lästa gravars svar. Sådana rader har en lila kant och märket **AI-läst, ej granskad**, rött med antal varningar om svaret har orimliga datum eller osäkra siffror. Kolumnen **Källa** visar **Sparad** för det som en människa har sparat. Kryssrutan **Ta med AI-lästa gravar som ingen har granskat än** under Övrigt stänger av det
 
 När du öppnar en AI-läst grav visas AI-förslaget direkt i formuläret, med en lila ruta som säger att inget är granskat. Har graven både ett Claude-svar och ett lokalt svar visas Claudes. Du kan bläddra vidare utan att något sparas. Klicka **Redigera gravplatsen** för att rätta mot kortet och spara. Panelen med sparade svar låter dig byta till ett annat förslag.
 

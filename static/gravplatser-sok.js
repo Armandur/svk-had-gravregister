@@ -27,6 +27,7 @@ const submitBtn = document.getElementById('gp-sok-submit');
 
 const SOK_KOLUMNER = [
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'kalla', label: 'Källa', defaultVisible: true },
   { id: 'antal_innehavare', label: 'Innehavare', defaultVisible: true },
   { id: 'antal_narmast_anhoriga', label: 'Närmast anhöriga', defaultVisible: true },
   { id: 'antal_gravsatta', label: 'Gravsatta', defaultVisible: true },
@@ -39,6 +40,7 @@ const INNEHAVARE_KOLUMNER = [
   { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
   { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'kalla', label: 'Källa', defaultVisible: true },
   { id: 'yrke', label: 'Yrke', defaultVisible: true },
   { id: 'gatuadress', label: 'Gatuadress', defaultVisible: true },
   { id: 'postnummer', label: 'Postnummer', defaultVisible: true },
@@ -50,6 +52,7 @@ const ANHORIG_KOLUMNER = [
   { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
   { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'kalla', label: 'Källa', defaultVisible: true },
   { id: 'yrke', label: 'Yrke', defaultVisible: true },
   { id: 'adress', label: 'Adress', defaultVisible: true },
   { id: 'postnummer', label: 'Postnummer', defaultVisible: true },
@@ -62,6 +65,7 @@ const GRAVSATTA_KOLUMNER = [
   { id: 'fornamn', label: 'Förnamn', defaultVisible: true },
   { id: 'efternamn', label: 'Efternamn', defaultVisible: true },
   { id: 'fullstandigt', label: 'Gravplats', defaultVisible: true },
+  { id: 'kalla', label: 'Källa', defaultVisible: true },
   { id: 'position', label: 'Nr', defaultVisible: true },
   { id: 'yrke', label: 'Yrke', defaultVisible: true },
   { id: 'gatuadress', label: 'Gatuadress', defaultVisible: true },
@@ -313,9 +317,10 @@ async function koraAvanceradSok(e) {
   if (fd.get('har_extramaterial') === '1') params.set('har_extramaterial', 'true');
   const transkStatus = (fd.get('transkriberingsstatus') || '').trim();
   if (['ej', 'ai', 'ai_varning', 'paborjad', 'fardig'].includes(transkStatus)) params.set('transkriberingsstatus', transkStatus);
+  if (!fd.get('inkludera_ai')) params.set('inkludera_ai', 'false');
   params.set('limit', '5000');
 
-  const harNagonFiltret = Array.from(params.keys()).some((k) => k !== 'limit');
+  const harNagonFiltret = Array.from(params.keys()).some((k) => k !== 'limit' && k !== 'inkludera_ai');
   if (!harNagonFiltret) {
     showToast('Ange minst ett sökvillkor (t.ex. kyrkogård, kvarter, namn eller ett datumintervall) innan du söker.', 'info');
     return;
@@ -411,7 +416,15 @@ function formatUtfordatDenForDisplay(s) {
   return t;
 }
 
+/** "AI-läst" eller "Sparad" (sparad av en människa), med antal varningar för AI-rader. */
+function kallaText(row) {
+  if (row.kalla !== 'ai') return 'Sparad';
+  const n = row.ai_varningar || 0;
+  return 'AI-läst, ej granskad' + (n ? ' · ' + n + (n === 1 ? ' varning' : ' varningar') : '');
+}
+
 function cellValue(row, colId, typ) {
+  if (colId === 'kalla') return kallaText(row);
   if (typ !== 'gravplatser') {
     if (colId === 'fullstandigt') return (row.fullstandigt || '').trim() || '–';
     if (colId === 'fodelse') {
@@ -501,9 +514,32 @@ function renderResultatTabell() {
 
   slice.forEach((row) => {
     const tr = document.createElement('tr');
+    if (row.kalla === 'ai') tr.classList.add('gp-sok-rad-ai');
     cols.forEach((c) => {
       const td = document.createElement('td');
-      if (c.id === 'fullstandigt') {
+      if (c.id === 'kalla') {
+        const span = document.createElement('span');
+        span.className = row.kalla === 'ai' ? 'gp-sok-kalla-ai' + (row.ai_varningar ? ' gp-sok-kalla-varning' : '') : 'gp-sok-kalla-sparad';
+        span.textContent = kallaText(row);
+        if (row.kalla === 'ai') span.title = 'Tolkat av ' + (row.ai_modell || 'AI') + '. Ingen har granskat det mot kortet än.';
+        td.appendChild(span);
+      } else if (c.id === 'kommentar' && row.kommentar) {
+        // Långa kommentarer gjorde raden mycket hög. Två rader visas, hela texten vid hovring eller klick.
+        const span = document.createElement('span');
+        span.className = 'gp-sok-kommentar';
+        span.textContent = row.kommentar;
+        span.title = row.kommentar;
+        span.tabIndex = 0;
+        span.setAttribute('role', 'button');
+        span.setAttribute('aria-expanded', 'false');
+        const vaxla = () => {
+          const oppen = span.classList.toggle('gp-sok-kommentar-oppen');
+          span.setAttribute('aria-expanded', oppen ? 'true' : 'false');
+        };
+        span.addEventListener('click', vaxla);
+        span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); vaxla(); } });
+        td.appendChild(span);
+      } else if (c.id === 'fullstandigt') {
         const a = document.createElement('a');
         a.href = '/gravplatser/' + slugFromFullstandigt(row.fullstandigt);
         a.textContent = cellValue(row, c.id, sokResultatTyp);

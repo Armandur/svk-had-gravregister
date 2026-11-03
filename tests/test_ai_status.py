@@ -75,3 +75,51 @@ def test_inmatningen_berattar_om_ai_svar_och_varningar(kvarter, client):
     assert client.get(f"/api/gravplats/{ids['ai_varning']}/inmatning").json()["ai_varningar"] == 1
     assert client.get(f"/api/gravplats/{ids['ai']}/inmatning").json()["ai_svar_finns"] is True
     assert client.get(f"/api/gravplats/{ids['ej']}/inmatning").json()["ai_svar_finns"] is False
+
+
+AI_SVAR = {"innehavare": [{"fornamn": "Hilma", "efternamn": "Ekdahl", "yrke": "Änka"}],
+           "gravsatta": [{"position": 1, "fornamn": "Per", "efternamn": "Ekdahl", "fodelse_ar": 1870, "dods_ar": 1931,
+                          "gravsatt_den": "1931-04-02"}],
+           "utfardat_den": "1931-04-01"}
+
+
+@pytest.fixture
+def ai_grav(kvarter, db):
+    kv, ids = kvarter
+    rad = db.query(LokalOcrSvar).filter(LokalOcrSvar.gravplats_id == ids["ai"]).one()
+    rad.svar_json = json.dumps(AI_SVAR)
+    db.commit()
+    return kv, ids
+
+
+def _sok(client, **p):
+    r = client.get("/api/gravplatser/avancerad-sok", params={"kyrkogard": "STK", **p})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_sokning_hittar_ai_last_grav_och_marker_den(ai_grav, client):
+    kv, ids = ai_grav
+    d = _sok(client, kvarter=kv, gravsatt_efternamn="ekdahl")
+    assert [(g["id"], g["kalla"], g["ai_modell"], g["antal_gravsatta"]) for g in d["gravplatser"]] == [(ids["ai"], "ai", "m", 1)]
+    # Utan AI-lästa: ingen träff, eftersom ingen människa har sparat namnet
+    assert _sok(client, kvarter=kv, gravsatt_efternamn="ekdahl", inkludera_ai=False)["gravplatser"] == []
+
+
+def test_personresultat_fran_ai_svar_har_kalla_och_filtreras(ai_grav, client):
+    kv, ids = ai_grav
+    gs = _sok(client, kvarter=kv, resultat_typ="gravsatta", gravsatt_doda_fran=1930, gravsatt_doda_till=1932)["gravsatta"]
+    assert [(g["gravplats_id"], g["efternamn"], g["kalla"]) for g in gs] == [(ids["ai"], "Ekdahl", "ai")]
+    assert _sok(client, kvarter=kv, resultat_typ="gravsatta", gravsatt_doda_fran=1950)["gravsatta"] == []
+    inn = _sok(client, kvarter=kv, resultat_typ="innehavare", innehavare_yrke="änka")["innehavare"]
+    assert [(i["fornamn"], i["kalla"]) for i in inn] == [("Hilma", "ai")]
+
+
+def test_manskliga_rader_marks_och_statusfilter_galler(ai_grav, client):
+    kv, ids = ai_grav
+    alla = {g["id"]: g["kalla"] for g in _sok(client, kvarter=kv)["gravplatser"]}
+    assert alla[ids["ai"]] == "ai" and alla[ids["paborjad"]] == "manniska" and alla[ids["fardig"]] == "manniska"
+    fardiga = _sok(client, kvarter=kv, transkriberingsstatus="fardig")["gravplatser"]
+    assert [g["id"] for g in fardiga] == [ids["fardig"]]
+    varning = _sok(client, kvarter=kv, transkriberingsstatus="ai_varning")["gravplatser"]
+    assert [(g["id"], g["ai_varningar"]) for g in varning] == [(ids["ai_varning"], 1)]

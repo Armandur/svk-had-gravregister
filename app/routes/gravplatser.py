@@ -19,6 +19,7 @@ from app.database import (
 )
 from app.auth import get_current_user
 from app.schemas import GravplatsSchema, DoldHalvaBody
+from app.utils.ai_sok import ai_forslag, grav_matchar, gravsatt_matchar
 from app.utils.gravplats_status import ai_lasta, status_per_grav
 from app.utils.text import _format_fullstandigt, _ledande_tal
 from app.utils.pdf_utils import (
@@ -287,6 +288,10 @@ def _ar_ur_datumstr(s: str | None) -> int | None:
     return int(m.group(0)) if m else None
 
 
+def _ai_rader(svar: dict, nyckel: str) -> list[dict]:
+    return [x for x in (svar.get(nyckel) or []) if isinstance(x, dict)]
+
+
 @router.get("/api/gravplatser/avancerad-sok")
 async def avancerad_sok_gravplatser(
     db: Session = Depends(get_db),
@@ -311,9 +316,15 @@ async def avancerad_sok_gravplatser(
     utfardad_till: int | None = None,
     ej_fardigtranskriberad: bool | None = None,
     transkriberingsstatus: str | None = None,
+    inkludera_ai: bool = True,
     limit: int = 500,
 ):
-    """Avancerad sökning med filter på gravplatser."""
+    """Avancerad sökning med filter på gravplatser.
+
+    Med inkludera_ai söks också AI-lästa gravar som ingen har granskat än, i det
+    AI-svar gravvyn visar. Sådana rader har kalla "ai", modell och antal varningar.
+    """
+    filter_ = {k: v for k, v in locals().items() if k not in ("db", "resultat_typ", "limit", "inkludera_ai")}
     q = db.query(Gravplats).join(MappConfig, Gravplats.mapp_id == MappConfig.id)
     if kyrkogard and kyrkogard.strip():
         q = q.filter(Gravplats.kyrkogard.ilike("%" + kyrkogard.strip() + "%"))
@@ -369,6 +380,7 @@ async def avancerad_sok_gravplatser(
                 continue
             gp_ids.add(gid)
         q = q.filter(Gravplats.id.in_(gp_ids)) if gp_ids else q.filter(False)
+    gp_with_em: set[int] = set()
     if har_extramaterial:
         sub = (
             db.query(Extramaterial.mapp_id, Extramaterial.grav_start_sida)
@@ -376,7 +388,6 @@ async def avancerad_sok_gravplatser(
             .distinct()
             .all()
         )
-        gp_with_em = set()
         for mapp_id, start_sida in sub:
             g = db.query(Gravplats.id).filter(
                 Gravplats.mapp_id == mapp_id,
@@ -418,7 +429,32 @@ async def avancerad_sok_gravplatser(
         q = q.filter(~Gravplats.id.in_(subq))
     q = q.distinct().order_by(Gravplats.kyrkogard, Gravplats.kvarter, Gravplats.start_sida).limit(max(1, min(limit, 5000)))
     rows = q.all()
+
+    # AI-lästa, ogranskade gravar: sök i AI-svaret och slå ihop med de mänskliga träffarna
+    ai = ai_forslag(db) if transkriberingsstatus not in ("ej", "paborjad", "fardig") else {}
+    if transkriberingsstatus == "ai_varning":
+        ai = {gid: d for gid, d in ai.items() if d["varningar"]}
+    if inkludera_ai and ai:
+        aq = db.query(Gravplats).filter(Gravplats.id.in_(list(ai)))
+        if kyrkogard and kyrkogard.strip():
+            aq = aq.filter(Gravplats.kyrkogard.ilike("%" + kyrkogard.strip() + "%"))
+        if kvarter and kvarter.strip():
+            aq = aq.filter(Gravplats.kvarter.ilike("%" + kvarter.strip() + "%"))
+        ai_rows = [g for g in aq.all() if grav_matchar(ai[g.id]["svar"], filter_)]
+        if har_extramaterial:
+            ai_rows = [g for g in ai_rows if g.id in gp_with_em]
+        sammanslagna = {g.id: g for g in rows}
+        sammanslagna.update({g.id: g for g in ai_rows})
+        rows = list(sammanslagna.values())[: max(1, min(limit, 5000))]
+    elif not inkludera_ai:
+        rows = [g for g in rows if g.id not in ai]
+    ai_ids = {g.id for g in rows if g.id in ai}
     ids = [g.id for g in rows]
+
+    def _kalla(gid: int) -> dict:
+        if gid in ai_ids:
+            return {"kalla": "ai", "ai_modell": ai[gid]["modell"], "ai_varningar": ai[gid]["varningar"]}
+        return {"kalla": "manniska"}
     fullstandigt_map = {g.id: _format_fullstandigt(g.kyrkogard, g.kvarter, g.gravplatsnummer) for g in rows}
 
     if resultat_typ == "innehavare":
@@ -440,7 +476,13 @@ async def avancerad_sok_gravplatser(
                 "postnummer": getattr(inv, "postnummer", None) or "",
                 "postort": getattr(inv, "postort", None) or "",
                 "kommentar": inv.kommentar or "",
+                **_kalla(inv.gravplats_id),
             })
+        for gid in ai_ids:
+            for inv in _ai_rader(ai[gid]["svar"], "innehavare"):
+                out_inv.append({"gravplats_id": gid, "fullstandigt": fullstandigt_map.get(gid, ""),
+                                **{k: inv.get(k) or "" for k in ("fornamn", "efternamn", "yrke", "gatuadress", "postnummer", "postort", "kommentar")},
+                                **_kalla(gid)})
         return {"resultat_typ": "innehavare", "innehavare": out_inv, "antal": len(out_inv)}
 
     if resultat_typ == "narmast_anhoriga":
@@ -463,7 +505,13 @@ async def avancerad_sok_gravplatser(
                 "postort": na.postort or "",
                 "telefon": na.telefon or "",
                 "kommentar": getattr(na, "kommentar", None) or "",
+                **_kalla(na.gravplats_id),
             })
+        for gid in ai_ids:
+            for na in _ai_rader(ai[gid]["svar"], "narmast_anhoriga"):
+                out_na.append({"gravplats_id": gid, "fullstandigt": fullstandigt_map.get(gid, ""),
+                               **{k: na.get(k) or "" for k in ("fornamn", "efternamn", "yrke", "adress", "postnummer", "postort", "telefon", "kommentar")},
+                               **_kalla(gid)})
         return {"resultat_typ": "narmast_anhoriga", "narmast_anhoriga": out_na, "antal": len(out_na)}
 
     if resultat_typ == "gravsatta":
@@ -511,7 +559,17 @@ async def avancerad_sok_gravplatser(
                 "gravsatt_den": gs.gravsatt_den or "",
                 "urna": gs.urna or "",
                 "kommentar": gs.kommentar or "",
+                **_kalla(gs.gravplats_id),
             })
+        for gid in ai_ids:
+            for gs in _ai_rader(ai[gid]["svar"], "gravsatta"):
+                if not gravsatt_matchar(gs, filter_):
+                    continue
+                out_gs.append({"gravplats_id": gid, "fullstandigt": fullstandigt_map.get(gid, ""),
+                               "position": gs.get("position"), "ar_beteckning": bool(gs.get("ar_beteckning")),
+                               **{k: gs.get(k) or "" for k in ("fornamn", "efternamn", "yrke", "gatuadress", "postnummer", "postort", "gravsatt_den", "urna", "kommentar")},
+                               **{k: gs.get(k) for k in ("fodelse_ar", "fodelse_manad", "fodelse_dag", "dods_ar", "dods_manad", "dods_dag")},
+                               **_kalla(gid)})
         return {"resultat_typ": "gravsatta", "gravsatta": out_gs, "antal": len(out_gs)}
 
     inv_map = {}
@@ -562,7 +620,16 @@ async def avancerad_sok_gravplatser(
             "utfordat_den": utfordat_map.get(g.id, ""),
             "har_extramaterial": antal_em > 0,
             "antal_extramaterial": antal_em,
+            **_kalla(g.id),
         })
+        if g.id in ai_ids:
+            svar = ai[g.id]["svar"]
+            out[-1].update({
+                "antal_innehavare": len(_ai_rader(svar, "innehavare")),
+                "antal_narmast_anhoriga": len(_ai_rader(svar, "narmast_anhoriga")),
+                "antal_gravsatta": len(_ai_rader(svar, "gravsatta")),
+                "utfordat_den": svar.get("utfardat_den") or "",
+            })
     out.sort(key=lambda x: (
         (x.get("kyrkogard") or "").lower(),
         (x.get("kvarter") or "").lower(),
