@@ -20,7 +20,7 @@ Mätning 2026-11-02 på prod-kopian: gravplats 120, 387, 420 (död före födsel
 
 ---
 
-## [P3][todo] [gravregister] Godkänna en rimlighetsvarning som korrekt (kortet har faktiskt felet) med kommentar
+## [P3][done] [gravregister] Godkänna en rimlighetsvarning som korrekt (kortet har faktiskt felet) med kommentar
 
 Rasmus 2026-11-02: om kortet verkligen har ett orimligt värde ska granskaren kunna kvittera varningen, eventuellt med en kommentar, så den inte ligger kvar. Avvakta tills varningarna använts en tid.
 
