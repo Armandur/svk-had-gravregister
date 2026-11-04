@@ -31,6 +31,7 @@ from app.utils.pdf_utils import (
     _redan_halva_filenames_for_mapp,
 )
 from app.utils.gravplats_utils import _gravplats_halvor
+from app.utils.kvittering import markera
 from app.utils.rimlighet import kontrollera as kontrollera_rimlighet
 
 router = APIRouter()
@@ -205,7 +206,7 @@ async def ocr_gravplats_endpoint(
         "cache_read_tokens": cache_read,
         "kostnad_usd": round(kostnad, 6),
     }
-    result["_varningar"] = kontrollera_rimlighet(result)
+    result["_varningar"] = markera(db, gravplats_id, kontrollera_rimlighet(result))
     return result
 
 
@@ -253,5 +254,5 @@ async def ocr_gravplats_lokal_endpoint(
         "modell": usage["modell"],
     }
     result["_osakra"] = usage.get("osakra") or {}
-    result["_varningar"] = kontrollera_rimlighet(result)
+    result["_varningar"] = markera(db, gravplats_id, kontrollera_rimlighet(result))
     return result

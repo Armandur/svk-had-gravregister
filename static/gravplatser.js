@@ -594,6 +594,7 @@ async function uppdateraInmatningSektionerVidGravplatsbyte() {
   uppdateraFardigtranskriberadKnapp();
   if (state.batchJobbMode) await batchAutoLaddaClaude();
   else await visaAiForslagOmAiLast();
+  if (inmatningHarNagonData()) hamtaSparadRimlighet();
 }
 
 /** Bästa förslaget att visa: Claudes om det finns, annars senaste lokala. */
@@ -1361,7 +1362,7 @@ function uppdateraFardigtranskriberadKnapp() {
     btn.classList.add('gp-fardigtranskriberad-ja');
     btn.textContent = 'Färdigtranskriberad';
   } else if (state.aiForslag && state.aiForslag.gravplatsId === state.currentGravplatsId) {
-    const n = (state.aiForslag.svar.varningar || []).length + Object.keys(state.aiForslag.svar.osakra || {}).length;
+    const n = (state.aiForslag.svar.varningar || []).filter(function(v) { return !v.kvitterad; }).length + Object.keys(state.aiForslag.svar.osakra || {}).length;
     btn.classList.add('gp-fardigtranskriberad-ai');
     btn.textContent = 'AI-läst, ej granskad' + (n ? ' (' + n + (n === 1 ? ' varning)' : ' varningar)') : '');
   } else if (harData) {
@@ -2856,15 +2857,35 @@ function visaRimlighetsvarningar(varningar) {
     el.classList.remove('gp-falt-varning');
     el.removeAttribute('title');
   });
+  state.rimlighetsvarningar = varningar || [];
   const banner = document.getElementById('gp-rimlighet-banner');
   if (!banner) return;
-  const lista = varningar || [];
+  const lista = state.rimlighetsvarningar;
   if (lista.length === 0) { banner.hidden = true; banner.innerHTML = ''; return; }
-  banner.innerHTML = '<strong>Kontrollera mot kortet:</strong><ul>' +
-    lista.map(function(v) { return '<li>' + escapeHtml(v.meddelande) + '</li>'; }).join('') + '</ul>';
+  const aktiva = lista.filter(function(v) { return !v.kvitterad; });
+  const kanKvittera = state.currentGravplatsId != null && lista.every(function(v) { return v.nyckel; });
+  banner.classList.toggle('gp-rimlighet-banner-kvitterad', aktiva.length === 0);
+  banner.innerHTML = '<strong>' + (aktiva.length ? 'Kontrollera mot kortet:' : 'Kontrollerat mot kortet:') + '</strong><ul>' +
+    lista.map(function(v, i) {
+      if (v.kvitterad) {
+        const k = v.kvitterad;
+        return '<li class="gp-rimlighet-kvitterad">' + escapeHtml(v.meddelande) +
+          '<div class="gp-rimlighet-kvitto">Stämmer med kortet' + (k.username ? ' enligt ' + escapeHtml(k.username) : '') +
+          (k.kommentar ? ': ' + escapeHtml(k.kommentar) : '') +
+          (kanKvittera ? ' <button type="button" class="gp-rimlighet-angra" data-i="' + i + '">Ångra</button>' : '') + '</div></li>';
+      }
+      return '<li>' + escapeHtml(v.meddelande) +
+        (kanKvittera ? ' <button type="button" class="gp-rimlighet-kvittera" data-i="' + i + '">Stämmer med kortet</button>' +
+          '<div class="gp-rimlighet-kvittoform" data-i="' + i + '" hidden>' +
+          '<input type="text" class="gp-rimlighet-kommentar" maxlength="1000" placeholder="Kommentar (valfri), t.ex. vad kortet säger" aria-label="Kommentar till kvitteringen" />' +
+          '<button type="button" class="gp-rimlighet-spara" data-i="' + i + '">Spara</button>' +
+          '<button type="button" class="gp-rimlighet-avbryt" data-i="' + i + '">Avbryt</button></div>' : '') +
+        '</li>';
+    }).join('') + '</ul>';
   banner.hidden = false;
+  kopplaKvittering(banner);
   const root = document.getElementById('gp-inmatning');
-  lista.forEach(function(v) {
+  aktiva.forEach(function(v) {
     const falt = rimlighetsFalt(v)
       .map(function(namn) { return root && root.querySelector('[name="' + namn + '"]'); })
       .filter(Boolean);
@@ -2878,6 +2899,87 @@ function visaRimlighetsvarningar(varningar) {
       el.addEventListener('input', slapp, { once: true });
     });
   });
+}
+
+/** Knapparna i varningsrutan: kvittera att kortet faktiskt säger så, eller ångra. */
+function kopplaKvittering(banner) {
+  const gpId = state.currentGravplatsId;
+  const url = function(v) { return `${API}/gravplats/${gpId}/rimlighet/${encodeURIComponent(v.nyckel)}/kvittera`; };
+  const form = function(i) { return banner.querySelector('.gp-rimlighet-kvittoform[data-i="' + i + '"]'); };
+  banner.querySelectorAll('.gp-rimlighet-kvittera').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      const f = form(btn.dataset.i);
+      f.hidden = false;
+      btn.hidden = true;
+      f.querySelector('input').focus();
+    });
+  });
+  banner.querySelectorAll('.gp-rimlighet-avbryt').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      form(btn.dataset.i).hidden = true;
+      banner.querySelector('.gp-rimlighet-kvittera[data-i="' + btn.dataset.i + '"]').hidden = false;
+    });
+  });
+  const spara = async function(i) {
+    const v = state.rimlighetsvarningar[i];
+    const kommentar = form(i).querySelector('input').value.trim();
+    try {
+      const res = await fetch(url(v), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kommentar: kommentar }) });
+      if (!res.ok) throw new Error();
+      if (gpId !== state.currentGravplatsId) return;
+      v.kvitterad = { kommentar: kommentar, username: state.currentUsername || '', skapad_den: new Date().toISOString() };
+      visaRimlighetsvarningar(state.rimlighetsvarningar);
+      uppdateraVarningsantal(-1);
+    } catch (e) {
+      showToast('Kunde inte spara kvitteringen. Försök igen.', 'fel');
+    }
+  };
+  banner.querySelectorAll('.gp-rimlighet-spara').forEach(function(btn) {
+    btn.addEventListener('click', function() { spara(btn.dataset.i); });
+  });
+  banner.querySelectorAll('.gp-rimlighet-kommentar').forEach(function(inp) {
+    inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); spara(inp.closest('[data-i]').dataset.i); } });
+  });
+  banner.querySelectorAll('.gp-rimlighet-angra').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const v = state.rimlighetsvarningar[btn.dataset.i];
+      try {
+        const res = await fetch(url(v), { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) throw new Error();
+        if (gpId !== state.currentGravplatsId) return;
+        v.kvitterad = null;
+        visaRimlighetsvarningar(state.rimlighetsvarningar);
+        uppdateraVarningsantal(1);
+      } catch (e) {
+        showToast('Kunde inte ångra kvitteringen. Försök igen.', 'fel');
+      }
+    });
+  });
+}
+
+/** Håll statusknappens antal varningar i takt med kvitteringar. */
+function uppdateraVarningsantal(andring) {
+  if (state.inmatningData && typeof state.inmatningData.ai_varningar === 'number') {
+    state.inmatningData.ai_varningar = Math.max(0, state.inmatningData.ai_varningar + andring);
+  }
+  if (state.aiForslag && state.aiForslag.svar) {
+    (state.aiForslag.svar.varningar || []).forEach(function(v) {
+      const motsv = (state.rimlighetsvarningar || []).find(function(x) { return x.nyckel === v.nyckel; });
+      if (motsv) v.kvitterad = motsv.kvitterad;
+    });
+  }
+  uppdateraFardigtranskriberadKnapp();
+}
+
+/** Varningar på det som är sparat för graven (inte på ett AI-förslag). */
+async function hamtaSparadRimlighet() {
+  const gpId = state.currentGravplatsId;
+  if (gpId == null || state.aiForslag) return;
+  try {
+    const res = await fetch(`${API}/gravplats/${gpId}/rimlighet`, { credentials: 'include' });
+    if (!res.ok || gpId !== state.currentGravplatsId || state.aiForslag) return;
+    visaRimlighetsvarningar((await res.json()).varningar);
+  } catch (e) { /* varningarna är en hjälp, vyn fungerar utan dem */ }
 }
 
 function formatOcrKommentar(text) {
@@ -3156,6 +3258,8 @@ async function sparaInmatning() {
     state.inmatningDirty = false;
     state.aiForslag = null;  // sparat: graven är nu påbörjad, inte längre bara AI-läst
     visaAiForslagBanner();
+    visaOsakraFalt({});
+    hamtaSparadRimlighet();
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
     visaSparStatus('Sparat.', true);
@@ -3331,6 +3435,10 @@ function toggleRedigeraVy() {
       markInmatningDirty();
       visaAiForslagBanner();
       visaFaltmarkeringar(state.aiForslag.svar.varningar, state.aiForslag.svar.osakra);
+    }
+    else if ((state.rimlighetsvarningar || []).length) {
+      // Varningar på sparad data hämtades i visningsläget, utan textfält. Rama in fälten nu.
+      visaRimlighetsvarningar(state.rimlighetsvarningar);
     }
     uppdateraInmatningSparaKnapp();
     uppdateraFardigtranskriberadKnapp();
@@ -3532,6 +3640,7 @@ try {
       } else {
         applyInmatningSectionsOrder(state.inmatningSectionsOrder);
       }
+      if (me) state.currentUsername = me.username || '';
       if (me && me.lokal_ocr_tillganglig) {
         var lokalBtn = document.getElementById('gp-lokal-ocr-btn');
         if (lokalBtn) lokalBtn.hidden = false;

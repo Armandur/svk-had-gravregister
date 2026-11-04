@@ -5,7 +5,8 @@ som lästs som 05 fast kortet säger 03, så att gravsättningen hamnar före
 döden. Ett felläst värde som ändå ser rimligt ut fångas inte.
 
 Varje varning pekar ut gravsatt (1-baserat, som i formuläret) och fält, så
-gränssnittet kan visa den vid rätt rad.
+gränssnittet kan visa den vid rätt rad. Nyckeln ("gs1.dod_efter_gravsattning")
+identifierar varningen när en granskare kvitterar att kortet faktiskt säger så.
 """
 import datetime
 
@@ -45,14 +46,15 @@ def _iso(d: datetime.date) -> str:
 
 
 def kontrollera(svar: dict) -> list[dict]:
-    """Lista med varningar: {"gravsatt": n, "falt": "...", "meddelande": "..."}."""
+    """Lista med varningar: {"gravsatt": n, "falt": "...", "regel": "...", "nyckel": "...", "meddelande": "..."}."""
     varningar: list[dict] = []
     for i, g in enumerate(svar.get("gravsatta") or [], start=1):
         if not isinstance(g, dict):
             continue
 
-        def varna(falt: str, meddelande: str) -> None:
-            varningar.append({"gravsatt": i, "falt": falt, "meddelande": f"Gravsatt {i}: {meddelande}"})
+        def varna(falt: str, regel: str, meddelande: str) -> None:
+            varningar.append({"gravsatt": i, "falt": falt, "regel": regel, "nyckel": f"gs{i}.{regel}",
+                              "meddelande": f"Gravsatt {i}: {meddelande}"})
 
         for falt, namn, hogst in (
             ("fodelse_manad", "födelsemånad", 12),
@@ -62,7 +64,7 @@ def kontrollera(svar: dict) -> list[dict]:
         ):
             v = _heltal(g.get(falt))
             if v is not None and not 1 <= v <= hogst:
-                varna(falt, f"{namn} {v} finns inte.")
+                varna(falt, f"ogiltig_{falt}", f"{namn} {v} finns inte.")
 
         fod = _datum(g.get("fodelse_ar"), g.get("fodelse_manad"), g.get("fodelse_dag"))
         dod = _datum(g.get("dods_ar"), g.get("dods_manad"), g.get("dods_dag"))
@@ -70,11 +72,11 @@ def kontrollera(svar: dict) -> list[dict]:
         fod_ar, dod_ar = _heltal(g.get("fodelse_ar")), _heltal(g.get("dods_ar"))
 
         if fod and dod and dod < fod:
-            varna("dods_ar", f"dödsdatum {_iso(dod)} ligger före födelsedatum {_iso(fod)}.")
+            varna("dods_ar", "dod_fore_fodsel", f"dödsdatum {_iso(dod)} ligger före födelsedatum {_iso(fod)}.")
         elif fod_ar and dod_ar and dod_ar < fod_ar:
-            varna("dods_ar", f"dödsår {dod_ar} ligger före födelseår {fod_ar}.")
+            varna("dods_ar", "dod_fore_fodsel", f"dödsår {dod_ar} ligger före födelseår {fod_ar}.")
         if fod_ar and dod_ar and dod_ar - fod_ar > MAX_ALDER:
-            varna("fodelse_ar", f"blev {dod_ar - fod_ar} år enligt födelse- och dödsår. Kontrollera årtalen.")
+            varna("fodelse_ar", "over_110_ar", f"blev {dod_ar - fod_ar} år enligt födelse- och dödsår. Kontrollera årtalen.")
         if dod and gravsatt and gravsatt < dod:
-            varna("dods_manad", f"dödsdatum {_iso(dod)} ligger efter gravsättningen {_iso(gravsatt)}. Kontrollera månad och dag.")
+            varna("dods_manad", "dod_efter_gravsattning", f"dödsdatum {_iso(dod)} ligger efter gravsättningen {_iso(gravsatt)}. Kontrollera månad och dag.")
     return varningar

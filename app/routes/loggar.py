@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.utils.kvittering import markera
 from app.utils.rimlighet import kontrollera as kontrollera_rimlighet
 from app.auth import get_current_user, require_admin
 from app.database import (
@@ -137,7 +138,7 @@ async def get_alla_ocr_svar(
                      "ocr_kommentar": rad.ocr_kommentar, "skapad_den": rad.skapad_den, "username": username or "",
                      "osakra": json.loads(rad.osakra_falt or "{}")})
     for s in svar:
-        s["varningar"] = kontrollera_rimlighet(s["svar_json"])
+        s["varningar"] = markera(db, gravplats_id, kontrollera_rimlighet(s["svar_json"]))
     return {"svar": svar}
 
 

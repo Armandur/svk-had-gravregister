@@ -123,3 +123,36 @@ def test_manskliga_rader_marks_och_statusfilter_galler(ai_grav, client):
     assert [g["id"] for g in fardiga] == [ids["fardig"]]
     varning = _sok(client, kvarter=kv, transkriberingsstatus="ai_varning")["gravplatser"]
     assert [(g["id"], g["ai_varningar"]) for g in varning] == [(ids["ai_varning"], 1)]
+
+
+def test_rimlighet_pa_sparad_data_och_kvittering(kvarter, client, db):
+    _, ids = kvarter
+    gid = ids["paborjad"]
+    g = db.query(Gravsatt).filter(Gravsatt.gravplats_id == gid).one()
+    g.fodelse_ar, g.fodelse_manad, g.fodelse_dag = 1883, 6, 1
+    g.dods_ar, g.dods_manad, g.dods_dag, g.gravsatt_den = 1937, 5, 18, "1937-03-23"
+    db.commit()
+    v = client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"]
+    assert [(x["nyckel"], x["kvitterad"]) for x in v] == [("gs1.dod_efter_gravsattning", None)]
+
+    r = client.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera",
+                    json={"kommentar": "  Kortet säger så, kontrollerat mot dödboken  "})
+    assert r.status_code == 200
+    k = client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"][0]["kvitterad"]
+    assert (k["kommentar"], k["username"]) == ("Kortet säger så, kontrollerat mot dödboken", "status-user")
+
+    client.delete(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera")
+    assert client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"][0]["kvitterad"] is None
+
+
+def test_kvitterad_varning_raknas_inte_for_ai_last_grav(kvarter, client):
+    kv, ids = kvarter
+    gid = ids["ai_varning"]
+    assert client.get(f"/api/gravplats/{gid}/inmatning").json()["ai_varningar"] == 1
+    client.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera", json={})
+    assert client.get(f"/api/gravplats/{gid}/inmatning").json()["ai_varningar"] == 0
+    svar = client.get(f"/api/ocr/gravplats/{gid}/svar-alla").json()["svar"][0]
+    assert svar["varningar"][0]["kvitterad"] is not None
+    varning = client.get("/api/gravplatser/avancerad-sok", params={"kyrkogard": "STK", "kvarter": kv,
+                                                                   "transkriberingsstatus": "ai_varning"}).json()
+    assert varning["gravplatser"] == []

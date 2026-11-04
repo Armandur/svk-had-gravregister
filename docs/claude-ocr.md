@@ -27,6 +27,12 @@ En administratör kan låta gravkorten läsas av en modell på en egen server (o
 - Den lokala modellen anger också hur säker den är på varje siffra. Siffror och datum under 95 % säkerhet ramas in i gult och listas i en gul ruta, med modellens andrahandsval: "dödsdatum 1972-09-16 (64 % säker), kanske 1975-09-16". I utvärderingen var vartannat sådant värde fel. För text är måttet för opålitligt, så textfält markeras inte. Claude ger ingen sådan siffra.
 - I redigeringsläget finns då knappen **Hämta från lokal modell**. Svaret sparas bredvid ett eventuellt Claude-svar, och panelen listar alla sparade svar. Klicka **Ladda in i formuläret** på det svar du vill utgå från.
 
+## Varningar som stämmer med kortet
+
+Ibland säger kortet faktiskt något orimligt, till exempel en gravsättning före dödsdatumet. Klicka då **Stämmer med kortet** vid varningen och skriv gärna en kommentar om vad kortet säger. Varningen blir grå, visar vem som kvitterade och räknas inte längre. **Ångra** tar tillbaka den.
+
+Varningarna gäller både AI-förslag och sparad data: en granskad grav vars datum bryter mot reglerna visar varningen när den öppnas. Kvitteringen gäller gravsatt-numret, så flyttar du om de gravsatta kan en kvittering hamna på fel rad.
+
 ## Status: AI-läst, ej granskad
 
 En grav som har ett AI-svar men där ingen har sparat något får statusen **AI-läst, ej granskad**. Den visas i lila:

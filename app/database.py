@@ -237,6 +237,23 @@ class LokalOcrSvar(Base):
     osakra_falt: Mapped[str | None] = mapped_column(nullable=True)  # JSON {sökväg: {sakerhet, kanske}}, se app/utils/sakerhet.py
 
 
+class RimlighetKvittering(Base):
+    """En granskare har kontrollerat en rimlighetsvarning mot kortet: kortet säger faktiskt så.
+
+    Nyckeln kommer från app/utils/rimlighet.py ("gs1.dod_efter_gravsattning"). En
+    kvitterad varning visas grå och räknas inte.
+    """
+    __tablename__ = "rimlighet_kvittering"
+    __table_args__ = (UniqueConstraint("gravplats_id", "nyckel", name="uq_rimlighet_kvittering_grav_nyckel"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    gravplats_id: Mapped[int] = mapped_column(ForeignKey("gravplats.id"), nullable=False, index=True)
+    nyckel: Mapped[str] = mapped_column()
+    kommentar: Mapped[str] = mapped_column(default="")
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    skapad_den: Mapped[str] = mapped_column()  # ISO 8601 UTC
+
+
 class ClaudeBatchJobb(Base):
     """Batch-jobb för att köra Claude OCR på flera gravplatser."""
     __tablename__ = "claude_batch_jobb"

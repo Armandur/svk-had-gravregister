@@ -49,9 +49,12 @@ def _gravplats_halvor(
 def _ai_status(gravplats_id: int, db: Session) -> dict:
     """Om graven har AI-svar, och hur många rimlighetsvarningar svaret med flest har."""
     from app.utils.gravplats_status import ai_svar_per_grav, osakra_per_grav
+    from app.utils.kvittering import aktiva, kvitterade_per_grav
     from app.utils.rimlighet import kontrollera
     svar = ai_svar_per_grav(db, {gravplats_id}).get(gravplats_id, [])
-    varningar = max((len(kontrollera(x)) for x in svar), default=0) + osakra_per_grav(db, {gravplats_id}).get(gravplats_id, 0)
+    kvitt = kvitterade_per_grav(db, {gravplats_id}).get(gravplats_id)
+    varningar = (max((len(aktiva(kontrollera(x), kvitt)) for x in svar), default=0)
+                 + osakra_per_grav(db, {gravplats_id}).get(gravplats_id, 0))
     return {"ai_svar_finns": bool(svar), "ai_varningar": varningar}
 
 

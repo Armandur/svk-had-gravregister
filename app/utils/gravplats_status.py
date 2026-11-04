@@ -24,6 +24,7 @@ from app.database import (
     Gravsatt,
     LokalOcrSvar,
 )
+from app.utils.kvittering import aktiva, kvitterade_per_grav
 from app.utils.rimlighet import kontrollera
 
 FARDIG, PABORJAD, AI, EJ = "fardig", "paborjad", "ai", "ej"
@@ -85,8 +86,9 @@ def ai_lasta(db: Session) -> dict[int, int]:
     """
     upptagna = ids_fardiga(db) | ids_med_data(db)
     osakra = osakra_per_grav(db)
+    kvitt = kvitterade_per_grav(db)
     return {
-        gid: max(len(kontrollera(s)) for s in svar) + osakra.get(gid, 0)
+        gid: max(len(aktiva(kontrollera(s), kvitt.get(gid))) for s in svar) + osakra.get(gid, 0)
         for gid, svar in ai_svar_per_grav(db).items()
         if gid not in upptagna and svar
     }
