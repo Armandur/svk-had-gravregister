@@ -1,15 +1,12 @@
-"""Admin-routes: användarhantering, inställningar, säkerhetskopior, kyrkogårdar, achievements."""
+"""Admin-routes: användarhantering, inställningar, kyrkogårdar, achievements."""
 import json
 import os
-import shutil
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, hash_password, require_admin
-from app.config import BACKUP_DIR, DATABASE_PATH
 from app.database import (
     AchievementNiva,
     AchievementYrkesGrupp,
@@ -37,60 +34,8 @@ from app.schemas import (
     SetUsernameBody,
 )
 from app.utils.achievements import _compute_achievements_niva
-from app.utils.git_version import GIT_VERSION
-from app.utils.text import _sanitize_backup_filename_part
 
 router = APIRouter()
-
-
-# ---------- Säkerhetskopior ----------
-
-@router.get("/api/backups")
-def list_backups(admin: User = Depends(require_admin)):
-    """Lista säkerhetskopior (filnamn, storlek, datum) – endast admin."""
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    files = []
-    for p in sorted(BACKUP_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-        if p.is_file() and p.suffix == ".db":
-            st = p.stat()
-            files.append({
-                "name": p.name,
-                "size": st.st_size,
-                "mtime": st.st_mtime,
-            })
-    return {"backups": files}
-
-
-@router.post("/api/backups")
-def create_backup(admin: User = Depends(require_admin)):
-    """Skapa säkerhetskopia av databasen. Filnamn: gravregister_YYYY-MM-DD_HH-MM-SS_branch-{branch}_commit-{commit}.db."""
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    now = datetime.now(timezone.utc)
-    datum = now.strftime("%Y-%m-%d")
-    tid = now.strftime("%H-%M-%S")
-    branch = _sanitize_backup_filename_part(GIT_VERSION.get("branch"))
-    commit = _sanitize_backup_filename_part(GIT_VERSION.get("commit"))
-    name = f"gravregister_{datum}_{tid}_branch-{branch}_commit-{commit}.db"
-    dest = BACKUP_DIR / name
-    if not DATABASE_PATH.exists():
-        raise HTTPException(status_code=500, detail="Databasfil saknas")
-    shutil.copy2(DATABASE_PATH, dest)
-    st = dest.stat()
-    return {"name": name, "size": st.st_size, "mtime": st.st_mtime}
-
-
-@router.get("/api/backups/{filename:path}")
-def download_backup(filename: str, admin: User = Depends(require_admin)):
-    """Ladda ner en säkerhetskopia – endast admin. Filnamn måste vara .db och ligga i BACKUP_DIR."""
-    from fastapi.responses import FileResponse
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Ogiltigt filnamn")
-    if not filename.endswith(".db"):
-        raise HTTPException(status_code=400, detail="Endast .db-filer")
-    path = BACKUP_DIR / filename
-    if not path.is_file() or not path.resolve().is_relative_to(BACKUP_DIR.resolve()):
-        raise HTTPException(status_code=404, detail="Filen finns inte")
-    return FileResponse(path, filename=filename, media_type="application/octet-stream")
 
 
 # ---------- API-nycklar / inställningar ----------

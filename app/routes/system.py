@@ -1,7 +1,6 @@
 """System-rutter: root, version, säkerhetskopior och API-nyckelinställningar."""
 import json
 import os
-import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +13,7 @@ from app.config import BACKUP_DIR, DATABASE_PATH, API_KEYS_PATH
 from app.database import User
 from app.auth import require_admin
 from app.utils.git_version import GIT_VERSION
+from app.utils.text import _sanitize_backup_filename_part
 from app.utils.api_keys import (
     _get_anthropic_api_key,
     _get_claude_instans_aktiv,
@@ -53,13 +53,6 @@ def api_version():
 
 
 # ---------- Säkerhetskopior ----------
-
-def _sanitize_backup_filename_part(s: str | None) -> str:
-    """Endast alfanumeriskt, bindestreck och understreck (för branch/commit i filnamn)."""
-    if not s or not s.strip():
-        return "unknown"
-    return re.sub(r"[^a-zA-Z0-9_-]", "", s.strip())[:80] or "unknown"
-
 
 @router.get("/api/backups")
 def list_backups(admin: User = Depends(require_admin)):
