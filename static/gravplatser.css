@@ -2621,3 +2621,20 @@ body.gp-ocr-vantar-pa-bild .gravplatser-halva img {
 .gp-rimlighet-kvitto { font-size: 0.82rem; color: #475569; margin-top: 0.15rem; }
 .gp-rimlighet-kvitto .gp-rimlighet-angra { border-color: #cbd5e1; color: #475569; }
 .gp-rimlighet-banner.gp-rimlighet-banner-kvitterad { background: #f8fafc; border-color: #cbd5e1; color: #475569; }
+
+/* Förslag på skissmarkering (bildmätning) för gravar som saknar skiss */
+.gp-skissforslag { margin: 0.5rem 0; padding: 0.5rem 0.75rem; border: 1px dashed #a78bfa; border-radius: 6px; background: #f5f3ff; }
+.gp-skissforslag[hidden] { display: none; }
+.gp-skissforslag-rubrik { font-size: 0.88rem; font-weight: 600; color: #5b21b6; margin-bottom: 0.3rem; }
+.gp-skissforslag-kanske { font-size: 0.82rem; color: #92400e; margin-bottom: 0.3rem; }
+.gp-skissforslag-knappar { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+.gp-skissforslag-knappar button { padding: 0.3rem 0.7rem; font-size: 0.85rem; border-radius: 4px; cursor: pointer; border: 1px solid #7c3aed; background: #fff; color: #5b21b6; }
+.gp-skissforslag-knappar .gp-skissforslag-anvand { background: #7c3aed; color: #fff; }
+
+/* Handtag på skissmarkeringen: visar var man kan dra för att ändra en sida eller ett hörn */
+.gp-skiss-handtag { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid var(--accent); border-radius: 2px; pointer-events: none; }
+.gp-skiss-handtag-nw { left: -6px; top: -6px; } .gp-skiss-handtag-n { left: calc(50% - 6px); top: -6px; }
+.gp-skiss-handtag-ne { right: -6px; top: -6px; } .gp-skiss-handtag-e { right: -6px; top: calc(50% - 6px); }
+.gp-skiss-handtag-se { right: -6px; bottom: -6px; } .gp-skiss-handtag-s { left: calc(50% - 6px); bottom: -6px; }
+.gp-skiss-handtag-sw { left: -6px; bottom: -6px; } .gp-skiss-handtag-w { left: -6px; top: calc(50% - 6px); }
+@media (pointer: coarse) { .gp-skiss-handtag { width: 16px; height: 16px; } }

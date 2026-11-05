@@ -27,6 +27,12 @@ En administratör kan låta gravkorten läsas av en modell på en egen server (o
 - Den lokala modellen anger också hur säker den är på varje siffra. Siffror och datum under 95 % säkerhet ramas in i gult och listas i en gul ruta, med modellens andrahandsval: "dödsdatum 1972-09-16 (64 % säker), kanske 1975-09-16". I utvärderingen var vartannat sådant värde fel. För text är måttet för opålitligt, så textfält markeras inte. Claude ger ingen sådan siffra.
 - I redigeringsläget finns då knappen **Hämta från lokal modell**. Svaret sparas bredvid ett eventuellt Claude-svar, och panelen listar alla sparade svar. Klicka **Ladda in i formuläret** på det svar du vill utgå från.
 
+## Förslag på skiss
+
+Saknar graven skiss visar skissektionen i redigeringsläget ett förslag när någon av kortets skissrutor är ifylld. Förslaget räknas fram genom bildmätning, inte med en AI-modell: appen mäter bläcket i vänstra rutan och mittrutan, och hittar var rutans högra kant slutar, även när den förlängts för hand vid dubbelgravar. **Använd förslaget** sparar markeringen direkt. **Justera** öppnar markeringen med förslaget inritat, så att du kan dra om den, till exempel för att ta med en anteckning bredvid rutan. Är bläcket svagt står det "Kontrollera att det verkligen är en skiss".
+
+Mot prods 253 markerade skisser föreslog appen rätt ruta för alla som fick ett förslag. 245 av 249 förslag överlappar granskarens markering till minst 80 %.
+
 ## Varningar som stämmer med kortet
 
 Ibland säger kortet faktiskt något orimligt, till exempel en gravsättning före dödsdatumet. Klicka då **Stämmer med kortet** vid varningen och skriv gärna en kommentar om vad kortet säger. Varningen blir grå, visar vem som kvitterade och räknas inte längre. **Ångra** tar tillbaka den.

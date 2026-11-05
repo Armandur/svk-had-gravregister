@@ -95,6 +95,7 @@ app/
     gravplats_utils.py  Beräkna "halvor" per gravplats
     rimlighet.py    Rimlighetsregler för datum i OCR-svar (varningar i gravvyn)
     sakerhet.py     Lokala modellens säkerhet per sifferfält ur ollamas logprobs
+    skissforslag.py Förslag på skissmarkering genom bildmätning (bläck + rutans högerkant)
     gravplats_status.py  Transkriberingsstatus (färdig, påbörjad, AI-läst, ej) för statistik, sök och nästa-knappen
     achievements.py Achievement-logik
     git_version.py  Läs git-versionstagg

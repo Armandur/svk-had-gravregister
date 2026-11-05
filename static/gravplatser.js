@@ -1607,7 +1607,64 @@ function bindSkissDragDrop(container) {
 }
 
 /** Öppna modal för att lägga till skiss: välj bild, markera område, spara. */
-function oppnaSkissModal() {
+/**
+ * Visa ett förslag på skissmarkering (bildmätning i app/utils/skissforslag.py) för en grav
+ * utan skiss. "Använd förslaget" sparar direkt, "Justera" öppnar markeringen med förslaget inritat.
+ */
+async function visaSkissforslag(el) {
+  if (!el || state.currentGravplatsId == null) return;
+  const gpId = state.currentGravplatsId;
+  let forslag = null;
+  try {
+    const res = await fetch(`${API}/gravplats/${gpId}/skissforslag`, { credentials: 'include' });
+    if (!res.ok || gpId !== state.currentGravplatsId) return;
+    forslag = (await res.json()).forslag;
+  } catch (e) { return; }
+  if (!forslag || !el.isConnected) return;
+  const ruta = forslag.ruta === 'mitten' ? 'mittrutan' : 'vänstra rutan';
+  el.innerHTML = `
+    <div class="gp-skissforslag-rubrik">Förslag på skiss: ${ruta}</div>
+    ${forslag.sakerhet === 'kanske' ? '<div class="gp-skissforslag-kanske">Svagt bläck i rutan. Kontrollera att det verkligen är en skiss.</div>' : ''}
+    <div class="gp-skiss-miniatyr gp-skissforslag-miniatyr"></div>
+    <div class="gp-skissforslag-knappar">
+      <button type="button" class="gp-skissforslag-anvand">Använd förslaget</button>
+      <button type="button" class="gp-skissforslag-justera">Justera</button>
+    </div>`;
+  el.hidden = false;
+  renderSkissCropMiniatyr(el.querySelector('.gp-skissforslag-miniatyr'), forslag);
+  el.querySelector('.gp-skissforslag-anvand').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    const ok = await sparaSkiss({ ...forslag, position: null });
+    if (!ok) e.target.disabled = false;
+  });
+  el.querySelector('.gp-skissforslag-justera').addEventListener('click', () => {
+    oppnaSkissModal({ kalla: { ...forslag, url: getSkissKallaUrl(forslag) },
+                      rect: { x: forslag.x, y: forslag.y, w: forslag.width, h: forslag.height } });
+  });
+}
+
+/** Spara en skiss och rita om skissektionen. Svarar true om det gick. */
+async function sparaSkiss(skiss) {
+  const res = await fetch(`${API}/gravplats/${state.currentGravplatsId}/skisser`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+    body: JSON.stringify({
+      source_type: skiss.source_type, content_sida: skiss.content_sida ?? null, halva: skiss.halva ?? null,
+      segment_index: skiss.segment_index ?? null, position: skiss.position ?? null,
+      extramaterial_id: skiss.extramaterial_id ?? null, x: skiss.x, y: skiss.y, width: skiss.width, height: skiss.height,
+    }),
+  }).catch(() => null);
+  if (!res || !res.ok) { showToast('Kunde inte spara skiss.', 'fel'); return false; }
+  const savedInmatning = state.inmatningData ? { ...state.inmatningData } : null;
+  state.lastInmatningGravplatsId = null;
+  await ensureInmatningData();
+  if (savedInmatning && state.inmatningData) {
+    Object.assign(state.inmatningData, { ...savedInmatning, skisser: state.inmatningData.skisser });
+  }
+  renderInmatningSektion('skiss');
+  return true;
+}
+
+function oppnaSkissModal(forval) {
   const modal = document.getElementById('gp-skiss-modal');
   const rubrik = document.getElementById('gp-skiss-modal-rubrik');
   const bilderEl = document.getElementById('gp-skiss-modal-bilder');
@@ -1686,7 +1743,7 @@ function oppnaSkissModal() {
     rectEl.style.left = rectEl.style.top = rectEl.style.width = rectEl.style.height = '';
 
     let dragStart = null;
-    let currentRect = { x: 0, y: 0, w: 0, h: 0 };
+    let currentRect = forval && forval.rect ? { ...forval.rect } : { x: 0, y: 0, w: 0, h: 0 };
 
     function updateRectEl() {
       const ir = imgEl.getBoundingClientRect();
@@ -1699,37 +1756,87 @@ function oppnaSkissModal() {
       rectEl.style.display = currentRect.w > 0 && currentRect.h > 0 ? 'block' : 'none';
     }
 
+    // Markeringen kan ritas ny, flyttas (dra inuti) eller ändras sida för sida (dra i kant eller hörn).
+    // Pekarhändelser, så det fungerar med mus, penna och finger. Hanterarna sätts (inte läggs till),
+    // så de inte samlas på hög när modalen öppnas flera gånger.
+    if (!rectEl.querySelector('.gp-skiss-handtag')) {
+      ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].forEach((pos) => {
+        const h = document.createElement('span');
+        h.className = 'gp-skiss-handtag gp-skiss-handtag-' + pos;
+        rectEl.appendChild(h);
+      });
+    }
+    const GREPP_PX = 10;
+    let lage = null;  // { typ: 'ny'|'flytta'|'kant', kanter: {l,r,t,b}, start: {x,y}, fran: {...rect} }
+
+    function punkt(e) {
+      const ir = imgEl.getBoundingClientRect();
+      return { x: (e.clientX - ir.left) / ir.width, y: (e.clientY - ir.top) / ir.height, ir: ir };
+    }
+    function traff(p, grepp) {
+      if (currentRect.w <= 0 || currentRect.h <= 0) return null;
+      const gx = (grepp || GREPP_PX) / p.ir.width, gy = (grepp || GREPP_PX) / p.ir.height;
+      const r = currentRect;
+      const inomY = p.y >= r.y - gy && p.y <= r.y + r.h + gy;
+      const inomX = p.x >= r.x - gx && p.x <= r.x + r.w + gx;
+      const kanter = {
+        l: inomY && Math.abs(p.x - r.x) <= gx,
+        r: inomY && Math.abs(p.x - (r.x + r.w)) <= gx,
+        t: inomX && Math.abs(p.y - r.y) <= gy,
+        b: inomX && Math.abs(p.y - (r.y + r.h)) <= gy,
+      };
+      if (kanter.l || kanter.r || kanter.t || kanter.b) return { typ: 'kant', kanter: kanter };
+      if (p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h) return { typ: 'flytta' };
+      return null;
+    }
+    function markor(t) {
+      if (!t) return 'crosshair';
+      if (t.typ === 'flytta') return 'move';
+      const k = t.kanter;
+      if ((k.l && k.t) || (k.r && k.b)) return 'nwse-resize';
+      if ((k.r && k.t) || (k.l && k.b)) return 'nesw-resize';
+      return k.l || k.r ? 'ew-resize' : 'ns-resize';
+    }
+    const klamp = (v) => Math.max(0, Math.min(1, v));
+
     imgEl.onload = () => {
       const wrap = imgEl.parentElement;
       if (!wrap) return;
-      wrap.addEventListener('mousedown', (e) => {
-        if (e.target !== imgEl && e.target !== rectEl && e.target !== wrap) return;
+      wrap.style.touchAction = 'none';
+      updateRectEl();  // ett förslag syns direkt och kan justeras
+      wrap.onpointerdown = (e) => {
+        if (e.target !== imgEl && e.target !== rectEl && e.target !== wrap && !rectEl.contains(e.target)) return;
         e.preventDefault();
-        const ir = imgEl.getBoundingClientRect();
-        const nx = (e.clientX - ir.left) / ir.width;
-        const ny = (e.clientY - ir.top) / ir.height;
-        dragStart = { x: nx, y: ny };
-        currentRect = { x: nx, y: ny, w: 0, h: 0 };
+        const p = punkt(e);
+        const t = traff(p, e.pointerType === 'touch' ? 2 * GREPP_PX : GREPP_PX);
+        lage = t ? { ...t, start: { x: p.x, y: p.y }, fran: { ...currentRect } } : { typ: 'ny', start: { x: p.x, y: p.y } };
+        if (lage.typ === 'ny') { currentRect = { x: p.x, y: p.y, w: 0, h: 0 }; updateRectEl(); }
+        try { wrap.setPointerCapture(e.pointerId); } catch (_) { /* äldre webbläsare */ }
+      };
+      wrap.onpointermove = (e) => {
+        const p = punkt(e);
+        if (!lage) { wrap.style.cursor = markor(traff(p)); return; }
+        e.preventDefault();
+        if (lage.typ === 'ny') {
+          const nx = klamp(p.x), ny = klamp(p.y);
+          currentRect = { x: Math.min(lage.start.x, nx), y: Math.min(lage.start.y, ny), w: Math.abs(nx - lage.start.x), h: Math.abs(ny - lage.start.y) };
+        } else if (lage.typ === 'flytta') {
+          const f = lage.fran;
+          currentRect = { x: klamp(Math.min(1 - f.w, f.x + p.x - lage.start.x)), y: klamp(Math.min(1 - f.h, f.y + p.y - lage.start.y)), w: f.w, h: f.h };
+        } else {
+          const f = lage.fran, k = lage.kanter;
+          let x0 = f.x, y0 = f.y, x1 = f.x + f.w, y1 = f.y + f.h;
+          if (k.l) x0 = klamp(p.x);
+          if (k.r) x1 = klamp(p.x);
+          if (k.t) y0 = klamp(p.y);
+          if (k.b) y1 = klamp(p.y);
+          currentRect = { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+        }
         updateRectEl();
-      });
-      wrap.addEventListener('mousemove', (e) => {
-        if (!dragStart) return;
-        e.preventDefault();
-        const ir = imgEl.getBoundingClientRect();
-        const nx = (e.clientX - ir.left) / ir.width;
-        const ny = (e.clientY - ir.top) / ir.height;
-        const x = Math.min(dragStart.x, nx);
-        const y = Math.min(dragStart.y, ny);
-        const w = Math.abs(nx - dragStart.x);
-        const h = Math.abs(ny - dragStart.y);
-        currentRect = { x, y, w, h };
-        updateRectEl();
-      });
-      wrap.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        dragStart = null;
-      });
-      wrap.addEventListener('mouseleave', () => { dragStart = null; });
+      };
+      const slapp = () => { lage = null; };
+      wrap.onpointerup = slapp;
+      wrap.onpointercancel = slapp;
     };
 
     document.getElementById('gp-skiss-spara').onclick = async () => {
@@ -1783,7 +1890,12 @@ function oppnaSkissModal() {
     if (!avbrytBtn) return;
     avbrytBtn.onclick = markeraEl.hidden ? () => { modal.hidden = true; } : () => visaSteg1();
   }
-  visaSteg1();
+  if (forval && forval.kalla && forval.kalla.url) {
+    valdKalla = forval.kalla;
+    visaSteg2();
+  } else {
+    visaSteg1();
+  }
   setAvbrytHandler();
   modal.hidden = false;
 }
@@ -2080,6 +2192,7 @@ function renderInmatningSektion(sektion) {
     innehall.innerHTML = `
       <label>Storlek <textarea name="storlek" class="gp-falt-expanderbar" rows="1">${esc(d.storlek)}</textarea></label>
       <div class="gp-skisser-lista" id="gp-skisser-lista"></div>
+      <div class="gp-skissforslag" id="gp-skissforslag" hidden></div>
       <button type="button" class="gp-lagg-till-skiss" id="gp-lagg-till-skiss">+ Lägg till skiss</button>
       <p class="gp-skiss-info" id="gp-lagg-till-skiss-hint">Skisser sparas direkt till gravplatsen när du markerat skissen och klickat på "Spara skiss" - du behöver inte klicka på "Spara" på gravplatsen.</p>`;
     innehall.querySelectorAll('textarea.gp-falt-expanderbar').forEach(autoExpandTextarea);
@@ -2118,6 +2231,7 @@ function renderInmatningSektion(sektion) {
       });
     });
     innehall.querySelector('#gp-lagg-till-skiss')?.addEventListener('click', () => oppnaSkissModal());
+    if (skisser.length === 0) visaSkissforslag(innehall.querySelector('#gp-skissforslag'));
     return;
   }
 

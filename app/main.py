@@ -23,6 +23,7 @@ from app.routes import (
     inmatning,
     ocr,
     rimlighet,
+    skissforslag,
     batch,
     extramaterial,
     sidor,
@@ -64,6 +65,7 @@ app.include_router(gravplatser.router)
 app.include_router(inmatning.router)
 app.include_router(ocr.router)
 app.include_router(rimlighet.router)
+app.include_router(skissforslag.router)
 app.include_router(batch.router)
 app.include_router(extramaterial.router)
 app.include_router(sidor.router)
