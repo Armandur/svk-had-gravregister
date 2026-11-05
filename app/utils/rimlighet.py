@@ -68,6 +68,11 @@ def kontrollera(svar: dict) -> list[dict]:
 
         fod = _datum(g.get("fodelse_ar"), g.get("fodelse_manad"), g.get("fodelse_dag"))
         dod = _datum(g.get("dods_ar"), g.get("dods_manad"), g.get("dods_dag"))
+        # Dag och månad var för sig rimliga, men datumet finns inte (t.ex. 30 februari)
+        for prefix, datum, namn in (("fodelse", fod, "födelsedatum"), ("dods", dod, "dödsdatum")):
+            ar, man, dag = (_heltal(g.get(f"{prefix}_{d}")) for d in ("ar", "manad", "dag"))
+            if datum is None and ar and man and dag and 1 <= man <= 12 and 1 <= dag <= 31:
+                varna(f"{prefix}_dag", f"ogiltigt_{prefix}datum", f"{namn} {ar}-{man:02d}-{dag:02d} finns inte.")
         gravsatt = _fullt_datum(g.get("gravsatt_den"))
         fod_ar, dod_ar = _heltal(g.get("fodelse_ar")), _heltal(g.get("dods_ar"))
 

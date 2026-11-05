@@ -20,6 +20,8 @@ from app.database import (
     User,
     get_db,
 )
+from app.utils.kvittering import aktiva, kvitterade_per_grav
+from app.utils.rimlighet import kontrollera
 from app.utils.text import _format_fullstandigt
 
 router = APIRouter()
@@ -255,26 +257,19 @@ def _samla_namnfalt_problem(r, roll: str, typ: str = "bada") -> list[dict]:
 
 
 def _dbuh_datum_problem(gs: Gravsatt) -> list[dict]:
-    """Returnerar problem med datum (gravsatt): födelse > död, framtida år, ogiltig månad/dag, kort årtal."""
+    """Datumproblem som rimlighetsreglerna inte täcker: framtida år och korta årtal.
+
+    Född efter död, över 110 år, död efter gravsättning och ogiltig månad eller
+    dag kommer från app/utils/rimlighet.py, så de kan kvitteras som i gravvyn.
+    """
     problems = []
     now_year = datetime.now(timezone.utc).year
-    fa, fm, fd = gs.fodelse_ar, gs.fodelse_manad, gs.fodelse_dag
-    da, dm, dd = gs.dods_ar, gs.dods_manad, gs.dods_dag
+    fa, da = gs.fodelse_ar, gs.dods_ar
 
-    if fa is not None and da is not None and fa > da:
-        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Datum", "varde": f"född {fa}, död {da} (född efter död)"})
     if fa is not None and fa > now_year:
         problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelseår", "varde": str(fa) + " (i framtiden)"})
     if da is not None and da > now_year:
         problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsår", "varde": str(da) + " (i framtiden)"})
-    if fm is not None and (fm < 1 or fm > 12):
-        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelsemånad", "varde": str(fm)})
-    if dm is not None and (dm < 1 or dm > 12):
-        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsmånad", "varde": str(dm)})
-    if fd is not None and (fd < 1 or fd > 31):
-        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelsedag", "varde": str(fd)})
-    if dd is not None and (dd < 1 or dd > 31):
-        problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Dödsdag", "varde": str(dd)})
     if fa is not None and 0 < fa < 100:
         problems.append({"roll": "Gravsatt pos " + str(gs.position), "falt": "Födelseår", "varde": str(fa) + " (kort årtal, kontrollera)"})
     if da is not None and 0 < da < 100:
@@ -784,14 +779,31 @@ async def get_datakvalitet_datum(
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Gravplatser där gravsatta har datumproblem: födelse efter död, framtida år, ogiltig månad/dag, korta årtal."""
+    """Gravplatser där gravsatta har datumproblem.
+
+    Rimlighetsreglerna (född efter död, över 110 år, död efter gravsättning, ogiltig
+    månad eller dag) är desamma som i gravvyn. Varningar som en granskare har
+    kvitterat som riktiga visas inte. Dessutom: framtida år och korta årtal.
+    """
     all_ids = set()
     problem_per_gp: dict[int, list[dict]] = {}
-    for gs in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).all():
-        probs = _dbuh_datum_problem(gs)
-        if probs:
-            all_ids.add(gs.gravplats_id)
-            problem_per_gp.setdefault(gs.gravplats_id, []).extend(probs)
+    per_grav: dict[int, list[Gravsatt]] = {}
+    for gs in db.query(Gravsatt).filter(Gravsatt.gravplats_id.isnot(None)).order_by(Gravsatt.gravplats_id, Gravsatt.position, Gravsatt.id):
+        per_grav.setdefault(gs.gravplats_id, []).append(gs)
+    kvitterade = kvitterade_per_grav(db)
+    antal_kvitterade = 0
+    for gid, rader in per_grav.items():
+        varningar = kontrollera({"gravsatta": [{f: getattr(g, f) for f in _RIMLIGHET_FALT} for g in rader]})
+        aktiva_v = aktiva(varningar, kvitterade.get(gid))
+        antal_kvitterade += len(varningar) - len(aktiva_v)
+        for v in aktiva_v:
+            problem_per_gp.setdefault(gid, []).append({
+                "roll": "Gravsatt " + str(v["gravsatt"]), "falt": _REGEL_ETIKETT.get(v["regel"], "Datum"),
+                "varde": v["meddelande"].split(": ", 1)[-1],
+            })
+        for gs in rader:
+            problem_per_gp.setdefault(gid, []).extend(_dbuh_datum_problem(gs))
+    all_ids = {gid for gid, p in problem_per_gp.items() if p}
     extra = {}
     last_edited_map = _dbuh_last_edited_map(db, list(all_ids))
     for gid in all_ids:
@@ -802,7 +814,21 @@ async def get_datakvalitet_datum(
             "last_edited_by_username": led.get("last_edited_by_username"),
         }
     out = _dbuh_gravplats_lista(db, list(all_ids), extra)
-    return {"gravplatser": out, "antal": len(out)}
+    return {"gravplatser": out, "antal": len(out), "antal_kvitterade": antal_kvitterade}
+
+
+_RIMLIGHET_FALT = ("fodelse_ar", "fodelse_manad", "fodelse_dag", "dods_ar", "dods_manad", "dods_dag", "gravsatt_den")
+_REGEL_ETIKETT = {
+    "dod_fore_fodsel": "Född efter död",
+    "over_110_ar": "Över 110 år",
+    "dod_efter_gravsattning": "Gravsatt före död",
+    "ogiltig_fodelse_manad": "Födelsemånad",
+    "ogiltig_dods_manad": "Dödsmånad",
+    "ogiltig_fodelse_dag": "Födelsedag",
+    "ogiltig_dods_dag": "Dödsdag",
+    "ogiltigt_fodelsedatum": "Födelsedatum finns inte",
+    "ogiltigt_dodsdatum": "Dödsdatum finns inte",
+}
 
 
 @router.get("/api/admin/databasunderhall/datakvalitet-postnummer-adress")

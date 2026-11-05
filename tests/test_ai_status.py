@@ -156,3 +156,27 @@ def test_kvitterad_varning_raknas_inte_for_ai_last_grav(kvarter, client):
     varning = client.get("/api/gravplatser/avancerad-sok", params={"kyrkogard": "STK", "kvarter": kv,
                                                                    "transkriberingsstatus": "ai_varning"}).json()
     assert varning["gravplatser"] == []
+
+
+def test_datakvalitetssidan_visar_okvitterade_varningar(kvarter, client, db, logga_in):
+    _, ids = kvarter
+    gid = ids["paborjad"]
+    g = db.query(Gravsatt).filter(Gravsatt.gravplats_id == gid).one()
+    g.fodelse_ar, g.fodelse_manad, g.fodelse_dag = 1883, 6, 1
+    g.dods_ar, g.dods_manad, g.dods_dag, g.gravsatt_den = 1937, 5, 18, "1937-03-23"
+    db.commit()
+    c = logga_in("dq-admin", is_admin=True)
+    url = "/api/admin/databasunderhall/datakvalitet-datum"
+    rader = {gp["id"]: gp["problem_falt"] for gp in c.get(url).json()["gravplatser"]}
+    assert [p["falt"] for p in rader[gid]] == ["Gravsatt före död"]
+
+    c.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera", json={"kommentar": "Kortet säger så"})
+    d = c.get(url).json()
+    assert gid not in {gp["id"] for gp in d["gravplatser"]}
+    assert d["antal_kvitterade"] >= 1
+
+    # Framtida år ingår inte i rimlighetsreglerna och kan inte kvitteras bort
+    g.dods_ar = 2999
+    db.commit()
+    rader = {gp["id"]: [p["falt"] for p in gp["problem_falt"]] for gp in c.get(url).json()["gravplatser"]}
+    assert "Dödsår" in rader[gid]

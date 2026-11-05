@@ -31,7 +31,7 @@ En administratör kan låta gravkorten läsas av en modell på en egen server (o
 
 Ibland säger kortet faktiskt något orimligt, till exempel en gravsättning före dödsdatumet. Klicka då **Stämmer med kortet** vid varningen och skriv gärna en kommentar om vad kortet säger. Varningen blir grå, visar vem som kvitterade och räknas inte längre. **Ångra** tar tillbaka den.
 
-Varningarna gäller både AI-förslag och sparad data: en granskad grav vars datum bryter mot reglerna visar varningen när den öppnas. Kvitteringen gäller gravsatt-numret, så flyttar du om de gravsatta kan en kvittering hamna på fel rad.
+Varningarna gäller både AI-förslag och sparad data: en granskad grav vars datum bryter mot reglerna visar varningen när den öppnas. Administratörer ser alla sådana gravar under **Databasunderhåll → Datakvalitet: Datum och årtal**, där kvitterade varningar inte visas. Kvitteringen gäller gravsatt-numret, så flyttar du om de gravsatta kan en kvittering hamna på fel rad.
 
 ## Status: AI-läst, ej granskad
 

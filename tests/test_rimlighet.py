@@ -35,3 +35,12 @@ def test_ofullstandiga_datum_och_skrap_ger_inga_falska_larm():
     assert kontrollera(_gs(dods_dag=None, gravsatt_den="1937-03-01")) == []
     assert kontrollera({"gravsatta": [{"fodelse_ar": "okänt"}, "skräp"]}) == []
     assert kontrollera({}) == []
+
+
+def test_datum_som_inte_finns():
+    """Verkligt fall, HKG 24 33: dödsdatum 1920-02-30."""
+    v = kontrollera(_gs(dods_ar=1920, dods_manad=2, dods_dag=30, gravsatt_den=""))
+    assert [(x["nyckel"], x["falt"]) for x in v] == [("gs1.ogiltigt_dodsdatum", "dods_dag")]
+    assert "1920-02-30 finns inte" in v[0]["meddelande"]
+    assert kontrollera(_gs(fodelse_ar=1900, fodelse_manad=2, fodelse_dag=29)) != []  # 1900 var inget skottår
+    assert kontrollera(_gs(fodelse_ar=1904, fodelse_manad=2, fodelse_dag=29)) == []

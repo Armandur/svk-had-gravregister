@@ -11,7 +11,7 @@
   <main class="dbuh-sida">
     <p class="dbuh-tillbaka"><a href="/databasunderhall">← Tillbaka till Databasunderhåll</a></p>
     <h1>Datakvalitet: Datum och årtal</h1>
-    <p class="dbuh-info">Gravplatser där gravsatta har datumproblem: födelseår efter dödsår, framtida år, ogiltig månad/dag (1–12 resp. 1–31), eller korta årtal (t.ex. 23 istället för 1923). Klicka på gravplatsen för att korrigera.</p>
+    <p class="dbuh-info">Gravplatser där gravsatta har orimliga datum: född efter död, över 110 år, gravsatt före död, ogiltig månad eller dag, framtida år eller korta årtal (t.ex. 23 i stället för 1923). Klicka på gravplatsen för att rätta. Säger kortet faktiskt så, klicka <strong>Stämmer med kortet</strong> vid varningen i gravvyn, så försvinner den från listan.</p>
     <div class="dbuh-knapp-rad">
       <button type="button" id="dbuh-kor">Kör</button>
     </div>
@@ -23,6 +23,7 @@
         </table>
       </div>
       <p class="dbuh-tom" id="dbuh-tom" hidden>Inga gravplatser hittades.</p>
+      <p class="dbuh-info" id="dbuh-kvitterade" hidden></p>
       <p class="dbuh-fel" id="dbuh-fel" hidden></p>
     </div>
   </main>
@@ -72,6 +73,10 @@
         btn.disabled = false;
         if (!data) return;
         var lista = data.gravplatser || [];
+        var kvittEl = document.getElementById('dbuh-kvitterade');
+        var nKvitt = data.antal_kvitterade || 0;
+        kvittEl.textContent = nKvitt ? nKvitt + (nKvitt === 1 ? ' varning är kvitterad' : ' varningar är kvitterade') + ' som riktig enligt kortet och visas inte.' : '';
+        kvittEl.hidden = !nKvitt;
         if (lista.length === 0) { tomEl.hidden = false; tomEl.textContent = 'Inga gravplatser med datumproblem hittades.'; return; }
         thead.innerHTML = buildRow(lista[0], true);
         tbody.innerHTML = '';
