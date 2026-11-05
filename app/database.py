@@ -240,8 +240,9 @@ class LokalOcrSvar(Base):
 class RimlighetKvittering(Base):
     """En granskare har kontrollerat en rimlighetsvarning mot kortet: kortet säger faktiskt så.
 
-    Nyckeln kommer från app/utils/rimlighet.py ("gs1.dod_efter_gravsattning"). En
-    kvitterad varning visas grå och räknas inte.
+    Nyckeln kommer från app/utils/rimlighet.py: regeln och de värden den läste
+    ("dod_efter_gravsattning.1937-05-18.1937-03-23"), inte raden. En kvitterad
+    varning visas grå och räknas inte.
     """
     __tablename__ = "rimlighet_kvittering"
     __table_args__ = (UniqueConstraint("gravplats_id", "nyckel", name="uq_rimlighet_kvittering_grav_nyckel"),)

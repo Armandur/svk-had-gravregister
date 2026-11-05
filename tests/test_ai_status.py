@@ -133,15 +133,15 @@ def test_rimlighet_pa_sparad_data_och_kvittering(kvarter, client, db):
     g.dods_ar, g.dods_manad, g.dods_dag, g.gravsatt_den = 1937, 5, 18, "1937-03-23"
     db.commit()
     v = client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"]
-    assert [(x["nyckel"], x["kvitterad"]) for x in v] == [("gs1.dod_efter_gravsattning", None)]
+    assert [(x["nyckel"], x["kvitterad"]) for x in v] == [("dod_efter_gravsattning.1937-05-18.1937-03-23", None)]
 
-    r = client.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera",
+    r = client.post(f"/api/gravplats/{gid}/rimlighet/dod_efter_gravsattning.1937-05-18.1937-03-23/kvittera",
                     json={"kommentar": "  Kortet säger så, kontrollerat mot dödboken  "})
     assert r.status_code == 200
     k = client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"][0]["kvitterad"]
     assert (k["kommentar"], k["username"]) == ("Kortet säger så, kontrollerat mot dödboken", "status-user")
 
-    client.delete(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera")
+    client.delete(f"/api/gravplats/{gid}/rimlighet/dod_efter_gravsattning.1937-05-18.1937-03-23/kvittera")
     assert client.get(f"/api/gravplats/{gid}/rimlighet").json()["varningar"][0]["kvitterad"] is None
 
 
@@ -149,7 +149,7 @@ def test_kvitterad_varning_raknas_inte_for_ai_last_grav(kvarter, client):
     kv, ids = kvarter
     gid = ids["ai_varning"]
     assert client.get(f"/api/gravplats/{gid}/inmatning").json()["ai_varningar"] == 1
-    client.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera", json={})
+    client.post(f"/api/gravplats/{gid}/rimlighet/dod_efter_gravsattning.1937-05-18.1937-03-23/kvittera", json={})
     assert client.get(f"/api/gravplats/{gid}/inmatning").json()["ai_varningar"] == 0
     svar = client.get(f"/api/ocr/gravplats/{gid}/svar-alla").json()["svar"][0]
     assert svar["varningar"][0]["kvitterad"] is not None
@@ -170,7 +170,7 @@ def test_datakvalitetssidan_visar_okvitterade_varningar(kvarter, client, db, log
     rader = {gp["id"]: gp["problem_falt"] for gp in c.get(url).json()["gravplatser"]}
     assert [p["falt"] for p in rader[gid]] == ["Gravsatt före död"]
 
-    c.post(f"/api/gravplats/{gid}/rimlighet/gs1.dod_efter_gravsattning/kvittera", json={"kommentar": "Kortet säger så"})
+    c.post(f"/api/gravplats/{gid}/rimlighet/dod_efter_gravsattning.1937-05-18.1937-03-23/kvittera", json={"kommentar": "Kortet säger så"})
     d = c.get(url).json()
     assert gid not in {gp["id"] for gp in d["gravplatser"]}
     assert d["antal_kvitterade"] >= 1
