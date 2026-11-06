@@ -1,5 +1,51 @@
 # Backlog Export
 
+## [P3][done] [gravregister] Kvittering av rimlighetsvarning följer gravsatt-numret, inte personen
+
+Nyckeln är t.ex. 'gs1.dod_efter_gravsattning' (position i listan). Flyttar granskaren om de gravsatta kan en kvittering hamna på fel person, och en varning som kvitterats dyka upp igen. Dokumenterat i docs/claude-ocr.md. Alternativ: nyckla på gravsatt-id för sparad data.
+
+- ID: `01M6PX0MP2E9FG6XFPZPKTMDAT`
+- Type: bug
+- Actor: ai:claude-code
+
+---
+
+## [P3][done] [gravregister] Döda dubblettroutes för /api/backups i admin.py
+
+/api/backups (GET, POST, GET {filnamn}) finns i både system.py och admin.py. system.py registreras först och vinner, så admin.py-kopiorna körs aldrig. Samma fel för /api/settings/api-keys gjorde att Claude-modell och lokal modell inte sparades (rättat i fdee802). Ta bort kopiorna i admin.py efter att ha kontrollerat att de inte skiljer sig.
+
+- ID: `01M6PX0MNW8VGCCCGV6RYNRS2B`
+- Type: bug
+- Actor: ai:claude-code
+
+---
+
+## [P3][done] [gravregister] Dela upp filer som vuxit över ~500 rader (batch.py, gravplatser.py, gravplatser.js)
+
+batch.py 650, gravplatser.py 885 (avancerad sökning), datakvalitet.py 1075 och static/gravplatser.js 3786 rader. Lokal OCR-arbetet 2026-11-02--05 lade till i batch.py och gravplatser.py; datakvalitet.py och gravplatser.js var redan stora. Naturliga snitt: batchroutes för Anthropic Batch API i egen fil, avancerad sökning ur gravplatser.py, skiss- och OCR-delarna ur gravplatser.js.
+
+- ID: `01M6PX0MNPNFXX7FA3FTD7H9ZM`
+- Type: chore
+- Actor: ai:claude-code
+
+---
+
+## [P3][done] [gravregister] Städa efter lokal OCR-spåret: kopian på :8053, säkerhetskopior och previews med persondata
+
+Väntar på Rasmus klartecken. Allt innehåller persondata från prod.
+- Dev-server på ubuntu-ai:8053 (svc gravregister-lokal-ocr, PID i /tmp/claude-1000/-home-rasmus-workspace-svk-had-gravregister/d818b263-08f2-4889-a359-926602204c9b/scratchpad/dev.pid) mot kopia av prod-db från 2026-11-02 i /tmp/claude-1000/-home-rasmus-workspace-svk-had-gravregister/d818b263-08f2-4889-a359-926602204c9b/scratchpad/data, med testkontot lokaltest. Stoppa PID och svc unregister.
+- Säkerhetskopior av prod före varje deploy: /tmp/claude-1000/-home-rasmus-workspace-svk-had-gravregister/d818b263-08f2-4889-a359-926602204c9b/scratchpad/prod-fore-*.db (sex st, 2026-11-02 till 2026-11-05).
+- Mätskript och kontaktark i /tmp/claude-1000/-home-rasmus-workspace-svk-had-gravregister/d818b263-08f2-4889-a359-926602204c9b/scratchpad/kontakt (kontakt.py, kant.py, jamfor_bbox.py, finns_skiss.py).
+- Previews i portalens /modelljobb med kortbilder och namn (rensas av portalen efter 7 dagar, eller DELETE /api/modelljobb/{uuid}).
+- Read-only-monteringen /mnt/tervo2/appdata (Rasmus monterade den 2026-11-02).
+- dev.log i repot är ogitignorerat.
+
+- ID: `01M6PX0MNFYCE2DQYB10M9K3HW`
+- Type: chore
+- Actor: ai:claude-code
+
+---
+
 ## [P3][done] [gravregister] Gravvyn vid mobilbredd: högerspalten klipps i vänsterkanten
 
 Vid 390 px ligger gravvyn kvar i två spalter. Högerspalten (statusknapp, banners, formulär) klipps i vänsterkanten och rubriken överlappar 'Senast redigerad'. Fanns före lokal OCR-arbetet, sett 2026-11-02 i shot av HKG U 25.
@@ -117,6 +163,16 @@ Klart och i prod 2026-11-02 (1716f55): lokal OCR med gemma4:12b via portalens v�
 
 - ID: `01M6ER522XWBR4131DCC3YSHSW`
 - Type: spike
+- Actor: ai:claude-code
+
+---
+
+## [P4][todo] [gravregister] Dela gravplatser.js vidare (1 145 rader efter TASK-3370)
+
+Kvar efter uppdelningen: state, uppdateraVy (240), händelsebindningarna (ca 280), sparande, redigeringsläget och init. Toppnivåkoden är ordningskänslig: bindningar måste köras efter att funktionerna laddats, och const/let får inte flyttas (cachad gammal fil ger annars SyntaxError för dubbel const). Verifiera med jämförelse av toppnivåsatser (acorn) och klickflöde mot HEAD som i ebf0a06.
+
+- ID: `01M6QT7W12XGYCYHJ4G2P14H0Z`
+- Type: chore
 - Actor: ai:claude-code
 
 ---
