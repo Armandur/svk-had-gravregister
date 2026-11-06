@@ -16,6 +16,7 @@ from app.utils.git_version import _read_git_version
 from app.routes import (
     auth,
     admin,
+    databasunderhall,
     datakvalitet,
     loggar,
     mappar,
@@ -61,6 +62,7 @@ app.include_router(system.router)
 app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(datakvalitet.router)
+app.include_router(databasunderhall.router)
 app.include_router(loggar.router)
 app.include_router(mappar.router)
 app.include_router(gravplatser.router)
