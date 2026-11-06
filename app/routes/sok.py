@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, tuple_
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import (
     Extramaterial,
     Gravplats,
@@ -13,6 +14,7 @@ from app.database import (
     GravplatsNarmastAnhorig,
     Gravsatt,
     MappConfig,
+    User,
     get_db,
 )
 from app.utils.ai_sok import ai_forslag, grav_matchar, gravsatt_matchar
@@ -37,6 +39,7 @@ def _ai_rader(svar: dict, nyckel: str) -> list[dict]:
 @router.get("/api/gravplatser/avancerad-sok")
 async def avancerad_sok_gravplatser(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
     resultat_typ: str = "gravplatser",
     kyrkogard: str | None = None,
     kvarter: str | None = None,

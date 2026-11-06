@@ -36,3 +36,36 @@ def test_sakerhetskopior_kraver_admin(logga_in):
     c = logga_in("backup-vanlig", is_admin=False)
     assert c.get("/api/backups").status_code == 403
     assert c.post("/api/backups").status_code == 403
+
+
+# Routes som ska gå att nå utan inloggning. Allt annat under /api kräver den.
+OPPNA = {
+    ("GET", "/api/version"),
+    ("POST", "/api/login"),
+    ("POST", "/api/logout"),
+    ("GET", "/api/toast-formuleringar"),
+    ("GET", "/api/hjalp"),
+    ("GET", "/api/hjalp/{slug}"),
+}
+
+
+def test_alla_api_routes_utom_de_oppna_kraver_inloggning(client):
+    """Anropar varje route utloggad. Persondata får inte gå att nå utan konto.
+
+    client-fixturen behövs för att bakgrundsslingan ska vara avstängd. Själva
+    anropen går via en egen klient utan sessionskaka.
+    """
+    import re
+
+    from fastapi.testclient import TestClient
+
+    oppna_utan_krav = []
+    with TestClient(app) as utloggad:
+        for r in _alla_routes(app.routes):
+            if not getattr(r, "path", "").startswith("/api"):
+                continue
+            url = re.sub(r"\{[^}]*\}", "x", re.sub(r"\{[^}]*:int\}", "1", r.path))
+            for m in sorted((r.methods or set()) - {"HEAD"}):
+                if (m, r.path) not in OPPNA and utloggad.request(m, url, json={}).status_code not in (401, 403):
+                    oppna_utan_krav.append((m, r.path))
+    assert oppna_utan_krav == []

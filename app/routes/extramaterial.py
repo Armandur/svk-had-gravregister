@@ -85,7 +85,7 @@ async def list_extramaterial_mapp(mapp_namn: str, db: Session = Depends(get_db),
 
 
 @router.get("/api/mappar/{mapp_namn}/fil/{filnamn}/bild")
-async def pdf_fil_sida_bild(mapp_namn: str, filnamn: str):
+async def pdf_fil_sida_bild(mapp_namn: str, filnamn: str, current_user: User = Depends(get_current_user)):
     """Returnera första sidan av en PDF-fil som PNG (hela sidan)."""
     if "/" in filnamn or "\\" in filnamn or ".." in filnamn:
         raise HTTPException(status_code=400, detail="Ogiltigt filnamn")
@@ -108,7 +108,7 @@ async def pdf_fil_sida_bild(mapp_namn: str, filnamn: str):
 
 
 @router.get("/api/mappar/{mapp_namn}/fil/{filnamn}")
-async def pdf_fil_efter_namn(mapp_namn: str, filnamn: str):
+async def pdf_fil_efter_namn(mapp_namn: str, filnamn: str, current_user: User = Depends(get_current_user)):
     """Returnera en PDF-fil efter filnamn."""
     if "/" in filnamn or "\\" in filnamn or ".." in filnamn:
         raise HTTPException(status_code=400, detail="Ogiltigt filnamn")
