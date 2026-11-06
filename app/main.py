@@ -25,6 +25,7 @@ from app.routes import (
     rimlighet,
     skissforslag,
     batch,
+    batch_anthropic,
     extramaterial,
     sidor,
     system,
@@ -67,6 +68,7 @@ app.include_router(ocr.router)
 app.include_router(rimlighet.router)
 app.include_router(skissforslag.router)
 app.include_router(batch.router)
+app.include_router(batch_anthropic.router)
 app.include_router(extramaterial.router)
 app.include_router(sidor.router)
 
