@@ -28,6 +28,7 @@ from app.routes import (
     batch_anthropic,
     extramaterial,
     sidor,
+    sok,
     system,
 )
 
@@ -63,6 +64,7 @@ app.include_router(datakvalitet.router)
 app.include_router(loggar.router)
 app.include_router(mappar.router)
 app.include_router(gravplatser.router)
+app.include_router(sok.router)
 app.include_router(inmatning.router)
 app.include_router(ocr.router)
 app.include_router(rimlighet.router)
